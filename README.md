@@ -1,6 +1,6 @@
 # TPDD_bash
 
-A [http://tandy.wiki/TPDD_client](TPDD client) implemented in (almost) pure bash.
+A [TPDD client](http://tandy.wiki/TPDD_client) implemented in (almost) pure bash.
 
 Currently the basic skeleton is up and working to send requests to and read responses from the drive, and a few commands work.
 
