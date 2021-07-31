@@ -8,7 +8,8 @@
 # config
 
 # verbose/debug
-v=0 # 0=normal, 1=verbose
+v=0
+[[ "$DEBUG" ]] && v=1 # 0=normal, 1=verbose
 
 # platform differences
 DEFAULT_TPDD_PORT_PREFIX=ttyUSB	# linux
@@ -24,6 +25,8 @@ RTSCTS="crtscts"  # "crtscts" to enable, "-crtscts" to disable
 # stty flags to set the serial port parameters & tty line discipline & behavior
 # don't include -f/-F filename
 STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
+#STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain eof undef eol undef erase undef intr undef kill undef quit undef start undef stop undef susp undef"
+#STTY="19200 -parenb -parodd -cmspar cs8 hupcl -cstopb cread clocal ${RTSCTS} ignbrk -brkint -ignpar -parmrk -inpck -istrip -inlcr -igncr -icrnl -ixon -ixoff -iuclc -ixany -imaxbel -iutf8 -opost -olcuc -ocrnl -onlcr -onocr -onlret -ofill -ofdel nl0 cr0 tab0 bs0 vt0 ff0 -isig -icanon -iexten -echo -echoe -echok -echonl -noflsh -xcase -tostop -echoprt -echoctl -echoke -extproc"
 
 # read timeout in seconds
 # current bash can take floating point, old bash may need a whole number
@@ -356,8 +359,8 @@ tpdd_write () {
 # (we're not actually reading or storing nulls, but we are *detecting* them and recording where they were)
 # Thanks to Andrew Ayers in the M100 group on Facebook for help finding the key trick.
 tpdd_read () {
-	local -i i l=$1 ;local x ;rdh=() read_err=
 	vecho -n "${FUNCNAME[0]}($@) :"
+	local -i i l=$1 ;local x ;rdh=() read_err=
 	vecho -n " l=$l "
 	tpdd_wait # DST/DTR work-around
 	for ((i=0;i<l;i++)) {
@@ -676,6 +679,8 @@ lcmd_ls () {
 	done
 }
 
+# Filenames on the tpdd are space-padded to 24 bytes, so we intentionally do not
+# quote the filename argument here, so that the extraneous spaces get removed.
 #####  NOT WORKING YET  #####
 # load a file (copy a file from tpdd to local fs)
 lcmd_load () {
