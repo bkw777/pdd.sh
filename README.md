@@ -20,16 +20,17 @@ Low level "operation mode" commands (functions of the drive firmware, some not u
 * close - close the currently open file
 * read - read a block of data from the currently open file
 
-High level "operaion mode" commands. (compound functions that use combinations of the other functions to do something actually useful)
+High level "operation mode" commands. (compound functions that use combinations of the other functions to do something actually useful)
 * ls - dirent loop to list all files on the disk
 * load - copy a file from disk to local filesystem (uses dirent, open, read, and close)
-* q
+* q - quit
 
 "FDC mode" commands:
 * mode - select "operation mode" or "FDC mode"
 * condition - report status of the drive & disk - this is a little different from the "operation mode" status command
 
-There are several low level manual debugging commands too, which are mostly just wrappers for the low level drive functions.
+There are several low level manual debugging commands too, which are mostly just wrappers for the low level drive functions and even lower level serial communication functions.  
+com_read, com_write, etc...
 
 # Usage
 (after connecting a TPDD drive)
