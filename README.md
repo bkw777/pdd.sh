@@ -19,7 +19,7 @@ The only commands that are implemented yet are:
 
 It's pure bash except for the following:
 * "stty" is needed once at startup to configure the serial port.
-* "mkfifo" is used once at startup for _sleep() without /usr/bin/sleep .
+* "mkfifo" is used once at startup for _sleep() without /usr/bin/sleep .  
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
 # References
