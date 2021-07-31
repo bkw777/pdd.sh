@@ -100,7 +100,7 @@ typeset -A fdc_err=(
 #   D data      0-128 bytes   data
 #   C checksum  1 byte        1's comp of LSByte of sum of format through data
 
-# Operation Mode Block Formats
+# Operation Mode Request/Return Block Formats
 typeset -A fmt=(
 	# requests
 	[req_dirent]='00'
@@ -180,7 +180,19 @@ typeset -A err=(
 	[8F]='Hardware Fault F'
 )
 
+# Directory Entry Search Forms
+typeset -A dirent_cmd=(
+	[set_name]=0
+	[get_first]=1
+	[get_next]=2
+)
 
+# File Open Access Modes
+typeset -A open_mode=(
+	[write]=1
+	[append]=2
+	[read]=3
+)
 
 # drive operating modes
 typeset -a mode=(
@@ -236,6 +248,17 @@ verify_checksum () {
 	[[ "$x" == "$cksum" ]]
 }
 
+# check if the current operation-mode response is an error response
+# return true if error, false if not error
+# ex: ck_ocmd_err && echo "error" || echo "no error"
+ck_ocmd_err () {
+	[[ "$ret_fmt" == "${fmt[ret_error]}" ]] || return 1
+	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
+	error_msg="${err[${ret_dat[0]}]}"
+	drive_err=$((16#${ret_dat[0]}))
+	vecho -n "${ret_dat[0]} : "
+	echo "$error_msg" >&2
+}
 
 do_cmd () {
 	local x=$1 ;shift
@@ -265,7 +288,13 @@ do_cmd () {
 		#${fdc[writesectnv]}|writesectnv) fcmd_writesectnv $* ;; # write sector no verify
 
 		# client local/virtual commands (not part of the drive firmware)
-		ls|dir|list) lcmd_get_list ;; # dirent loop to list all files
+		# high-level & normal commands
+		ls|dir|list) lcmd_ls ;; # dirent loop to list all files
+		load) lcmd_load $* ;; # copy a file from the tpdd to the local filesystem
+		sync) iosync ;; # read bytes from the drive until there are no more
+		q|quit|bye|exit) exit ;;
+
+		# low level manual debug/raw commands
 		com_test) lcmd_com_test ;; # check if serial port is open or closed
 		com_open) lcmd_com_open ;; # open the serial port
 		com_close) lcmd_com_close ;; # close the serial port
@@ -273,8 +302,6 @@ do_cmd () {
 		com_write) lcmd_com_write $* ;; # write $* to the serial port (space-seperated hex pairs)
 		com_ret) lcmd_com_ret $* ;; # read $1 bytes from the serial port
 		com_req) lcmd_com_req $* ;; # write $* to the serial port (space-seperated hex pairs)
-		sync) iosync ;; # read bytes from the drive until there are no more
-		q|quit|bye|exit) exit ;;
 	esac
 }
 
@@ -428,7 +455,7 @@ iosync () {
 # fmt = 00
 # len = 1a
 # filename = 24 bytes
-# attribute = 46 ("F" = ignore attribute)
+# attribute = "F" (always)
 # search form = 00=set_name | 01=get_first | 02=get_next
 
 ocmd_dirent () {
@@ -437,9 +464,9 @@ ocmd_dirent () {
 	local x ;drive_err= error_msg= file_name= file_attr= file_len= free_sectors=
 
 	# construct the request
-	printf -v x '%-24.24s' $1 ;mk_hex "$x"
-	printf -v hex[24] '%02x' "'${2:-F}"
-	printf -v hex[25] '%02x' ${3:-1}
+	printf -v x '%-24.24s' $1 ;mk_hex "$x"	# filename
+	printf -v hex[24] '%02x' "'${2:-F}"	# attribute - always "F"
+	printf -v hex[25] '%02x' ${3:-${dirent_cmd[get_first]}}	# search form
 
 	# send the request
 	ocmd_send_req ${fmt[req_dirent]} ${hex[*]}
@@ -463,42 +490,24 @@ ocmd_dirent () {
 		:
 	}
 
-	# parse the response
-	case "$ret_fmt" in
-		${fmt[ret_error]}) # error return packet
-			((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 1 ; }
-			error_msg="${err[${ret_dat[0]}]}"
-			drive_err=$((16#${ret_dat[0]}))
-			vecho -n "${ret_dat[0]} : "
-			echo "$error_msg" >&2
-			return 1
-			;;
-		${fmt[ret_dirent]}) # dirent return packet
-			((${#ret_dat[*]}==28)) || { echo "Corrupt Response" >&2 ;return 1 ; }
-			free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
-			file_len=$((16#${ret_dat[25]}*255+16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
-			x="\x${ret_dat[24]}" ;ret_dat[24]= ;printf -v file_attr '%b' "$x"
-			x=(${ret_dat[*]}) ;x="${x[*]}" ;x="\x${x// /\\x}" ;printf -v file_name '%-24.24b' "$x"
-			vecho "$file_name $file_len"
-			[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
-			;;
-	esac
+	# check if the response was an error
+	ck_ocmd_err && return 1
 
-	echo "Corrupt Response" >&2 ;return 1
+	# sanity check the normal response
+	[[ "$ret_fmt" == "${fmt[ret_dirent]}" ]] || { echo "Corrupt Response" >&2 ;return 1 ; }
+	((${#ret_dat[*]}==28)) || { echo "Corrupt Response" >&2 ;return 1 ; }
+
+	# parse the normal response
+	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
+	file_len=$((16#${ret_dat[25]}*255+16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
+	x="\x${ret_dat[24]}" ;ret_dat[24]= ;printf -v file_attr '%b' "$x"
+	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
+
+	vecho "$file_name $file_len"
+	# if first byte of filename is 00, then there are no more files
+	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
 }
 
-# list all files
-lcmd_get_list () {
-	vecho "${FUNCNAME[0]}($@)"
-	local -i access_mode=0 i= ;local x f a ;ret_dat=()
-
-	while ((i++<40)) ;do
-		vecho "FCB: $i"
-		((access_mode<2)) && ((access_mode++))
-		ocmd_dirent '' '' $access_mode || break
-		printf '%24b %6u\n' "$file_name" "$file_len"
-	done
-}
 
 # Get Drive Status
 # request: 5a 5a 07 00 ##
@@ -539,6 +548,67 @@ ocmd_format () {
 ocmd_fdc () {
 	ocmd_send_req ${fmt[req_fdc]}
 	operation_mode=0
+}
+
+# Open File
+# request: 5a 5a 01 01 MM ##
+# return : 12 01 ?? ##
+# MM = access mode: 01=write_new, 02=write_append, 03=read
+ocmd_open () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+	local mode ;printf -v mode '%02x' $1
+	ocmd_send_req ${fmt[req_open]} $mode	# open the file
+	ocmd_read_ret
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+}
+
+# Close File
+# request: 5a 5a 02 00 ##
+# return : 12 01 ?? ##
+ocmd_close () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+	ocmd_send_req ${fmt[req_close]}
+	ocmd_read_ret
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+}
+
+# Delete File
+# request: 5a 5a 05 00 ##
+# return : 12 01 ?? ##
+ocmd_delete () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+	ocmd_send_req ${fmt[req_delete]}
+	ocmd_read_ret
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+}
+
+# Read File data
+# request: 5a 5a 03 00 ##
+# return : 10 00-80 1-128bytes ##
+ocmd_read () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+	ocmd_send_req ${fmt[req_read]}
+	ocmd_read_ret
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+
+	# check if the response was an error
+	ck_ocmd_err && return 1
+
+	# sanity check
+	[[ "$ret_fmt" == "${fmt[ret_read]}" ]] || return 1
+
+	# EOF
+	((${#ret_dat[*]}))
 }
 
 ###############################################################################
@@ -589,6 +659,37 @@ fcmd_condition () {
 	#vecho "Result bit 2: ${D2B[result]:5:1}"
 	#vecho "Result bit 1: ${D2B[result]:6:1}"
 	#vecho "Result bit 0: ${D2B[result]:7:1}"
+}
+
+###############################################################################
+# local/client high-level commands
+
+# list all files
+lcmd_ls () {
+	vecho "${FUNCNAME[0]}($@)"
+	local -i access_mode=${dirent_cmd[get_first]} i= ;local x f a ;ret_dat=()
+
+	while ((i++<40)) ;do
+		ocmd_dirent '' '' $access_mode || break
+		printf '%24b %6u\n' "$file_name" "$file_len"
+		((access_mode==${dirent_cmd[get_first]})) && access_mode=${dirent_cmd[get_next]}
+	done
+}
+
+#####  NOT WORKING YET  #####
+# load a file (copy a file from tpdd to local fs)
+lcmd_load () {
+	vecho "${FUNCNAME[0]}($@)"
+	local x
+	ocmd_dirent $1 '' ${dirent_cmd[set_name]}	# set the filename
+	ocmd_open ${open_mode[read]}			# open the file for reading
+	>$1						# start the local file
+	while ocmd_read ;do				# read a block of data from tpdd
+		x="${ret_dat[*]}"
+		printf '%b' "\x${x// /\\x}" >> $1	# write the block of data to local file
+		(($ret_len<128)) && break		# this is the last block
+	done						# loop until no more data
+	ocmd_close					# close the file
 }
 
 ###############################################################################
