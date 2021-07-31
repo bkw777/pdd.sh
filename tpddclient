@@ -1,0 +1,658 @@
+#!/usr/bin/env bash
+#
+# tpddclient.sh - TPDD1 client in (almost) pure bash
+# Brian K. White b.kenyon.w@gmail.com
+# https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
+
+###############################################################################
+# config
+
+# verbose/debug
+v=0 # 0=normal, 1=verbose
+
+# platform differences
+DEFAULT_TPDD_PORT_PREFIX=ttyUSB	# linux
+stty_f="-F"
+case "${OSTYPE,,}" in
+	*bsd*) stty_f="-f" DEFAULT_TPDD_PORT_PREFIX=ttyU ;; # FreeBSD/NetBSD/OpenBSD/etc
+	darwin*) stty_f="-f" DEFAULT_TPDD_PORT_PREFIX=cu.usbserial- ;; # mac osx
+esac
+
+# enable hardware flow-control or not
+RTSCTS="crtscts"  # "crtscts" to enable, "-crtscts" to disable
+
+# stty flags to set the serial port parameters & tty line discipline & behavior
+# don't include -f/-F filename
+#STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain eof undef eol undef erase undef intr undef kill undef quit undef start undef stop undef susp undef"
+STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
+# https://gist.github.com/plugnburn/5b2582be521944f739e1#file-nokiatool-sh
+#STTY="19200 -parenb -parodd -cmspar cs8 hupcl -cstopb cread clocal ${RTSCTS} ignbrk -brkint -ignpar -parmrk -inpck -istrip -inlcr -igncr -icrnl -ixon -ixoff -iuclc -ixany -imaxbel -iutf8 -opost -olcuc -ocrnl -onlcr -onocr -onlret -ofill -ofdel nl0 cr0 tab0 bs0 vt0 ff0 -isig -icanon -iexten -echo -echoe -echok -echonl -noflsh -xcase -tostop -echoprt -echoctl -echoke -extproc"
+
+# read timeout in seconds
+# current bash can take floating point, old bash may need a whole number
+READ_TIMEOUT=0.1
+
+# default tpdd_wait() timout in READ_TIMEOUTs
+# usually needs at least 1.5 seconds
+# (new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds )
+# (old bash:  READ_TIMEOUT=1 * WAIT_TIMEOUT=2 = 2 seconds )
+# wait this long for the drive to wake up, spin up, read and deliver data
+# this works around not being able to flow-control on DSR
+WAIT_TIMEOUT=20
+
+###############################################################################
+# FDC Mode transactions
+#
+# send: C [ ] [P[,P]...] CR
+#
+# C = command letter, ascii letter
+# optional space between command letter and first parameter
+# P = parameter (if any), integer decimal value in ascii numbers
+# ,p = more parameters if any, seperated by commas, ascii decimal numbers
+# CR = carriage return
+#
+# recv: 8 bytes as 4 ascii hex pairs representing 4 byte values
+#
+#  1st pair is the error status
+#  remaining pairs meaning depends on the command
+#
+# Some fdc commands have another send-and-receive after that.
+# Receive the first response, if the status is not error, then:
+#
+# send: the data for a sector write
+# recv: another standard 8-byte response as above
+# or
+# send: single carriage-return
+# recv: data from a sector read
+#
+
+# FDC Mode Commands
+typeset -A fdc=(
+	[mode]='M'
+	[condition]='D'
+	[format]='F'
+	[formatnv]='G'
+	[readid]='A'
+	[readsect]='R'
+	[searchid]='S'
+	[writeid]='B'
+	[writeidnv]='C'
+	[writesect]='W'
+	[writesectnv]='X'
+)
+
+# FDC Mode Errors
+typeset -A fdc_err=(
+	[0]="OK"
+	[193]="Command Error"
+)
+
+###############################################################################
+# Operation Mode transactions
+#
+# request block
+#   P preamble  2 bytes       5A5A
+#   F format    1 byte        type of request block
+#   L length    1 byte        length of data in bytes
+#   D data      0-128 bytes   data
+#   C checksum  1 byte        1's comp of LSByte of sum of format through data
+#
+# return block
+#   F format    1 byte        type of return block
+#   L length    1 byte        length of data in bytes
+#   D data      0-128 bytes   data
+#   C checksum  1 byte        1's comp of LSByte of sum of format through data
+
+# Operation Mode Block Formats
+typeset -A fmt=(
+	# requests
+	[req_dirent]='00'
+	[req_open]='01'
+	[req_close]='02'
+	[req_read]='03'
+	[req_write]='04'
+	[req_delete]='05'
+	[req_format]='06'
+	[req_status]='07'
+	[req_fdc]='08'
+	# returns
+	[ret_read]='10'
+	[ret_dirent]='11'
+	[ret_close]='12'
+	[ret_delete]='12'
+	[ret_status]='12'
+	[ret_open]='12'
+	[ret_write]='12'
+	[ret_error]='12'
+)
+
+# Operation Mode Error Codes
+typeset -A err=(
+	[00]='Operation Complete'
+	[10]='File Not Found'
+	[30]='Command Parameter or Sequence Error'
+	[40]='Read Error 0'
+	[41]='Read Error 1'
+	[42]='Read Error 2'
+	[43]='Read Error 3'
+	[44]='Read Error 4'
+	[45]='Disk Not Formatted' # 'Read Error 5'
+	[46]='Read Error 6'
+	[47]='Read Error 7'
+	[48]='Read Error 8'
+	[49]='Read Error 9'
+	[4A]='Read Error A'
+	[4B]='Read Error B'
+	[4C]='Read Error C'
+	[4D]='Read Error D'
+	[4E]='Read Error E'
+	[4F]='Read Error F'
+	[50]='Write-Protected Disk'
+	[60]='Disk Full'
+	[70]='Disk Insertion Error 0'
+	[71]='Disk Not Inserted'      # 'Disk Insertion Error 1'
+	[72]='Disk Insertion Error 2'
+	[73]='Disk Insertion Error 3'
+	[74]='Disk Insertion Error 4'
+	[75]='Disk Insertion Error 5'
+	[76]='Disk Insertion Error 6'
+	[77]='Disk Insertion Error 7'
+	[78]='Disk Insertion Error 8'
+	[79]='Disk Insertion Error 9'
+	[7A]='Disk Insertion Error A'
+	[7B]='Disk Insertion Error B'
+	[7C]='Disk Insertion Error C'
+	[7D]='Disk Insertion Error D'
+	[7E]='Disk Insertion Error E'
+	[7F]='Disk Insertion Error F'
+	[80]='Hardware Fault 0'
+	[81]='Hardware Fault 1'
+	[82]='Hardware Fault 2'
+	[83]='Hardware Fault 3'
+	[84]='Hardware Fault 4'
+	[85]='Hardware Fault 5'
+	[86]='Hardware Fault 6'
+	[87]='Hardware Fault 7'
+	[88]='Hardware Fault 8'
+	[89]='Hardware Fault 9'
+	[8A]='Hardware Fault A'
+	[8B]='Hardware Fault B'
+	[8C]='Hardware Fault C'
+	[8D]='Hardware Fault D'
+	[8E]='Hardware Fault E'
+	[8F]='Hardware Fault F'
+)
+
+
+
+# drive operating modes
+typeset -a mode=(
+	[0]=fdc		# "FDC mode"
+	[1]=opr		# "operation mode"
+)
+
+###############################################################################
+# generic/util
+
+abrt () {
+	echo "$0: $@" >&2
+	exit 1
+}
+
+vecho () {
+	((v)) && echo "$@" >&2
+}
+
+_sleep () {
+	local x
+	read -t ${1:-1} -u 4 x
+}
+
+get_tpdd_port () {
+	(($#)) && {
+		PORT=$1
+		[[ "$PORT" =~ ^/dev/.* ]] || PORT="/dev/$1"
+		[[ -c "$PORT" ]] && return
+		PORT=
+	}
+	local x=(/dev/${DEFAULT_TPDD_PORT_PREFIX}*)
+	[[ ${x[0]} == ${DEFAULT_TPDD_PORT_PREFIX}\* ]] && x=()
+	((${#x[*]}<1)) && return 1
+	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
+	echo "Which serial port?"
+	select PORT in ${x[*]} ;do [[ ${PORT} ]] && break ;done
+}
+
+do_cmd () {
+	local x=$1 ;shift
+	case $x in
+		# operation-mode commands
+		dirent) ocmd_dirent ;; # directory entry (set reference, list)
+		#open) ocmd_open $* ;; # open file
+		#close) ocmd_close ;; # close file
+		#read) ocmd_read $* ;; # read from file
+		#write) ocmd_write $* ;; # write to file
+		#rm|del|delete) ocmd_delete ;; # delete file
+		format) ocmd_format ;; # format disk
+		stat|status) ocmd_status ;; # report drive status
+		fdc) ocmd_fdc ;; # switch to FDC mode
+
+		# fdc-mode commands
+		${fdc[mode]}|mode) fcmd_mode $* ;; # select operation-mode or fdc-mode
+		${fdc[condition]}|condition) fcmd_condition $* ;; # get drive condition
+# conflict	#${fdc[format]}|format) fcmd_format $* ;; # format disk
+		#${fdc[formatnv]}|formatnv) fcmd_formatnv $* ;; # format disk no verify
+		#${fdc[readid]}|readid) fcmd_readid $* ;; # read id
+		#${fdc[readsect]}|readsect) fcmd_readsect $* ;; # read sector
+		#${fdc[searchid]}|searchid) fcmd_searchid $* ;; # search id
+		#${fdc[writeid]}|writeid) fcmd_writeid $* ;; # write id
+		#${fdc[writeidnv]}|writeidnv) fcmd_writeidnv $* ;; # write id no verify
+		#${fdc[writesect]}|writesect) fcmd_writesect $* ;; # write sector
+		#${fdc[writesectnv]}|writesectnv) fcmd_writesectnv $* ;; # write sector no verify
+
+		# client local/virtual commands (not part of the drive firmware)
+		ls|dir|list) lcmd_get_list ;; # dirent loop to list all files
+		com_test) lcmd_com_test ;; # check if serial port is open or closed
+		com_open) lcmd_com_open ;; # open the serial port
+		com_close) lcmd_com_close ;; # close the serial port
+		com_read) lcmd_com_read $* ;; # read $1 bytes from the serial port
+		com_write) lcmd_com_write $* ;; # write $* to the serial port (space-seperated hex pairs)
+		com_ret) lcmd_com_ret $* ;; # read $1 bytes from the serial port
+		com_req) lcmd_com_req $* ;; # write $* to the serial port (space-seperated hex pairs)
+		sync) iosync ;; # read bytes from the drive until there are no more
+		q|quit|bye|exit) exit ;;
+	esac
+}
+
+###############################################################################
+# serial port operations
+
+test_com () {
+	{ true >&3 ; } 2>&-
+}
+
+open_com () {
+	test_com && return
+	exec 3<>"${PORT}"
+	stty ${stty_f} "${PORT}" ${STTY}
+	test_com || abrt "Failed to open serial port \"${PORT}\""
+	iosync
+	#fcmd_mode 1
+}
+
+close_com () {
+	exec 3>&-
+}
+
+# Convert a plain text string to hex pairs in hex[]
+mk_hex () {
+	vecho "${FUNCNAME[0]}($*)"
+	local x=$* ;local -i i l=${#x} ;hex=()
+	for ((i=0;i<l;i++)) { printf -v hex[i] '%02x' "'${x:i:1}" ; }
+	vecho "hex=(${hex[*]})"
+}
+
+###############################################################################
+# TPDD communication primitives
+
+# write $* to com port as binary
+tpdd_write () {
+	vecho "${FUNCNAME[0]}($*)"
+	local x=$* ;rdh=()
+	echo -en "\x${x// /\\x}" >&3
+}
+
+# read $1 bytes from com port
+# store each byte as a hex pair in rdh[]
+# deep brute force magic here to actually read null bytes
+# (we're not actually reading or storing nulls, but we are *detecting* them and recording where they were)
+# Thanks to Andrew Ayers in the M100 group on Facebook for help finding the key trick.
+tpdd_read () {
+	local -i i l=$1 ;local x ;rdh=() read_err=
+	vecho -n "${FUNCNAME[0]}($@) :"
+	vecho -n " l=$l "
+	tpdd_wait # DST/DTR work-around
+	for ((i=0;i<l;i++)) {
+		vecho -n " $i:"
+		x= rdh[i]='00'
+		((read_err)) && continue
+		IFS= read -t ${READ_TIMEOUT} -r -d $'\0' -n 1 -u 3 x
+		read_err=$?
+		printf -v rdh[i] '%02x' "'$x"
+		vecho -n "${rdh[i]}"
+	}
+	vecho " read_err:$read_err"
+}
+
+# check if data available without consuming any of it
+tpdd_check () {
+	IFS= read -t 0 -u 3
+}
+
+# wait for data available
+# polling loop to work around lack of DSR/DTR
+tpdd_wait () {
+	vecho -n "${FUNCNAME[0]}($@):"
+	local -i i=-1 t=${1:-${WAIT_TIMEOUT}}
+	until ((++i>t)) ;do
+		tpdd_check && break
+		_sleep ${READ_TIMEOUT}
+	done
+	vecho -n "$i"
+}
+
+# build a valid operation-mode request block from $1=fmt and $*=data
+# 5a 5a $1 len $* cksum
+# and send it to the tpdd
+ocmd_send_req () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+	local fmt=$1 len ;shift
+	printf -v len "%02x" $#
+	calc_cksum $fmt $len $*
+	vecho "fmt=\"$fmt\" len=\"$len\" dat=\"$*\" sum=\"$cksum\""
+	tpdd_write 5a 5a $fmt $len $* $cksum
+}
+
+# read an operation-mode return block from the tpdd
+# parse it into the parts: format, length, data, checksum
+# verify the checksum
+# return the globals ret_fmt=format, ret_len=length, rdh[]=data
+ocmd_read_ret () {
+	vecho "${FUNCNAME[0]}($@)"
+	local -i t ;local l x ;ret_fmt= ret_len= ret_dat=() ret_sum=
+
+	# retry a few times
+	for ((t=0;t<3;t++)) {
+		# read 2 bytes (fmt len)
+		tpdd_read 2
+		vecho "(fmt len):(${rdh[*]})"
+		((${#rdh[*]}==2)) || return 1
+		case "${rdh[0]}" in
+			10|11|12) ret_fmt=${rdh[0]} ret_len=${rdh[1]} ; break ;;
+			00) continue ;;
+			*) rdh=() ;return 2 ;;
+		esac
+	}
+
+	# read <length> bytes (data)
+	l=$((16#${ret_len}))
+	tpdd_read $l
+	((${#rdh[*]}==l)) || return 3
+	ret_dat=(${rdh[*]})
+	vecho "data=(${ret_dat[*]})"
+
+	# read 1 byte (checksum)
+	tpdd_read 1
+	((${#rdh[*]}==1)) || return 4
+	ret_sum=${rdh[0]}
+	vecho "cksum=$ret_sum"
+
+	# compute our own checksum and verify it matches the supplied checksum
+	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { echo "checksum failed" ; return 5 ; }
+}
+
+# Drain any pending output from the drive.
+# Read and discard bytes one at a time until hitting a read timeout.
+iosync () {
+	vecho "${FUNCNAME[0]}($@)"
+	while tpdd_check ;do tpdd_read 1 ;done
+	rdh=()
+}
+
+# calculate the checksum of $* (hex pairs)
+# return in global $cksum (hex pair)
+calc_cksum () {
+	vecho -n "${FUNCNAME[0]}($*) :"
+	local -i s=0
+	while (($#)) ;do ((s+=16#$1)) ;shift ;done
+	s=$(((s&255)^255))
+	printf -v cksum "%02x" $s
+	vecho "$cksum"
+}
+
+# verify the checksum of a received packet
+# $* = data data data... csum  (hex pairs)
+verify_checksum () {
+	vecho "${FUNCNAME[0]}($*)"
+	local -i l=$(($#-1)) ;local x= h=($*)
+	x=${h[l]} ;h[l]=
+	calc_cksum ${h[*]}
+	vecho "received: \"$x\""
+	vecho "computed: \"$cksum\""
+	[[ "$x" == "$cksum" ]]
+}
+
+###############################################################################
+# TPDD "Operation Mode" commands
+
+# directory entry
+# fmt = 00
+# len = 1a
+# filename = 24 bytes
+# attribute = 46 ("F" = ignore attribute)
+# search form = 00=set_name | 01=get_first | 02=get_next
+
+ocmd_dirent () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+	local x ;drive_err= error_msg= file_name= file_attr= file_len= free_sectors=
+
+	# construct the request
+	printf -v x '%-24.24s' $1 ;mk_hex "$x"
+	printf -v hex[24] '%02x' "'${2:-F}"
+	printf -v hex[25] '%02x' ${3:-1}
+
+	# send the request
+	ocmd_send_req ${fmt[req_dirent]} ${hex[*]}
+
+	# read the response
+	ocmd_read_ret || {
+		# Pain in the ass special case...
+		# TPDD1 util disk has something odd with SETRAM.BA where the drive
+		# never sends the checksum byte, and we get 00 from timing out.
+		# Also the free sectors are wrong. Should be 79, returns 26.
+		# But otherwise, the record is fine. We get the expected response
+		# format byte, data length byte, filename, attribute, and file length.
+		# Tested 2 different copies from 2 different sources, a backup
+		# made by an m100 list member in NZ, and a factory original disk from
+		# an ebay lot in the US. Both behave exactly the same, including the
+		# the same specific wrong value for free sectors, so it's not random
+		# disk corruption.
+		#
+		# If read_ret() errored and checksum=00 then ignore error.
+		[[ "$ret_sum" == '00' ]] && drive_err= error_msg= read_err=
+		:
+	}
+
+	# parse the response
+	case "$ret_fmt" in
+		${fmt[ret_error]}) # error return packet
+			((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 1 ; }
+			error_msg="${err[${ret_dat[0]}]}"
+			drive_err=$((16#${ret_dat[0]}))
+			vecho -n "${ret_dat[0]} : "
+			echo "$error_msg" >&2
+			return 1
+			;;
+		${fmt[ret_dirent]}) # dirent return packet
+			((${#ret_dat[*]}==28)) || { echo "Corrupt Response" >&2 ;return 1 ; }
+			free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
+			file_len=$((16#${ret_dat[25]}*255+16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
+			x="\x${ret_dat[24]}" ;ret_dat[24]= ;printf -v file_attr '%b' "$x"
+			x=(${ret_dat[*]}) ;x="${x[*]}" ;x="\x${x// /\\x}" ;printf -v file_name '%-24.24b' "$x"
+			vecho "$file_name $file_len"
+			[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
+			;;
+	esac
+
+	echo "Corrupt Response" >&2 ;return 1
+}
+
+# list all files
+lcmd_get_list () {
+	vecho "${FUNCNAME[0]}($@)"
+	local -i access_mode=0 i= ;local x f a ;ret_dat=()
+
+	while ((i++<40)) ;do
+		vecho "FCB: $i"
+		((access_mode<2)) && ((access_mode++))
+		ocmd_dirent '' '' $access_mode || break
+		printf '%24b %6u\n' "$file_name" "$file_len"
+	done
+}
+
+# Get Drive Status
+# request: 5a 5a 07 00 ##
+# return : 07 01 ?? ##
+ocmd_status () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+	ocmd_send_req ${fmt[req_status]}
+	ocmd_read_ret
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+}
+
+# Format Disk
+#request: 5a 5a 06 00 ##
+#return : 12 01 ?? ##
+ocmd_format () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) || fcmd_mode 1
+
+	# send the format command
+	ocmd_send_req ${fmt[req_format]}
+
+	# allow 2 minutes (1200 x 0.1s), usually done by 100 seconds
+	echo "Formatting disk..."
+	tpdd_wait 1200 
+
+	# read response
+	ocmd_read_ret
+
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+}
+
+# switch to FDC mode
+ocmd_fdc () {
+	ocmd_send_req ${fmt[req_fdc]}
+	operation_mode=0
+}
+
+###############################################################################
+# TPDD "FDC Mode" commands
+
+# select operation mode
+# $1 0=fdc 1=operation
+fcmd_mode () {
+	vecho "${FUNCNAME[0]}($@)"
+	(($#)) || return
+	mk_hex "${fdc[mode]}$1"
+	tpdd_write ${hex[*]} 0d
+	operation_mode=$1
+	iosync
+}
+
+fcmd_condition () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) && ocmd_fdc
+	local x status result length
+	mk_hex "${fdc[condition]}"
+	tpdd_write ${hex[*]} 0d
+	tpdd_read 8
+	x="${rdh[*]}" ;printf -v x '%b' "\x${x// /\\x}"
+	vecho "$x"
+	status=$((16#${x:0:2}))
+	result=$((16#${x:2:2}))
+	#length=$((16#${x:4:4})) # always 0000 for this command
+
+	((v)) && {
+		x='OK'
+		((status)) && {
+			x='ERROR'
+			[[ "${fdc_err[status]}" ]] && x="${fdc_err[status]}"
+		}
+		vecho -n "status: $status - $x"
+	}
+	((status)) && return $status
+
+	vecho "result: $result (${D2B[result]})"
+	vecho -n "Result bit 7: ${D2B[result]:0:1} - " ;x='' ;((${D2B[result]:0:1})) && x=' Not' ;echo -n "Disk${x} Inserted" # bit 7
+	((${D2B[result]:0:1})) && { echo ;return ; }
+
+	#vecho "Result bit 6: ${D2B[result]:1:1} " ;#x='' ;((${D2B[result]:1:1})) || x=' not' ;echo "Disk${x} Inserted" # bit 6 same as 7
+	vecho -n "Result bit 5: ${D2B[result]:2:1} - " ;x='Writable' ;((${D2B[result]:2:1})) && x='Write-protected' ;echo ", $x" # bit 5
+	#vecho "Result bit 4: ${D2B[result]:3:1}" # 4-0 always 0 for this command
+	#vecho "Result bit 3: ${D2B[result]:4:1}"
+	#vecho "Result bit 2: ${D2B[result]:5:1}"
+	#vecho "Result bit 1: ${D2B[result]:6:1}"
+	#vecho "Result bit 0: ${D2B[result]:7:1}"
+}
+
+###############################################################################
+# manual/raw debug commands
+
+lcmd_com_test () {
+	test_com && echo "com is open" || echo "com is closed"
+}
+
+lcmd_com_open () {
+	open_com && echo "com opened"
+}
+
+lcmd_com_close () {
+	close_com
+	test_com && echo "com not closed" || echo "com closed"
+}
+
+lcmd_com_read () {
+	local i x
+	tpdd_read $1
+	printf '%s\n' "${rdh[@]}"
+}
+
+lcmd_com_write () {
+	tpdd_write $*
+}
+
+lcmd_com_ret () {
+	ocmd_read_ret $1
+	printf '%s\n' "${ret_dat[@]}"
+}
+
+# $1=len $*=data
+# len = number of bytes to read after sending data
+lcmd_com_req () {
+	local r=$1 ;shift
+	ocmd_send_req "$*"
+	(($r)) && lcmd_com_ret $r
+}
+
+###############################################################################
+# Main
+typeset -a hex=() rdh=() ret_dat=()
+typeset -i operation_mode=1 read_err=
+cksum=00 ret_fmt= ret_len= ret_sum=
+readonly D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
+
+# for _sleep()
+sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
+trap "rm -f ${sleep_fifo}" EXIT
+mkfifo $sleep_fifo || abrt "Error creating sleep fifo $sleep_fifo"
+exec 4<>$sleep_fifo
+
+# tpdd serial port
+[[ -c $1 ]] && { PORT=$1 ; shift ; }
+get_tpdd_port $1
+echo "Using port \"${PORT}\""
+open_com
+
+# non-interactive mode
+(($#)) && { do_cmd $* ; exit ; }
+
+# interactive mode
+while read -p"TPDD(${mode[operation_mode]})>" x ;do do_cmd $x ;done
