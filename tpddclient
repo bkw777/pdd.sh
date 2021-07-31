@@ -23,10 +23,7 @@ RTSCTS="crtscts"  # "crtscts" to enable, "-crtscts" to disable
 
 # stty flags to set the serial port parameters & tty line discipline & behavior
 # don't include -f/-F filename
-#STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain eof undef eol undef erase undef intr undef kill undef quit undef start undef stop undef susp undef"
 STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
-# https://gist.github.com/plugnburn/5b2582be521944f739e1#file-nokiatool-sh
-#STTY="19200 -parenb -parodd -cmspar cs8 hupcl -cstopb cread clocal ${RTSCTS} ignbrk -brkint -ignpar -parmrk -inpck -istrip -inlcr -igncr -icrnl -ixon -ixoff -iuclc -ixany -imaxbel -iutf8 -opost -olcuc -ocrnl -onlcr -onocr -onlret -ofill -ofdel nl0 cr0 tab0 bs0 vt0 ff0 -isig -icanon -iexten -echo -echoe -echok -echonl -noflsh -xcase -tostop -echoprt -echoctl -echoke -extproc"
 
 # read timeout in seconds
 # current bash can take floating point, old bash may need a whole number
@@ -208,20 +205,37 @@ _sleep () {
 	read -t ${1:-1} -u 4 x
 }
 
-get_tpdd_port () {
-	(($#)) && {
-		PORT=$1
-		[[ "$PORT" =~ ^/dev/.* ]] || PORT="/dev/$1"
-		[[ -c "$PORT" ]] && return
-		PORT=
-	}
-	local x=(/dev/${DEFAULT_TPDD_PORT_PREFIX}*)
-	[[ ${x[0]} == ${DEFAULT_TPDD_PORT_PREFIX}\* ]] && x=()
-	((${#x[*]}<1)) && return 1
-	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
-	echo "Which serial port?"
-	select PORT in ${x[*]} ;do [[ ${PORT} ]] && break ;done
+# Convert a plain text string to hex pairs stored in hex[]
+mk_hex () {
+	vecho "${FUNCNAME[0]}($*)"
+	local x=$* ;local -i i l=${#x} ;hex=()
+	for ((i=0;i<l;i++)) { printf -v hex[i] '%02x' "'${x:i:1}" ; }
+	vecho "hex=(${hex[*]})"
 }
+
+# calculate the checksum of $* (hex pairs)
+# return in global $cksum (hex pair)
+calc_cksum () {
+	vecho -n "${FUNCNAME[0]}($*) :"
+	local -i s=0
+	while (($#)) ;do ((s+=16#$1)) ;shift ;done
+	s=$(((s&255)^255))
+	printf -v cksum "%02x" $s
+	vecho "$cksum"
+}
+
+# verify the checksum of a received packet
+# $* = data data data... csum  (hex pairs)
+verify_checksum () {
+	vecho "${FUNCNAME[0]}($*)"
+	local -i l=$(($#-1)) ;local x= h=($*)
+	x=${h[l]} ;h[l]=
+	calc_cksum ${h[*]}
+	vecho "received: \"$x\""
+	vecho "computed: \"$cksum\""
+	[[ "$x" == "$cksum" ]]
+}
+
 
 do_cmd () {
 	local x=$1 ;shift
@@ -267,6 +281,21 @@ do_cmd () {
 ###############################################################################
 # serial port operations
 
+get_tpdd_port () {
+	(($#)) && {
+		PORT=$1
+		[[ "$PORT" =~ ^/dev/.* ]] || PORT="/dev/$1"
+		[[ -c "$PORT" ]] && return
+		PORT=
+	}
+	local x=(/dev/${DEFAULT_TPDD_PORT_PREFIX}*)
+	[[ ${x[0]} == ${DEFAULT_TPDD_PORT_PREFIX}\* ]] && x=()
+	((${#x[*]}<1)) && return 1
+	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
+	echo "Which serial port?"
+	select PORT in ${x[*]} ;do [[ ${PORT} ]] && break ;done
+}
+
 test_com () {
 	{ true >&3 ; } 2>&-
 }
@@ -284,16 +313,8 @@ close_com () {
 	exec 3>&-
 }
 
-# Convert a plain text string to hex pairs in hex[]
-mk_hex () {
-	vecho "${FUNCNAME[0]}($*)"
-	local x=$* ;local -i i l=${#x} ;hex=()
-	for ((i=0;i<l;i++)) { printf -v hex[i] '%02x' "'${x:i:1}" ; }
-	vecho "hex=(${hex[*]})"
-}
-
 ###############################################################################
-# TPDD communication primitives
+# TPDD communication
 
 # write $* to com port as binary
 tpdd_write () {
@@ -398,29 +419,6 @@ iosync () {
 	vecho "${FUNCNAME[0]}($@)"
 	while tpdd_check ;do tpdd_read 1 ;done
 	rdh=()
-}
-
-# calculate the checksum of $* (hex pairs)
-# return in global $cksum (hex pair)
-calc_cksum () {
-	vecho -n "${FUNCNAME[0]}($*) :"
-	local -i s=0
-	while (($#)) ;do ((s+=16#$1)) ;shift ;done
-	s=$(((s&255)^255))
-	printf -v cksum "%02x" $s
-	vecho "$cksum"
-}
-
-# verify the checksum of a received packet
-# $* = data data data... csum  (hex pairs)
-verify_checksum () {
-	vecho "${FUNCNAME[0]}($*)"
-	local -i l=$(($#-1)) ;local x= h=($*)
-	x=${h[l]} ;h[l]=
-	calc_cksum ${h[*]}
-	vecho "received: \"$x\""
-	vecho "computed: \"$cksum\""
-	[[ "$x" == "$cksum" ]]
 }
 
 ###############################################################################
