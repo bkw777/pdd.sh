@@ -64,7 +64,7 @@ Not working :/
 
 Use your M100 to place a file on a disk. Let's say the file is named "FOO.DO"  
 Insert that disk and run "./tpddclient load FOO.DO"  
-Watch it start off ok, then crap out in the middle of the first or 2nd 128-byte packet.
+Watch it start off ok, then crap out in the middle of the first or second packet.
 
 # References
 http://tandy.wiki/TPDD  
