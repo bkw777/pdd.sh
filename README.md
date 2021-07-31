@@ -23,7 +23,7 @@ It's pure bash except for the following:
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
 # References
-http://tandy.wiki/TPDD
-https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
-https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd2-sector-0.html
+http://tandy.wiki/TPDD  
+https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/  
+https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd2-sector-0.html  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd-sector-access.html
