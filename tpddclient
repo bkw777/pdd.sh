@@ -274,8 +274,7 @@ do_cmd () {
 	# operation-mode commands
 	# All of the drive firmware "operation mode" functions.
 	# Most of these are low-level, not used directly by a user.
-	# Higher-level commands like ls, load, & save are built
-	# out of combinations of these.
+	# Higher-level commands like ls, load, & save are built out of these.
 			dirent) ocmd_dirent ;;
 			open) ocmd_open $* ;;
 			close) ocmd_close ;;
@@ -327,10 +326,11 @@ do_cmd () {
 }
 
 lcmd_tpdd1_boot () {
+	local x
 	mk_hex "S10985157C00AD7EF08B3AS901FE"
 	tpdd_write ${hex[*]} 0d
-	while tpdd_read 1 ;do : ;done
-	printf '%s\n' "${rdh[*]}"
+	while tpdd_read 1 ;do x+="${rdh[*]}" ;done
+	printf '%b\n' "\x${x// /\\x}"
 }
 
 ###############################################################################
