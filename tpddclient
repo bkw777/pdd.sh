@@ -326,11 +326,11 @@ do_cmd () {
 }
 
 lcmd_tpdd1_boot () {
-	local x
+	local x=
 	mk_hex "S10985157C00AD7EF08B3AS901FE"
 	tpdd_write ${hex[*]} 0d
-	while tpdd_read 1 ;do x+="${rdh[*]}" ;done
-	printf '%b\n' "\x${x// /\\x}"
+	while tpdd_read 1 ;do x+=" ${rdh[*]}" ;done
+	echo -e "\x${x// /\\x}"
 }
 
 ###############################################################################
