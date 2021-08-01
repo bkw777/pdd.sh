@@ -253,7 +253,7 @@ verify_checksum () {
 
 # check if the current operation-mode response is an error response
 # return true if error, false if not error
-# ex: ck_ocmd_err && echo "error" || echo "no error"
+# (so everything in here looks backwards)
 ck_ocmd_err () {
 	[[ "$ret_fmt" == "${fmt[ret_error]}" ]] || return 1
 	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
@@ -267,10 +267,13 @@ do_cmd () {
 	local x=$1 ;shift
 	case $x in
 		# operation-mode commands
+		# most of these aren't really sensible as user interactive commands
+		# other commands like "ls" and "load" or "save" use them
+		# but these are the commands the drive firmware supplies in "operation" mode
 		dirent) ocmd_dirent ;; # directory entry (set reference, list)
-		#open) ocmd_open $* ;; # open file
-		#close) ocmd_close ;; # close file
-		#read) ocmd_read $* ;; # read from file
+		open) ocmd_open $* ;; # open file
+		close) ocmd_close ;; # close file
+		read) ocmd_read $* ;; # read from file
 		#write) ocmd_write $* ;; # write to file
 		#rm|del|delete) ocmd_delete ;; # delete file
 		format) ocmd_format ;; # format disk
@@ -280,7 +283,7 @@ do_cmd () {
 		# fdc-mode commands
 		${fdc[mode]}|mode) fcmd_mode $* ;; # select operation-mode or fdc-mode
 		${fdc[condition]}|condition) fcmd_condition $* ;; # get drive condition
-# conflict	#${fdc[format]}|format) fcmd_format $* ;; # format disk
+# name conflict #${fdc[format]}|format) fcmd_format $* ;; # format disk
 		#${fdc[formatnv]}|formatnv) fcmd_formatnv $* ;; # format disk no verify
 		#${fdc[readid]}|readid) fcmd_readid $* ;; # read id
 		#${fdc[readsect]}|readsect) fcmd_readsect $* ;; # read sector
@@ -724,16 +727,19 @@ lcmd_com_write () {
 }
 
 lcmd_com_ret () {
-	ocmd_read_ret $1
+	ocmd_read_ret
 	printf '%s\n' "${ret_dat[@]}"
 }
 
-# $1=len $*=data
-# len = number of bytes to read after sending data
+# $1 - 0=no 1=yes - read a return after sending
+# $* ocmd_send_req data
+# TODO replace this $r flag with the ability to stack commands in the main loop
+# command... ;command... ;...
+# should be easy since data is always all in hex pairs except filenames
 lcmd_com_req () {
-	local r=$1 ;shift
+	local -i r ;shift
 	ocmd_send_req "$*"
-	(($r)) && lcmd_com_ret $r
+	((r)) && lcmd_com_ret
 }
 
 ###############################################################################
