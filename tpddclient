@@ -264,69 +264,84 @@ ck_ocmd_err () {
 }
 
 do_cmd () {
-	local x=$1 ;shift
-	case $x in
-		# operation-mode commands
-		# most of these aren't really sensible as user interactive commands
-		# other commands like "ls" and "load" or "save" use them
-		# but these are the commands the drive firmware supplies in "operation" mode
-		dirent) ocmd_dirent ;; # directory entry (set reference, list)
-		open) ocmd_open $* ;; # open file
-		close) ocmd_close ;; # close file
-		read) ocmd_read $* ;; # read from file
-		#write) ocmd_write $* ;; # write to file
-		#rm|del|delete) ocmd_delete ;; # delete file
-		format) ocmd_format ;; # format disk
-		stat|status) ocmd_status ;; # report drive status
-		fdc) ocmd_fdc ;; # switch to FDC mode
+	vecho "${FUNCNAME[0]}($@)"
+	local -i i ;local a=() c ifs=$IFS IFS=';' ;a=($@) IFS=$ifs
+	for ((i=0;i<${#a[*]};i++)) {
+		set ${a[i]}
+		c=$1 ;shift
+		case $c in
 
-		# fdc-mode commands
-		${fdc[mode]}|mode) fcmd_mode $* ;; # select operation-mode or fdc-mode
-		${fdc[condition]}|condition) fcmd_condition $* ;; # get drive condition
-# name conflict #${fdc[format]}|format) fcmd_format $* ;; # format disk
-		#${fdc[formatnv]}|formatnv) fcmd_formatnv $* ;; # format disk no verify
-		#${fdc[readid]}|readid) fcmd_readid $* ;; # read id
-		#${fdc[readsect]}|readsect) fcmd_readsect $* ;; # read sector
-		#${fdc[searchid]}|searchid) fcmd_searchid $* ;; # search id
-		#${fdc[writeid]}|writeid) fcmd_writeid $* ;; # write id
-		#${fdc[writeidnv]}|writeidnv) fcmd_writeidnv $* ;; # write id no verify
-		#${fdc[writesect]}|writesect) fcmd_writesect $* ;; # write sector
-		#${fdc[writesectnv]}|writesectnv) fcmd_writesectnv $* ;; # write sector no verify
+	# operation-mode commands
+	# All of the drive firmware "operation mode" functions.
+	# Most of these are low-level, not used directly by a user.
+	# Higher-level commands like ls, load, & save are built
+	# out of combinations of these.
+			dirent) ocmd_dirent ;;
+			open) ocmd_open $* ;;
+			close) ocmd_close ;;
+			read) ocmd_read $* ;;
+			#write) ocmd_write $* ;;
+			#rm|del|delete) ocmd_delete ;;
+			format) ocmd_format ;;
+			stat|status) ocmd_status ;;
+			fdc) ocmd_fdc ;;
 
-		# client local/virtual commands (not part of the drive firmware)
-		# high-level & normal commands
-		ls|dir|list) lcmd_ls ;; # dirent loop to list all files
-		load) lcmd_load $* ;; # copy a file from the tpdd to the local filesystem
-		sync) iosync ;; # read bytes from the drive until there are no more
-		q|quit|bye|exit) exit ;;
+	# fdc-mode commands
+	# All of the drive firmware "FDC mode" functions.
+			${fdc[mode]}|mode) fcmd_mode $* ;; # select operation-mode or fdc-mode
+			${fdc[condition]}|condition) fcmd_condition $* ;; # get drive condition
+# name conflict 	#${fdc[format]}|format) fcmd_format $* ;; # format disk
+			#${fdc[formatnv]}|formatnv) fcmd_formatnv $* ;; # format disk no verify
+			#${fdc[readid]}|readid) fcmd_readid $* ;; # read id
+			#${fdc[readsect]}|readsect) fcmd_readsect $* ;; # read sector
+			#${fdc[searchid]}|searchid) fcmd_searchid $* ;; # search id
+			#${fdc[writeid]}|writeid) fcmd_writeid $* ;; # write id
+			#${fdc[writeidnv]}|writeidnv) fcmd_writeidnv $* ;; # write id no verify
+			#${fdc[writesect]}|writesect) fcmd_writesect $* ;; # write sector
+			#${fdc[writesectnv]}|writesectnv) fcmd_writesectnv $* ;; # write sector no verify
 
-		# low level manual debug/raw commands
-		com_test) lcmd_com_test ;; # check if serial port is open or closed
-		com_open) lcmd_com_open ;; # open the serial port
-		com_close) lcmd_com_close ;; # close the serial port
-		com_read) lcmd_com_read $* ;; # read $1 bytes from the serial port
-		com_write) lcmd_com_write $* ;; # write $* to the serial port (space-seperated hex pairs)
-		com_ret) lcmd_com_ret $* ;; # read $1 bytes from the serial port
-		com_req) lcmd_com_req $* ;; # write $* to the serial port (space-seperated hex pairs)
-	esac
+	# local/client commands
+	# High-level commands like "ls", and things like "exit"
+			ls|dir|list) lcmd_ls ;;
+			load) lcmd_load $* ;;
+			sync|drain) iosync ;;
+			q|quit|bye|exit) exit ;;
+
+	# low level manual raw/debug commands
+			com_test) lcmd_com_test ;; # check if port open
+			com_open) lcmd_com_open ;; # open the port
+			com_close) lcmd_com_close ;; # close the port
+			com_read) lcmd_com_read $* ;; # read $1 bytes
+			com_write) lcmd_com_write $* ;; # write $* (hex pairs)
+			com_ret) lcmd_com_ret ;; # read a return packet
+			com_req) lcmd_com_req $* ;; # write a request packet
+
+	# playground
+			# send the TPDD1 bootstrap S-records
+			tpdd1_boot) lcmd_tpdd1_boot ;;
+
+			'') : ;;
+			*) echo "Unknown command: \"$x\"" ;;
+		esac
+	}
+}
+
+lcmd_tpdd1_boot () {
+	mk_hex "S10985157C00AD7EF08B3AS901FE"
+	tpdd_write ${hex[*]} 0d
+	while tpdd_read 1 ;do : ;done
+	printf '%s\n' "${rdh[*]}"
 }
 
 ###############################################################################
 # serial port operations
 
 get_tpdd_port () {
-	(($#)) && {
-		PORT=$1
-		[[ "$PORT" =~ ^/dev/.* ]] || PORT="/dev/$1"
-		[[ -c "$PORT" ]] && return
-		PORT=
-	}
-	local x=(/dev/${DEFAULT_TPDD_PORT_PREFIX}*)
-	[[ ${x[0]} == ${DEFAULT_TPDD_PORT_PREFIX}\* ]] && x=()
-	((${#x[*]}<1)) && return 1
+	local x=(/dev/${DEFAULT_TPDD_PORT_PREFIX#/dev/}*)
+	[[ "${x[0]}" == "/dev/${DEFAULT_TPDD_PORT_PREFIX}*" ]] && x=(/dev/tty*)
 	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
-	echo "Which serial port?"
-	select PORT in ${x[*]} ;do [[ ${PORT} ]] && break ;done
+	local PS3="Which serial tty device is the TPDD drive on? "
+	select PORT in ${x[*]} ;do [[ -c "$PORT" ]] && break ;done
 }
 
 test_com () {
@@ -708,16 +723,16 @@ lcmd_com_test () {
 }
 
 lcmd_com_open () {
-	open_com && echo "com opened"
+	open_com
+	lcmd_com_test
 }
 
 lcmd_com_close () {
 	close_com
-	test_com && echo "com not closed" || echo "com closed"
+	lcmd_com_test
 }
 
 lcmd_com_read () {
-	local i x
 	tpdd_read $1
 	printf '%s\n' "${rdh[@]}"
 }
@@ -731,15 +746,8 @@ lcmd_com_ret () {
 	printf '%s\n' "${ret_dat[@]}"
 }
 
-# $1 - 0=no 1=yes - read a return after sending
-# $* ocmd_send_req data
-# TODO replace this $r flag with the ability to stack commands in the main loop
-# command... ;command... ;...
-# should be easy since data is always all in hex pairs except filenames
 lcmd_com_req () {
-	local -i r ;shift
-	ocmd_send_req "$*"
-	((r)) && lcmd_com_ret
+	ocmd_send_req $*
 }
 
 ###############################################################################
@@ -756,13 +764,12 @@ mkfifo $sleep_fifo || abrt "Error creating sleep fifo $sleep_fifo"
 exec 4<>$sleep_fifo
 
 # tpdd serial port
-[[ -c $1 ]] && { PORT=$1 ; shift ; }
-get_tpdd_port $1
+PORT="/dev/${1#/dev/}" ;[[ -c "$PORT" ]] && shift || get_tpdd_port
 echo "Using port \"${PORT}\""
 open_com
 
 # non-interactive mode
-(($#)) && { do_cmd $* ; exit ; }
+(($#)) && { do_cmd "$@" ; exit ; }
 
 # interactive mode
-while read -p"TPDD(${mode[operation_mode]})>" x ;do do_cmd $x ;done
+while read -p"TPDD(${mode[operation_mode]})>" x ;do do_cmd "$x" ;done
