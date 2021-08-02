@@ -610,10 +610,10 @@ ocmd_read () {
 	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
 	# check if the response was an error
-	ck_ocmd_err && return 1
+	ck_ocmd_err && return 5
 
 	# sanity check
-	[[ "$ret_fmt" == "${fmt[ret_read]}" ]] || return 1
+	[[ "$ret_fmt" == "${fmt[ret_read]}" ]] || return 4
 
 	# EOF
 	((${#ret_dat[*]}))
@@ -711,7 +711,7 @@ lcmd_load () {
 	ocmd_open ${open_mode[read]}			# open the file for reading
 	>$f						# start the local file
 	while (($c<$file_len)) ;do				# read a block of data from tpdd
-		ocmd_read ;e=$? ;vecho "err=$e"
+		ocmd_read ;e=$? ;vecho "ocmd_read() err=$e"
 		((n++))
 		((c+=${#ret_dat[*]}))
 		vecho "packet:$n ret_len=$ret_len($((16#$ret_len))) #ret_dat:${#ret_dat[*]} accum:$c file:$file_len"

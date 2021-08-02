@@ -45,6 +45,9 @@ If you need to override the automatic guess, just supply a tty device as the fir
 
 If you don't supply any command on the commandline, the script runs in interactive mode where you enter the same commands at a "TPDD($mode)>" prompt.
 
+Multiple commands may be given at once, seperated by ';', either on the commandline to send an entire sequence and exit, or given manually at the interactive mode prompt.
+For instance, to issue a command and read the return all in one go.
+
 There is no help yet. Just look at do_cmd() in the code and go from there.
 
 # Examples
@@ -62,10 +65,11 @@ To see all the gory details, do "export DEBUG=true" before running tpddclient.
 
 # Status
 Not working :/
+But getting close!
 
-Use your M100 to place a file on a disk. Let's say the file is named "FOO.DO"  
-Insert that disk and run "./tpddclient load FOO.DO"  
-Watch it start off ok, then crap out in the middle of the first or second packet.
+Take a TPDD1 utility disk, or any disk with a file on it that's larger than 1280 bytes.
+Try to load that file "./tpddclient load Floppy_SYS"
+Watch it start off ok, then crap out after the 10th packet at exactly 1280.
 
 # References
 http://tandy.wiki/TPDD  
