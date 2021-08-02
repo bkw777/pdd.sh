@@ -71,6 +71,17 @@ Take a TPDD1 utility disk, or any disk with a file on it that's larger than 1280
 Try to load that file "./tpddclient load Floppy_SYS"
 Watch it start off ok, then crap out after the 10th packet at exactly 1280.
 
+...ok PDD.EXE halts at the exact same spot, on different copies of the utility disk that came from different sources, and on 2 different TPDD1 drives. Yet copies other disks ok. So it's not just this script. There is something funky about the TPDD1 utility disk, or the file Floppy_SYS, that's all.
+
+```
+mkdir pdd
+cd pdd
+wget 'https://archive.org/download/M100SIG/M100SIG.zip/Lib-09-PERIFERALS/PDD210.ZIP'
+unzip PDD210.ZIP
+dosbox -c "serial1 directserial realport:ttyUSB0" .
+C:\>pdd /read
+```
+
 # References
 http://tandy.wiki/TPDD  
 https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/  

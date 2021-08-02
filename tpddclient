@@ -262,7 +262,15 @@ ck_ocmd_err () {
 	error_msg="${err[${ret_dat[0]}]}"
 	drive_err=$((16#${ret_dat[0]}))
 	vecho -n "${ret_dat[0]} : "
-	echo "$error_msg" >&2
+	(($drive_err)) && echo "$error_msg" >&2
+}
+
+# check if "format 12h" response was ok (00) or error
+ck_ret_ok () {
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	((${#ret_dat[*]}==1)) || { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	vecho -n "${ret_dat[0]} : "
+	((16#${ret_dat[0]})) && echo "${err[${ret_dat[0]}]}" >&2 || vecho
 }
 
 do_cmd () {
@@ -282,7 +290,7 @@ do_cmd () {
 			close) ocmd_close ;;
 			read) ocmd_read $* ;;
 			#write) ocmd_write $* ;;
-			#rm|del|delete) ocmd_delete ;;
+			ocmd_delete) ocmd_delete ;;
 			format) ocmd_format ;;
 			stat|status) ocmd_status ;;
 			fdc) ocmd_fdc ;;
@@ -303,8 +311,9 @@ do_cmd () {
 
 	# local/client commands
 	# High-level commands like "ls", and things like "exit"
-			ls|dir|list) lcmd_ls ;;
-			load) lcmd_load $* ;;
+			ls|dir|list) lcmd_ls "$@" ;;
+			rm|del|delete) lcmd_rm "$@" ;;
+			load) lcmd_load "$@" ;;
 			sync|drain) iosync ;;
 			q|quit|bye|exit) exit ;;
 
@@ -323,7 +332,7 @@ do_cmd () {
 			tpdd1_boot) lcmd_tpdd1_boot ;;
 
 			'') : ;;
-			*) echo "Unknown command: \"$x\"" ;;
+			*) echo "Unknown command: \"$x\"" >&2 ;;
 		esac
 	}
 }
@@ -401,7 +410,7 @@ tpdd_read () {
 	vecho " read_err:$read_err"
 }
 
-# check if data available without consuming any of it
+# check if data is available without consuming any
 tpdd_check () {
 	IFS= read -t 0 -u 3
 }
@@ -462,8 +471,9 @@ ocmd_read_ret () {
 	vecho "cksum=$ret_sum"
 
 	# compute our own checksum and verify it matches the supplied checksum
-	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { echo "CHECKSUM FAILED" ; return 5 ; }
+	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { echo "CHECKSUM FAILED" >&2 ; return 5 ; }
 }
+
 
 # Drain any pending output from the drive.
 # Read and discard bytes one at a time until hitting a read timeout.
@@ -485,13 +495,22 @@ iosync () {
 
 ocmd_dirent () {
 	vecho "${FUNCNAME[0]}($@)"
+	local x f="$1" e m=${3:-${dirent_cmd[get_first]}}
+	drive_err= error_msg= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
-	local x ;drive_err= error_msg= file_name= file_attr= file_len= free_sectors=
+
+	# If we are setting a filename, and the filename is 6.2 or less, then
+	# assume it's a "Model T" file and add or remove internal spaces:
+	# "A.CO" -> "A     .CO               "
+	[[ $m == ${dirent_cmd[set_name]} ]] && {
+		f=${1%.*} e=${1#*.}
+		((${#f}>1)) && ((${#f}<6)) && ((${#e}<3)) && printf -v f '%-6s.%2s' "$f" "$e"
+	}
 
 	# construct the request
-	printf -v x '%-24.24s' $1 ;mk_hex "$x"	# filename
+	printf -v x '%-24.24s' "$f" ;mk_hex "$x"	# filename
 	printf -v hex[24] '%02x' "'${2:-F}"	# attribute - always "F"
-	printf -v hex[25] '%02x' ${3:-${dirent_cmd[get_first]}}	# search form
+	printf -v hex[25] '%02x' $m	# search form
 
 	# send the request
 	ocmd_send_req ${fmt[req_dirent]} ${hex[*]}
@@ -525,9 +544,7 @@ ocmd_status () {
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${fmt[req_status]}
 	ocmd_read_ret
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
-	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+	ck_ret_ok
 }
 
 # Format Disk
@@ -537,19 +554,12 @@ ocmd_format () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
 
-	# send the format command
-	ocmd_send_req ${fmt[req_format]}
-
-	# allow 2 minutes (1200 x 0.1s), usually done by 100 seconds
 	echo "Formatting disk..."
-	tpdd_wait 1200
+	ocmd_send_req ${fmt[req_format]}
+	tpdd_wait 1200	# takes 100 seconds, allow 120
 
-	# read response
 	ocmd_read_ret
-
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
-	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+	ck_ret_ok
 }
 
 # switch to FDC mode
@@ -568,9 +578,7 @@ ocmd_open () {
 	local mode ;printf -v mode '%02x' $1
 	ocmd_send_req ${fmt[req_open]} $mode	# open the file
 	ocmd_read_ret
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
-	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+	ck_ret_ok
 }
 
 # Close File
@@ -581,9 +589,7 @@ ocmd_close () {
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${fmt[req_close]}
 	ocmd_read_ret
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
-	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+	ck_ret_ok
 }
 
 # Delete File
@@ -593,10 +599,9 @@ ocmd_delete () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${fmt[req_delete]}
+	tpdd_wait 100	# takes ~5 seconds, allow 10
 	ocmd_read_ret
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}<1)) && { echo "Bad Response" ; ret_dat=() ;return 1 ; }
-	vecho -n "${ret_dat[0]} : " ;echo "${err[${ret_dat[0]}]}"
+	ck_ret_ok
 }
 
 # Read File data
@@ -684,43 +689,34 @@ lcmd_ls () {
 	done
 }
 
-# Filenames on the tpdd are space-padded to 24 bytes, so we intentionally do not
-# quote the filename argument here, so that the extraneous spaces get removed.
-#####  NOT WORKING YET  #####
-#####  Works for files under 1280 bytes.
-#####  That is suspicious, because 1280 is exactly one logical sector.
-#####  But the manual doesn't say anthing about sectors or tracks when reading a file.
-#####  The manual says you just:
-#####    1 - set the filename
-#####    2 - open the file
-#####    3 - read
-#####    4 - end of file? else goto 3
-#####  We are failing a read after 1280 bytes.
-#####  When trying to read the next return packet, we get a single null byte
-#####  where we should be getting a return format byte 10, 11, or 12
-#####  and we timeout trying to read the 2nd byte.
-#####  Everything is smooth sailing for 10 solid 128-byte packets up to that point.
-#
 # load a file (copy a file from tpdd to local fs)
 lcmd_load () {
 	vecho "${FUNCNAME[0]}($@)"
 	local x f ;local -i e n= c= b=
 	[[ "$1" ]] || return 1
-	f=$1
-	ocmd_dirent $f '' ${dirent_cmd[set_name]}	# set the filename
+	f="$1"
+	ocmd_dirent "$f" '' ${dirent_cmd[set_name]}	# set the filename
 	ocmd_open ${open_mode[read]}			# open the file for reading
-	>$f						# start the local file
-	while (($c<$file_len)) ;do				# read a block of data from tpdd
-		ocmd_read ;e=$? ;vecho "ocmd_read() err=$e"
-		((n++))
+	>"$f"						# start the local file
+	#while (($c<$file_len)) ;do				# read a block of data from tpdd
+	while ocmd_read ;do				# read a block of data from tpdd
+		#ocmd_read ;e=$? ;vecho "ocmd_read() err=$e"
+		#((n++))
 		((c+=${#ret_dat[*]}))
-		vecho "packet:$n ret_len=$ret_len($((16#$ret_len))) #ret_dat:${#ret_dat[*]} accum:$c file:$file_len"
+		#vecho "packet:$n ret_len=$ret_len($((16#$ret_len))) #ret_dat:${#ret_dat[*]} accum:$c file:$file_len"
 		x="${ret_dat[*]}"
-		printf '%b' "\x${x// /\\x}" >> $f	# write the block of data to local file
+		printf '%b' "\x${x// /\\x}" >> "$f"	# write the block of data to local file
 		#(($c<$file_len)) || break		# this trusts dirent
-		((16#$ret_len<128)) && break		# supposed to be more bulletproof
+		((16#$ret_len<128)) && break
 	done
 	ocmd_close					# close the file
+}
+
+lcmd_rm () {
+	vecho "${FUNCNAME[0]}($@)"
+	[[ "$1" ]] || return 1
+	ocmd_dirent "$1" '' ${dirent_cmd[set_name]}	# set the filename
+	ocmd_delete
 }
 
 ###############################################################################
