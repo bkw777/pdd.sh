@@ -687,6 +687,20 @@ lcmd_ls () {
 # Filenames on the tpdd are space-padded to 24 bytes, so we intentionally do not
 # quote the filename argument here, so that the extraneous spaces get removed.
 #####  NOT WORKING YET  #####
+#####  Works for files under 1280 bytes.
+#####  That is suspicious, because 1280 is exactly one logical sector.
+#####  But the manual doesn't say anthing about sectors or tracks when reading a file.
+#####  The manual says you just:
+#####    1 - set the filename
+#####    2 - open the file
+#####    3 - read
+#####    4 - end of file? else goto 3
+#####  We are failing a read after 1280 bytes.
+#####  When trying to read the next return packet, we get a single null byte
+#####  where we should be getting a return format byte 10, 11, or 12
+#####  and we timeout trying to read the 2nd byte.
+#####  Everything is smooth sailing for 10 solid 128-byte packets up to that point.
+#
 # load a file (copy a file from tpdd to local fs)
 lcmd_load () {
 	vecho "${FUNCNAME[0]}($@)"
