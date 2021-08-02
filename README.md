@@ -7,10 +7,6 @@ It's pure bash except for the following:
 * "mkfifo" is used once at startup for _sleep() without /usr/bin/sleep .  
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
-Currently the basic skeleton is up and working to send requests to and read responses from the drive, and a few commands work.
-
-The only commands that are implemented yet are:
-
 Low level "operation mode" commands (functions of the drive firmware, some not used directly by a user but used by other commands)
 * fdc - switch to FDC mode
 * status - report the status of the drive (disk ejected, hardware fault, etc)
@@ -19,10 +15,14 @@ Low level "operation mode" commands (functions of the drive firmware, some not u
 * open - open the currently set filename for write(new), write(append), or read
 * close - close the currently open file
 * read - read a block of data from the currently open file
+* ocmd_delete - delete the currently set filename
+* write - write a block of data to the currently open file (not written yet)
 
 High level "operation mode" commands. (compound functions that use combinations of the other functions to do something actually useful)
 * ls - dirent loop to list all files on the disk
-* load - copy a file from disk to local filesystem (uses dirent, open, read, and close)
+* rm - delete a file
+* load - copy a file from disk to local filesystem
+* save - copy a file from the local filesystem to the disk (not not written yet)
 * q - quit
 
 "FDC mode" commands:
@@ -46,7 +46,8 @@ If you need to override the automatic guess, just supply a tty device as the fir
 If you don't supply any command on the commandline, the script runs in interactive mode where you enter the same commands at a "TPDD($mode)>" prompt.
 
 Multiple commands may be given at once, seperated by ';', either on the commandline to send an entire sequence and exit, or given manually at the interactive mode prompt.
-For instance, to issue a command and read the return all in one go.
+Exampe, delete a file and get a listing immediately after:
+./tpddclient rm DOSNEC.CO \;ls
 
 There is no help yet. Just look at do_cmd() in the code and go from there.
 
@@ -64,23 +65,9 @@ It shoud scan the disk, list the files and file sizes, and then exit back to the
 To see all the gory details, do "export DEBUG=true" before running tpddclient.
 
 # Status
-Not working :/
-But getting close!
+All the "operation mode" commands work except write/save hasn't been written yet.
 
-Take a TPDD1 utility disk, or any disk with a file on it that's larger than 1280 bytes.
-Try to load that file "./tpddclient load Floppy_SYS"
-Watch it start off ok, then crap out after the 10th packet at exactly 1280.
-
-...ok PDD.EXE halts at the exact same spot, on different copies of the utility disk that came from different sources, and on 2 different TPDD1 drives. Yet copies other disks ok. So it's not just this script. There is something funky about the TPDD1 utility disk, or the file Floppy_SYS, that's all.
-
-```
-mkdir pdd
-cd pdd
-wget 'https://archive.org/download/M100SIG/M100SIG.zip/Lib-09-PERIFERALS/PDD210.ZIP'
-unzip PDD210.ZIP
-dosbox -c "serial1 directserial realport:ttyUSB0" .
-C:\>pdd /read
-```
+No FDC commands have been written except "condition".
 
 # References
 http://tandy.wiki/TPDD  
