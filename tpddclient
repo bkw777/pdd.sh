@@ -265,7 +265,7 @@ ck_ocmd_err () {
 
 do_cmd () {
 	vecho "${FUNCNAME[0]}($@)"
-	local -i i ;local a=() c ifs=$IFS IFS=';' ;a=($@) IFS=$ifs
+	local -i i ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
 	for ((i=0;i<${#a[*]};i++)) {
 		set ${a[i]}
 		c=$1 ;shift
@@ -314,6 +314,7 @@ do_cmd () {
 			com_write) lcmd_com_write $* ;; # write $* (hex pairs)
 			com_ret) lcmd_com_ret ;; # read a return packet
 			com_req) lcmd_com_req $* ;; # write a request packet
+			sum) calc_cksum $* ;;
 
 	# playground
 			# send the TPDD1 bootstrap S-records
@@ -376,19 +377,26 @@ tpdd_write () {
 # deep brute force magic here to actually read null bytes
 # (we're not actually reading or storing nulls, but we are *detecting* them and recording where they were)
 # Thanks to Andrew Ayers in the M100 group on Facebook for help finding the key trick.
+#
+# return values from "read"
+# $?=0 = we read a non-null byte normally
+#    1 = we read a null byte, $x is empty because the null was eaten as a delimiter
+#  142 = we timed out, $x is empty because there was no data, not a null byte
 tpdd_read () {
 	vecho -n "${FUNCNAME[0]}($@) :"
-	local -i i l=$1 ;local x ;rdh=() read_err=
+	local -i i e l=$1 ;local x y ;rdh=() read_err=0
 	vecho -n " l=$l "
 	tpdd_wait # DST/DTR work-around
 	for ((i=0;i<l;i++)) {
 		vecho -n " $i:"
 		x= rdh[i]='00'
-		((read_err)) && continue
-		IFS= read -t ${READ_TIMEOUT} -r -d $'\0' -n 1 -u 3 x
-		read_err=$?
+		((read_err)) && { vecho -n "XX" ; continue ; }
+		y=$x
+		IFS= read -t ${READ_TIMEOUT} -r -d $'\0' -n 1 -u 3 x ;read_err=$?
+		(($read_err>1)) || read_err=0		# both 0 and 1 are success
 		printf -v rdh[i] '%02x' "'$x"
 		vecho -n "${rdh[i]}"
+		((${#x}>1)) && vecho "!!!!! \"read -n 1\": ${#x} bytes: \"$y\"->\"$x\" !!!!!!"
 	}
 	vecho " read_err:$read_err"
 }
@@ -407,7 +415,7 @@ tpdd_wait () {
 		tpdd_check && break
 		_sleep ${READ_TIMEOUT}
 	done
-	vecho -n "$i"
+	vecho "$i"
 }
 
 # build a valid operation-mode request block from $1=fmt and $*=data
@@ -431,18 +439,15 @@ ocmd_read_ret () {
 	vecho "${FUNCNAME[0]}($@)"
 	local -i t ;local l x ;ret_fmt= ret_len= ret_dat=() ret_sum=
 
-	# retry a few times
-	for ((t=0;t<3;t++)) {
-		# read 2 bytes (fmt len)
-		tpdd_read 2
-		vecho "(fmt len):(${rdh[*]})"
-		((${#rdh[*]}==2)) || return 1
-		case "${rdh[0]}" in
-			10|11|12) ret_fmt=${rdh[0]} ret_len=${rdh[1]} ; break ;;
-			00) continue ;;
-			*) rdh=() ;return 2 ;;
-		esac
-	}
+	# read 2 bytes (fmt len)
+	tpdd_read 2
+	vecho "(fmt len):(${rdh[*]})"
+	((${#rdh[*]}==2)) || return 1
+	case "${rdh[0]}" in
+		10|11|12) ret_fmt=${rdh[0]} ret_len=${rdh[1]} ;;
+	#	00) continue ;;
+		*) rdh=() ;return 2 ;;
+	esac
 
 	# read <length> bytes (data)
 	l=$((16#${ret_len}))
@@ -458,7 +463,7 @@ ocmd_read_ret () {
 	vecho "cksum=$ret_sum"
 
 	# compute our own checksum and verify it matches the supplied checksum
-	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { echo "checksum failed" ; return 5 ; }
+	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { echo "CHECKSUM FAILED" ; return 5 ; }
 }
 
 # Drain any pending output from the drive.
@@ -493,23 +498,7 @@ ocmd_dirent () {
 	ocmd_send_req ${fmt[req_dirent]} ${hex[*]}
 
 	# read the response
-	ocmd_read_ret || {
-		# Pain in the ass special case...
-		# TPDD1 util disk has something odd with SETRAM.BA where the drive
-		# never sends the checksum byte, and we get 00 from timing out.
-		# Also the free sectors are wrong. Should be 79, returns 26.
-		# But otherwise, the record is fine. We get the expected response
-		# format byte, data length byte, filename, attribute, and file length.
-		# Tested 2 different copies from 2 different sources, a backup
-		# made by an m100 list member in NZ, and a factory original disk from
-		# an ebay lot in the US. Both behave exactly the same, including the
-		# the same specific wrong value for free sectors, so it's not random
-		# disk corruption.
-		#
-		# If read_ret() errored and checksum=00 then ignore error.
-		[[ "$ret_sum" == '00' ]] && drive_err= error_msg= read_err=
-		:
-	}
+	ocmd_read_ret
 
 	# check if the response was an error
 	ck_ocmd_err && return 1
@@ -520,7 +509,7 @@ ocmd_dirent () {
 
 	# parse the normal response
 	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
-	file_len=$((16#${ret_dat[25]}*255+16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
+	file_len=$((16#${ret_dat[25]} * 256 + 16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
 	x="\x${ret_dat[24]}" ;ret_dat[24]= ;printf -v file_attr '%b' "$x"
 	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
 
@@ -528,7 +517,6 @@ ocmd_dirent () {
 	# if first byte of filename is 00, then there are no more files
 	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
 }
-
 
 # Get Drive Status
 # request: 5a 5a 07 00 ##
@@ -555,7 +543,7 @@ ocmd_format () {
 
 	# allow 2 minutes (1200 x 0.1s), usually done by 100 seconds
 	echo "Formatting disk..."
-	tpdd_wait 1200 
+	tpdd_wait 1200
 
 	# read response
 	ocmd_read_ret
@@ -703,15 +691,22 @@ lcmd_ls () {
 # load a file (copy a file from tpdd to local fs)
 lcmd_load () {
 	vecho "${FUNCNAME[0]}($@)"
-	local x
-	ocmd_dirent $1 '' ${dirent_cmd[set_name]}	# set the filename
+	local x f ;local -i e n= c= b=
+	[[ "$1" ]] || return 1
+	f=$1
+	ocmd_dirent $f '' ${dirent_cmd[set_name]}	# set the filename
 	ocmd_open ${open_mode[read]}			# open the file for reading
-	>$1						# start the local file
+	>$f						# start the local file
 	while ocmd_read ;do				# read a block of data from tpdd
+		ocmd_read ;e=$? ;vecho "err=$e"
+		((n++))
+		((c+=${#ret_dat[*]}))
+		vecho "packet:$n ret_len=$ret_len($((16#$ret_len))) #ret_dat:${#ret_dat[*]} accum:$c file:$file_len"
 		x="${ret_dat[*]}"
-		printf '%b' "\x${x// /\\x}" >> $1	# write the block of data to local file
-		(($ret_len<128)) && break		# this is the last block
-	done						# loop until no more data
+		printf '%b' "\x${x// /\\x}" >> $f	# write the block of data to local file
+		(($c<$file_len)) || break		# this trusts dirent
+		((16#$ret_len<128)) && break		# supposed to be more bulletproof
+	done
 	ocmd_close					# close the file
 }
 
@@ -755,7 +750,7 @@ lcmd_com_req () {
 typeset -a hex=() rdh=() ret_dat=()
 typeset -i operation_mode=1 read_err=
 cksum=00 ret_fmt= ret_len= ret_sum=
-readonly D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
+readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 
 # for _sleep()
 sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
