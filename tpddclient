@@ -503,8 +503,8 @@ ocmd_dirent () {
 	# assume it's a "Model T" file and add or remove internal spaces:
 	# "A.CO" -> "A     .CO               "
 	[[ $m == ${dirent_cmd[set_name]} ]] && {
-		f=${1%.*} e=${1#*.}
-		((${#f}>1)) && ((${#f}<6)) && ((${#e}<3)) && printf -v f '%-6s.%2s' "$f" "$e"
+		f=${1%.*} e=${1##*.}
+		((${#f})) && ((${#f}<6)) && ((${#e}<3)) && printf -v f '%-6s.%2s' "$f" "$e"
 	}
 
 	# construct the request
@@ -680,12 +680,17 @@ fcmd_condition () {
 # list all files
 lcmd_ls () {
 	vecho "${FUNCNAME[0]}($@)"
-	local -i access_mode=${dirent_cmd[get_first]} i= ;local x f a ;ret_dat=()
+	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f e ;ret_dat=()
 
 	while ((i++<40)) ;do
-		ocmd_dirent '' '' $access_mode || break
-		printf '%24b %6u\n' "$file_name" "$file_len"
-		((access_mode==${dirent_cmd[get_first]})) && access_mode=${dirent_cmd[get_next]}
+		ocmd_dirent '' '' $dirent_mode || break
+
+		# If it looks like a "Model T" filename, then collapse the internal spaces.
+		f=${file_name// /} ;e=${f##*.} ;f=${f%.*}
+		((${#f})) && ((${#f}<6)) && ((${#e}<3)) && printf -v file_name '%s.%s' "$f" "$e"
+
+		printf '%-24.24b %6u\n' "$file_name" "$file_len"
+		((dirent_mode==${dirent_cmd[get_first]})) && dirent_mode=${dirent_cmd[get_next]}
 	done
 }
 
@@ -769,7 +774,7 @@ exec 4<>$sleep_fifo
 
 # tpdd serial port
 PORT="/dev/${1#/dev/}" ;[[ -c "$PORT" ]] && shift || get_tpdd_port
-echo "Using port \"${PORT}\""
+vecho "Using port \"${PORT}\""
 open_com
 
 # non-interactive mode
