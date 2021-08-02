@@ -33,12 +33,14 @@ STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
 READ_TIMEOUT=0.1
 
 # default tpdd_wait() timout in READ_TIMEOUTs
+# wait this long for the drive to start delivering data
 # usually needs at least 1.5 seconds
-# (new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds )
-# (old bash:  READ_TIMEOUT=1 * WAIT_TIMEOUT=2 = 2 seconds )
-# wait this long for the drive to wake up, spin up, read and deliver data
-# this works around not being able to flow-control on DSR
+# some commands like format need much lnger
 WAIT_TIMEOUT=20
+
+# new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds
+# old bash:  READ_TIMEOUT=1   * WAIT_TIMEOUT=2  = 2 seconds
+
 
 ###############################################################################
 # FDC Mode transactions
@@ -384,19 +386,17 @@ tpdd_write () {
 #  142 = we timed out, $x is empty because there was no data, not a null byte
 tpdd_read () {
 	vecho -n "${FUNCNAME[0]}($@) :"
-	local -i i e l=$1 ;local x y ;rdh=() read_err=0
+	local -i i l=$1 ;local x ;rdh=() read_err=0
 	vecho -n " l=$l "
-	tpdd_wait # DST/DTR work-around
+	tpdd_wait
 	for ((i=0;i<l;i++)) {
 		vecho -n " $i:"
 		x= rdh[i]='00'
 		((read_err)) && { vecho -n "XX" ; continue ; }
-		y=$x
 		IFS= read -t ${READ_TIMEOUT} -r -d $'\0' -n 1 -u 3 x ;read_err=$?
-		(($read_err>1)) || read_err=0		# both 0 and 1 are success
+		(($read_err>1)) || read_err=0
 		printf -v rdh[i] '%02x' "'$x"
 		vecho -n "${rdh[i]}"
-		((${#x}>1)) && vecho "!!!!! \"read -n 1\": ${#x} bytes: \"$y\"->\"$x\" !!!!!!"
 	}
 	vecho " read_err:$read_err"
 }
@@ -406,8 +406,7 @@ tpdd_check () {
 	IFS= read -t 0 -u 3
 }
 
-# wait for data available
-# polling loop to work around lack of DSR/DTR
+# wait for data
 tpdd_wait () {
 	vecho -n "${FUNCNAME[0]}($@):"
 	local -i i=-1 t=${1:-${WAIT_TIMEOUT}}
