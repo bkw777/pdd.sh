@@ -696,14 +696,14 @@ lcmd_load () {
 	ocmd_dirent $f '' ${dirent_cmd[set_name]}	# set the filename
 	ocmd_open ${open_mode[read]}			# open the file for reading
 	>$f						# start the local file
-	while ocmd_read ;do				# read a block of data from tpdd
+	while (($c<$file_len)) ;do				# read a block of data from tpdd
 		ocmd_read ;e=$? ;vecho "err=$e"
 		((n++))
 		((c+=${#ret_dat[*]}))
 		vecho "packet:$n ret_len=$ret_len($((16#$ret_len))) #ret_dat:${#ret_dat[*]} accum:$c file:$file_len"
 		x="${ret_dat[*]}"
 		printf '%b' "\x${x// /\\x}" >> $f	# write the block of data to local file
-		(($c<$file_len)) || break		# this trusts dirent
+		#(($c<$file_len)) || break		# this trusts dirent
 		((16#$ret_len<128)) && break		# supposed to be more bulletproof
 	done
 	ocmd_close					# close the file
