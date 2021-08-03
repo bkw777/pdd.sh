@@ -62,10 +62,37 @@ You should get a message that correctly reflects whether you have a disk inserte
 * Insert a disk and run "./tpddclient ls"
 It shoud scan the disk, list the files and file sizes, and then exit back to the shell.
 
-To see all the gory details, do "export DEBUG=true" before running tpddclient.
+To see all the gory details, do "DEBUG=true ./tpddclient ..."
 
 # Status
-All the "operation mode" commands work except write/save hasn't been written yet.
+All the "operation mode" commands work except lcmd_save() isn't working yet.  
+Most of it is working. file_to_hex() reads a local file into hex pairs
+including nulls, without externals or subshells. lcmd_save() loops through
+the load of hex pairs and issues ocmd_write()'s in 128 byte chunks.
+
+The current problem:  
+To save a file, the sequence is supposed to be:  
+ 1 create the filename reference ( ocmd_dirent(set_name filename), just like for reading or deleting a file, which are both working )  
+ 2 open the file for write(new) ( ocmd_open(write) )  
+ 3 write blocks of data until done or until receiving an error  
+
+dirent(set_name) is returning all nulls for the filename for some reason.  
+The manual says if you supply a filename, then the return should have that  
+filename in it, or filename will be all nulls if the name was invalid.  
+But it also says the file attribute will also be null if the name was invalid,  
+and the attribute is coming back "F" just like for a normal file.  
+
+Currently the code is set to exit on seeing the null filename, but even if you  
+skip that and do the writes anyway, the ocmd_write()'s don't actually produce  
+a file, though the drive does spin for a second sometimes.  
+
+Probably this is very close to working. Everything else works and all that's left  
+is to clean things up and put in more & better error trapping and sanity checking  
+just to make it all more robust. All the "tricky" things resulting from trying to  
+do low level work purely in bash without being hugely inefficient with shubshells  
+and external cmmands, is all actually working. This is now just in the "normal"  
+realm of figuring out how to work with the drive. Reading and writing binary data  
+over the serial port to/from the drive, and to/from local files is all working.  
 
 No FDC commands have been written except "condition".
 
