@@ -8,8 +8,9 @@
 # config
 
 # verbose/debug
+# DEBUG=true ./tpddclient ...
 v=0
-[[ "$DEBUG" ]] && v=1 # 0=normal, 1=verbose
+${DEBUG:-false} && v=1 # 0=normal, 1=verbose
 
 # platform differences
 DEFAULT_TPDD_PORT_PREFIX=ttyUSB	# linux
@@ -230,7 +231,7 @@ mk_hex () {
 	vecho "hex=(${hex[*]})"
 }
 
-# Read a local fs file into hex pairs stored in hex[]
+# Read a local file into hex pairs stored in hex[]
 file_to_hex () {
 	vecho "${FUNCNAME[0]}($@)"
 	local x ;hex=()
@@ -274,10 +275,10 @@ verify_checksum () {
 ck_ocmd_err () {
 	[[ "$ret_fmt" == "${fmt[ret_error]}" ]] || return 1
 	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
-	error_msg="${err[${ret_dat[0]}]}"
+	err_msg+=" ${err[${ret_dat[0]}]}"
 	drive_err=$((16#${ret_dat[0]}))
 	vecho -n "${ret_dat[0]} : "
-	(($drive_err)) && echo "$error_msg" >&2
+	#(($drive_err)) && echo "$err_msg" >&2
 }
 
 # check if "format 12h" response was ok (00) or error
@@ -294,6 +295,7 @@ do_cmd () {
 	for ((i=0;i<${#a[*]};i++)) {
 		set ${a[i]}
 		c=$1 ;shift
+		err_msg=
 		case $c in
 
 	# operation-mode commands
@@ -329,7 +331,7 @@ do_cmd () {
 			ls|dir|list) lcmd_ls "$@" ;;
 			rm|del|delete) lcmd_rm "$@" ;;
 			load) lcmd_load "$@" ;;
-			save) lcmd_save "$@" ;;
+			save) lcmd_save "$@" || vecho "save err=$?" ;;
 			sync|drain) iosync ;;
 			q|quit|bye|exit) exit ;;
 
@@ -348,8 +350,9 @@ do_cmd () {
 			tpdd1_boot) lcmd_tpdd1_boot ;;
 
 			'') : ;;
-			*) echo "Unknown command: \"$x\"" >&2 ;;
+			*) echo "Unknown command: \"$c\"" >&2 ;;
 		esac
+		((${#err_msg})) && echo "$c:$err_msg" >&2
 	}
 }
 
@@ -512,7 +515,7 @@ iosync () {
 ocmd_dirent () {
 	vecho "${FUNCNAME[0]}($@)"
 	local x f="$1" e m=${3:-${dirent_cmd[get_first]}}
-	drive_err= error_msg= file_name= file_attr= file_len= free_sectors=
+	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
 
 	# If we are setting a filename, and the filename is 6.2 or less, then
@@ -529,17 +532,17 @@ ocmd_dirent () {
 	printf -v hex[25] '%02x' $m	# search form
 
 	# send the request
-	ocmd_send_req ${fmt[req_dirent]} ${hex[*]}
+	ocmd_send_req ${fmt[req_dirent]} ${hex[*]} || err_msg+=" ${FUNCNAME[0]}:ocmd_send_req"
 
 	# read the response
-	ocmd_read_ret
+	ocmd_read_ret || err_msg+=" ${FUNCNAME[0]}:ocmd_read_ret"
 
 	# check if the response was an error
-	ck_ocmd_err && return 1
+	ck_ocmd_err && { err_msg+=" ${FUNCNAME[0]}:ck_ocmd_err" ;return 1 ; }
 
 	# sanity check the normal response
-	[[ "$ret_fmt" == "${fmt[ret_dirent]}" ]] || { echo "Corrupt Response" >&2 ;return 1 ; }
-	((${#ret_dat[*]}==28)) || { echo "Corrupt Response" >&2 ;return 1 ; }
+	[[ "$ret_fmt" == "${fmt[ret_dirent]}" ]] || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
+	((${#ret_dat[*]}==28)) || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
 
 	# parse the normal response
 	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
@@ -547,7 +550,7 @@ ocmd_dirent () {
 	x="\x${ret_dat[24]}" ;ret_dat[24]= ;printf -v file_attr '%b' "$x"
 	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
 
-	vecho "$file_name $file_len"
+	vecho "${FUNCNAME[0]} m=$m f=$file_name l=$file_len"
 	# if first byte of filename is 00, then there are no more files
 	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
 }
@@ -646,10 +649,15 @@ ocmd_read () {
 ocmd_write () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
-	(($#)) || return 1
-	ocmd_send_req ${fmt[req_write]} $*
-	tpdd_wait 100
-	ocmd_read_ret
+	(($#)) || return 128
+	ocmd_send_req ${fmt[req_write]} $* || return 129
+	#tpdd_wait 100
+
+	# manual says no return block is sent unless there's an error
+	tpdd_check || return 0
+
+	vecho "return block detected after write"
+	ocmd_read_ret ; vecho "ocmd_read_ret() err=$?"
 	ck_ret_ok
 }
 
@@ -742,16 +750,26 @@ lcmd_load () {
 # save a file (copy from local fs to disk)
 lcmd_save () {
 	vecho "${FUNCNAME[0]}($@)"
-	local -i i n ;local x=()
+	local -i i n p= e ;local x=
 	[[ "$1" ]] || return 1
-	file_to_hex "$1" || return 1			# read the local file into hex[]
-	ocmd_dirent "$1" '' ${dirent_cmd[set_name]}	# set the filename
-	ocmd_open ${open_mode[write_new]}		# open the file for write(new)
+	ocmd_dirent "$1" '' ${dirent_cmd[set_name]} || return 2	# set the filename
+	ocmd_open ${open_mode[write]} || return 3		# open the file for write(new)
+	file_to_hex "$1" || return 4				# read the local file into hex[]
 	while ((${#hex[*]})) ;do
-		n=${#hex[*]} ;((n>128)) && n=128
-		x= ;for ((i=0;i<n;i++)) { x+=(${hex[i]}) hex[i]= ; }
+		vecho "packet:$((++p)) start #hex=${#hex[*]}"
+		x= n=${#hex[*]}
+		((n>128)) && n=128
+		for ((i=0;i<n;i++)) {
+			x+=" ${hex[i]}"
+			hex[i]=
+		}
 		hex=(${hex[*]})
-		ocmd_write ${x[*]}
+		vecho "packet:$p end #hex=${#hex[*]}"
+		ocmd_write $x
+		e=$? ;((e)) && {
+			vecho "ocmd_write() err=$e"
+			return $((e+64))
+		}
 	done
 }
 
@@ -801,7 +819,7 @@ lcmd_com_req () {
 # Main
 typeset -a hex=() rdh=() ret_dat=()
 typeset -i operation_mode=1 read_err=
-cksum=00 ret_fmt= ret_len= ret_sum=
+cksum=00 ret_fmt= ret_len= ret_sum= err_msg=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 
 # for _sleep()
