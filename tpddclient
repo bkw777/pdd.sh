@@ -13,10 +13,10 @@ v=0
 ${DEBUG:-false} && v=1 # 0=normal, 1=verbose
 
 # platform differences
-stty_f="-F" DEFAULT_TPDD_PORT_PREFIX=ttyUSB	# linux
+stty_f="-F" TPDD_TTY_PREFIX=ttyUSB # Linux
 case "${OSTYPE,,}" in
-	*bsd*) stty_f="-f" DEFAULT_TPDD_PORT_PREFIX=ttyU ;; # FreeBSD/NetBSD/OpenBSD/etc
-	darwin*) stty_f="-f" DEFAULT_TPDD_PORT_PREFIX=cu.usbserial- ;; # mac osx
+	*bsd*) stty_f="-f" TPDD_TTY_PREFIX=ttyU ;; # FreeBSD/NetBSD/OpenBSD/etc
+	darwin*) stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial- ;; # Mac OSX
 esac
 
 # enable hardware flow-control or not
@@ -365,8 +365,8 @@ lcmd_tpdd1_boot () {
 # serial port operations
 
 get_tpdd_port () {
-	local x=(/dev/${DEFAULT_TPDD_PORT_PREFIX#/dev/}*)
-	[[ "${x[0]}" == "/dev/${DEFAULT_TPDD_PORT_PREFIX}*" ]] && x=(/dev/tty*)
+	local x=(/dev/${TPDD_TTY_PREFIX#/dev/}*)
+	[[ "${x[0]}" == "/dev/${TPDD_TTY_PREFIX}*" ]] && x=(/dev/tty*)
 	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
 	local PS3="Which serial tty device is the TPDD drive on? "
 	select PORT in ${x[*]} ;do [[ -c "$PORT" ]] && break ;done
