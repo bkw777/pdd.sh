@@ -252,7 +252,7 @@ file_to_hex () {
 # Main Command Dispatcher
 do_cmd () {
 	vecho "${FUNCNAME[0]}($@)"
-	local -i i ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
+	local -i i e ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
 	for ((i=0;i<${#a[*]};i++)) {
 		set ${a[i]}
 		c=$1 ;shift
@@ -263,57 +263,58 @@ do_cmd () {
 	# All of the drive firmware "operation mode" functions.
 	# Most of these are low-level, not used directly by a user.
 	# Higher-level commands like ls, load, & save are built out of these.
-			dirent) ocmd_dirent ;;
-			open) ocmd_open $* ;;
-			close) ocmd_close ;;
-			read) ocmd_read $* ;;
-			write) ocmd_write $* ;;
-			ocmd_delete) ocmd_delete ;;
-			format) ocmd_format ;;
-			stat|status) ocmd_status ;;
-			fdc) ocmd_fdc ;;
+			dirent) ocmd_dirent ;e=$? ;;
+			open) ocmd_open $* ;e=$? ;;
+			close) ocmd_close ;e=$? ;;
+			read) ocmd_read $* ;e=$? ;;
+			write) ocmd_write $* ;e=$? ;;
+			ocmd_delete) ocmd_delete ;e=$? ;;
+			format) ocmd_format ;e=$? ;;
+			stat|status) ocmd_status ;e=$? ;((e)) || echo "OK" ;;
+			fdc) ocmd_fdc ;e=$? ;;
 
 	# fdc-mode commands
 	# All of the drive firmware "FDC mode" functions.
-			${fdc_cmd[mode]}|mode) fcmd_mode $* ;; # select operation-mode or fdc-mode
-			${fdc_cmd[condition]}|condition) fcmd_condition $* ;; # get drive condition
-# name conflict 	#${fdc_cmd[format]}|format) fcmd_format $* ;; # format disk
-			#${fdc_cmd[formatnv]}|formatnv) fcmd_formatnv $* ;; # format disk no verify
-			#${fdc_cmd[readid]}|readid) fcmd_readid $* ;; # read id
-			#${fdc_cmd[readsect]}|readsect) fcmd_readsect $* ;; # read sector
-			#${fdc_cmd[searchid]}|searchid) fcmd_searchid $* ;; # search id
-			#${fdc_cmd[writeid]}|writeid) fcmd_writeid $* ;; # write id
-			#${fdc_cmd[writeidnv]}|writeidnv) fcmd_writeidnv $* ;; # write id no verify
-			#${fdc_cmd[writesect]}|writesect) fcmd_writesect $* ;; # write sector
-			#${fdc_cmd[writesectnv]}|writesectnv) fcmd_writesectnv $* ;; # write sector no verify
+			${fdc_cmd[mode]}|mode) fcmd_mode $* ;e=$? ;; # select operation-mode or fdc-mode
+			${fdc_cmd[condition]}|condition) fcmd_condition $* ;e=$? ;; # get drive condition
+# name conflict 	#${fdc_cmd[format]}|format) fcmd_format $* ;e=$? ;; # format disk
+			#${fdc_cmd[formatnv]}|formatnv) fcmd_formatnv $* ;e=$? ;; # format disk no verify
+			#${fdc_cmd[readid]}|readid) fcmd_readid $* ;e=$? ;; # read id
+			#${fdc_cmd[readsect]}|readsect) fcmd_readsect $* ;e=$? ;; # read sector
+			#${fdc_cmd[searchid]}|searchid) fcmd_searchid $* ;e=$? ;; # search id
+			#${fdc_cmd[writeid]}|writeid) fcmd_writeid $* ;e=$? ;; # write id
+			#${fdc_cmd[writeidnv]}|writeidnv) fcmd_writeidnv $* ;e=$? ;; # write id no verify
+			#${fdc_cmd[writesect]}|writesect) fcmd_writesect $* ;e=$? ;; # write sector
+			#${fdc_cmd[writesectnv]}|writesectnv) fcmd_writesectnv $* ;e=$? ;; # write sector no verify
 
 	# local/client commands
 	# High-level commands like "ls", and things like "exit"
-			ls|dir|list) lcmd_ls "$@" ;;
-			rm|del|delete) lcmd_rm "$@" ;;
-			load) lcmd_load "$@" ;;
-			save) lcmd_save "$@" || vecho "save err=$?" ;;
-			sync|drain) tpdd_iosync ;;
+			ls|dir|list) lcmd_ls "$@" ;e=$? ;;
+			rm|del|delete) lcmd_rm "$@" ;e=$? ;;
+			load) lcmd_load "$@" ;e=$? ;;
+			save) lcmd_save "$@" ;e=$? ;((e)) && vecho "save err=$?" ;;
+			sync|drain) tpdd_iosync ;e=$? ;;
 			q|quit|bye|exit) exit ;;
 
 	# low level manual raw/debug commands
-			com_test) lcmd_com_test ;; # check if port open
-			com_open) lcmd_com_open ;; # open the port
-			com_close) lcmd_com_close ;; # close the port
-			com_read) lcmd_com_read $* ;; # read $1 bytes
-			com_write) lcmd_com_write $* ;; # write $* (hex pairs)
-			com_ret) lcmd_com_ret ;; # read a return packet
-			com_req) lcmd_com_req $* ;; # write a request packet
-			sum) calc_cksum $* ;;
+			com_test) lcmd_com_test ;e=$? ;; # check if port open
+			com_open) lcmd_com_open ;e=$? ;; # open the port
+			com_close) lcmd_com_close ;e=$? ;; # close the port
+			com_read) lcmd_com_read $* ;e=$? ;; # read $1 bytes
+			com_write) lcmd_com_write $* ;e=$? ;; # write $* (hex pairs)
+			com_ret) lcmd_com_ret ;e=$? ;; # read a return packet
+			com_req) lcmd_com_req $* ;e=$? ;; # write a request packet
+			sum) calc_cksum $* ;e=$? ;;
 
 	# playground
 			# send the TPDD1 bootstrap S-records
-			tpdd1_boot) lcmd_tpdd1_boot ;;
+			tpdd1_boot) lcmd_tpdd1_boot ;e=$? ;;
 
 			'') : ;;
 			*) echo "Unknown command: \"$c\"" >&2 ;;
 		esac
 		((${#err_msg})) && echo "$c:$err_msg" >&2
+		return $e
 	}
 }
 
