@@ -63,7 +63,7 @@ typeset -a mode=(
 #   C checksum  1 byte        1's comp of LSByte of sum of format through data
 
 # Operation Mode Request/Return Block Formats
-typeset -A fmt=(
+typeset -A opr_fmt=(
 	# requests
 	[req_dirent]='00'
 	[req_open]='01'
@@ -440,7 +440,7 @@ verify_checksum () {
 # return true if error, false if not error
 # (so everything in here looks backwards)
 ck_ocmd_err () {
-	[[ "$ret_fmt" == "${fmt[ret_error]}" ]] || return 1
+	[[ "$ret_fmt" == "${opr_fmt[ret_error]}" ]] || return 1
 	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
 	err_msg+=" ${err[${ret_dat[0]}]}"
 	drive_err=$((16#${ret_dat[0]}))
@@ -533,7 +533,7 @@ ocmd_dirent () {
 	printf -v hex[25] '%02x' $m			# search form
 
 	# send the request
-	ocmd_send_req ${fmt[req_dirent]} ${hex[*]} || err_msg+=" ${FUNCNAME[0]}:ocmd_send_req"
+	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || err_msg+=" ${FUNCNAME[0]}:ocmd_send_req"
 
 	# read the response
 	ocmd_read_ret || err_msg+=" ${FUNCNAME[0]}:ocmd_read_ret"
@@ -542,7 +542,7 @@ ocmd_dirent () {
 	ck_ocmd_err && { err_msg+=" ${FUNCNAME[0]}:ck_ocmd_err" ;return 1 ; }
 
 	# sanity check the normal response
-	[[ "$ret_fmt" == "${fmt[ret_dirent]}" ]] || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
+	[[ "$ret_fmt" == "${opr_fmt[ret_dirent]}" ]] || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
 	((${#ret_dat[*]}==28)) || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
 
 	# parse the normal response
@@ -562,7 +562,7 @@ ocmd_dirent () {
 ocmd_status () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
-	ocmd_send_req ${fmt[req_status]}
+	ocmd_send_req ${opr_fmt[req_status]}
 	ocmd_read_ret
 	ck_ret_ok
 }
@@ -575,7 +575,7 @@ ocmd_format () {
 	((operation_mode)) || fcmd_mode 1
 
 	echo "Formatting disk..."
-	ocmd_send_req ${fmt[req_format]}
+	ocmd_send_req ${opr_fmt[req_format]}
 	tpdd_wait 1200	# takes 100 seconds, allow 120
 
 	ocmd_read_ret
@@ -584,7 +584,7 @@ ocmd_format () {
 
 # switch to FDC mode
 ocmd_fdc () {
-	ocmd_send_req ${fmt[req_fdc]}
+	ocmd_send_req ${opr_fmt[req_fdc]}
 	operation_mode=0
 }
 
@@ -596,7 +596,7 @@ ocmd_open () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
 	local mode ;printf -v mode '%02x' $1
-	ocmd_send_req ${fmt[req_open]} $mode	# open the file
+	ocmd_send_req ${opr_fmt[req_open]} $mode	# open the file
 	ocmd_read_ret
 	ck_ret_ok
 }
@@ -607,7 +607,7 @@ ocmd_open () {
 ocmd_close () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
-	ocmd_send_req ${fmt[req_close]}
+	ocmd_send_req ${opr_fmt[req_close]}
 	ocmd_read_ret
 	ck_ret_ok
 }
@@ -618,7 +618,7 @@ ocmd_close () {
 ocmd_delete () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
-	ocmd_send_req ${fmt[req_delete]}
+	ocmd_send_req ${opr_fmt[req_delete]}
 	tpdd_wait 100	# takes ~5 seconds, allow 10
 	ocmd_read_ret
 	ck_ret_ok
@@ -630,7 +630,7 @@ ocmd_delete () {
 ocmd_read () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
-	ocmd_send_req ${fmt[req_read]}
+	ocmd_send_req ${opr_fmt[req_read]}
 	ocmd_read_ret
 	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
@@ -638,7 +638,7 @@ ocmd_read () {
 	ck_ocmd_err && return 5
 
 	# sanity check
-	[[ "$ret_fmt" == "${fmt[ret_read]}" ]] || return 4
+	[[ "$ret_fmt" == "${opr_fmt[ret_read]}" ]] || return 4
 
 	# return true or not based on data or not
 	((${#ret_dat[*]}))
@@ -651,7 +651,7 @@ ocmd_write () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
 	(($#)) || return 128
-	ocmd_send_req ${fmt[req_write]} $* || return 129
+	ocmd_send_req ${opr_fmt[req_write]} $* || return 129
 	#tpdd_wait 100
 
 	# manual says no return block is sent unless there's an error
