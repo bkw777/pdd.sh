@@ -320,7 +320,7 @@ lcmd_tpdd1_boot () {
 	mk_hex "S10985157C00AD7EF08B3AS901FE"
 	tpdd_write ${hex[*]} 0d
 	while tpdd_read 1 ;do x+=" ${rdh[*]}" ;done
-	echo -e "\x${x// /\\x}"
+	printf '%b' "\x${x// /\\x}"
 }
 
 ###############################################################################
@@ -356,7 +356,7 @@ close_com () {
 tpdd_write () {
 	vecho "${FUNCNAME[0]}($*)"
 	local x=$* ;rdh=()
-	echo -en "\x${x// /\\x}" >&3
+	printf '%b' "\x${x// /\\x}" >&3
 }
 
 # read $1 bytes from com port
