@@ -152,7 +152,7 @@ typeset -A open_mode=(
 )
 
 ###############################################################################
-# FDC Mode transactions
+# "FDC Mode" transactions
 #
 # send: C [ ] [P[,P]...] CR
 #
@@ -658,6 +658,48 @@ ocmd_write () {
 }
 
 ###############################################################################
+# "FDC Mode" helper functions
+
+# read an FDC-mode 8-byte result packet
+fcmd_read_result () {
+	vecho "${FUNCNAME[0]}($@)"
+	((operation_mode)) && ocmd_fdc
+	local -i i ;local x ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
+
+	# read 8 bytes
+	tpdd_read 8
+
+	# re-constitute the 8 hex pairs from tpdd_write(), back to the original
+	# 8 ascii characters sent by the drive
+	x="${rdh[*]}" ;printf -v x '%b' "\x${x// /\\x}"
+	vecho "$x"
+
+	# the 8 characters sent by the drive are themselves hex pairs,
+	# representing integer values not ascii characters in this case
+	fdc_err=$((16#${x:0:2})) # first 2 status
+	fdc_res=$((16#${x:2:2})) # next 2  result
+	fdc_len=$((16#${x:4:4})) # last 4  length
+
+	# look up the error message for fdc_err if not 0
+	((v)) && {
+		x='OK'
+		((fdc_err)) && {
+			x='ERROR'
+			[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
+			err_msg+=" $x"
+		}
+		vecho -n "status: $fdc_err - $x"
+	}
+
+	# fdc_result is 8 individual bits
+	# convert to an array for convenience
+	fdc_result_b=()
+	for ((i=7;i>=0;i--)) { fdc_result_b+=(${D2B[fdc_res]:i:1}) ; }
+
+	return $fdc_err
+}
+
+###############################################################################
 # TPDD "FDC Mode" commands
 
 # select operation mode
@@ -673,37 +715,21 @@ fcmd_mode () {
 fcmd_condition () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) && ocmd_fdc
-	local x status result length
+	local -i ;local x
 	mk_hex "${fdc_cmd[condition]}"
 	tpdd_write ${hex[*]} 0d
-	tpdd_read 8
-	x="${rdh[*]}" ;printf -v x '%b' "\x${x// /\\x}"
-	vecho "$x"
-	status=$((16#${x:0:2}))
-	result=$((16#${x:2:2}))
-	#length=$((16#${x:4:4})) # always 0000 for this command
 
-	((v)) && {
-		x='OK'
-		((status)) && {
-			x='ERROR'
-			[[ "${fdc_msg[status]}" ]] && x="${fdc_msg[status]}"
-		}
-		vecho -n "status: $status - $x"
-	}
-	((status)) && return $status
+	fcmd_read_result
+	((fdc_status)) && return $fdc_status
 
-	vecho "result: $result (${D2B[result]})"
-	vecho -n "Result bit 7: ${D2B[result]:0:1} - " ;x='' ;((${D2B[result]:0:1})) && x=' Not' ;echo -n "Disk${x} Inserted" # bit 7
-	((${D2B[result]:0:1})) && { echo ;return ; }
+	# result bit 7 - disk not inserted
+	x= ;((fdc_result_b[7])) && x=' Not'
+	echo -n "Disk${x} Inserted"
+	((fdc_result_b[7])) && { echo ;return ; }
 
-	#vecho "Result bit 6: ${D2B[result]:1:1} " ;#x='' ;((${D2B[result]:1:1})) || x=' not' ;echo "Disk${x} Inserted" # bit 6 same as 7
-	vecho -n "Result bit 5: ${D2B[result]:2:1} - " ;x='Writable' ;((${D2B[result]:2:1})) && x='Write-protected' ;echo ", $x" # bit 5
-	#vecho "Result bit 4: ${D2B[result]:3:1}" # 4-0 always 0 for this command
-	#vecho "Result bit 3: ${D2B[result]:4:1}"
-	#vecho "Result bit 2: ${D2B[result]:5:1}"
-	#vecho "Result bit 1: ${D2B[result]:6:1}"
-	#vecho "Result bit 0: ${D2B[result]:7:1}"
+	# result bit 5 - disk write-protected
+	x='Writable' ;((fdc_result_b[5])) && x='Write-protected'
+	echo ", $x"
 }
 
 ###############################################################################
@@ -812,8 +838,8 @@ lcmd_com_req () {
 
 ###############################################################################
 # Main
-typeset -a hex=() rdh=() ret_dat=()
-typeset -i operation_mode=1 read_err=
+typeset -a hex=() rdh=() ret_dat=() fdc_res_b=()
+typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_fmt= ret_len= ret_sum= err_msg=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 
