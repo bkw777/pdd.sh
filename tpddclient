@@ -193,7 +193,7 @@ typeset -A fdc_cmd=(
 )
 
 # FDC Mode Errors
-typeset -A fdc_err=(
+typeset -A fdc_msg=(
 	[0]="OK"
 	[193]="Command Error"
 )
