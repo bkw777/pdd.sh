@@ -780,38 +780,41 @@ lcmd_ls () {
 # load a file (copy a file from tpdd to local fs)
 lcmd_load () {
 	vecho "${FUNCNAME[0]}($@)"
-	local x
+	local x s d
 	[[ "$1" ]] || return 1
-	ocmd_dirent "$1" '' ${dirent_cmd[set_name]}	# set the filename
-	ocmd_open ${open_mode[read]}			# open the file for reading
-	>"$1"						# start the local file
+	s=$1 d=${2:-$s}
+	ocmd_dirent "$s" '' ${dirent_cmd[set_name]}	# set the source filename
+	ocmd_open ${open_mode[read]}			# open the source file for reading
+	>"$d"						# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
 		x="${ret_dat[*]}"
-		printf '%b' "\x${x// /\\x}" >> "$1"	# write the block of data to local file
+		printf '%b' "\x${x// /\\x}" >> "$d"	# write the block of data to the destination file
 		((16#$ret_len<128)) && break
 	done
-	ocmd_close					# close the file
+	ocmd_close					# close the source file
 }
 
 # save a file (copy from local fs to disk)
 lcmd_save () {
 	vecho "${FUNCNAME[0]}($@)"
-	local -i i n p= e ;local x=
+	local -i i n p= e ;local s d h x
 	[[ "$1" ]] || return 1
-	ocmd_dirent "$1" '' ${dirent_cmd[set_name]} || return 2	# set the filename
-	ocmd_open ${open_mode[write]} || return 3		# open the file for write(new)
-	file_to_hex "$1" || return 4				# read the local file into hex[]
+	s=$1 d=${2:-$1}
+	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return 2	# set the destination filename
+	ocmd_open ${open_mode[write]} || return 3		# open the destination file for write(new)
+	file_to_hex "$s" || return 4				# read the source file into hex[]
 	while ((${#hex[*]})) ;do
 		vecho "packet:$((++p)) start #hex=${#hex[*]}"
-		x= n=${#hex[*]}
+		h=() n=${#hex[*]}
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) {
-			x+=" ${hex[i]}"
+			h+=(${hex[i]})
 			hex[i]=
 		}
 		hex=(${hex[*]})
 		vecho "packet:$p end #hex=${#hex[*]}"
-		ocmd_write $x
+		ocmd_write ${h[*]}
+		#((v==2)) && { x="${h[*]}" ;printf '%b' "\x${x// /\\x}" >> ${FUNCNAME[0]}.$s.$$ ; }
 		e=$? ;((e)) && {
 			vecho "ocmd_write() err=$e"
 			return $((e+64))
