@@ -39,6 +39,16 @@ WAIT_TIMEOUT=20
 # new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds
 # old bash:  READ_TIMEOUT=1   * WAIT_TIMEOUT=2  = 2 seconds
 
+# Assume any filenames that would fit within 6.2 are "Model T" files,
+# and automatically pad them to fill 6.2 the same way "Floppy" does.
+# "A.BA" -> "A     .BA" -> "A     .BA               "
+# You need to do this to be compatible with Floppy, Flopy2, TS-DOS, etc.
+# But the drive doesn't care, and Model T's are not the only users(1).
+# So the automatic 6.2 padding can be disabled by setting this to false.
+# Even when this is true, if a filename wouldn't fit within 6.2, then it is
+# not modified. (1) TANDY WP-2, Brother knitting machines, Cambridge Z-88
+FLOPPY_COMPAT=true
+
 ###############################################################################
 # drive operating modes
 typeset -a mode=(
@@ -510,16 +520,15 @@ ocmd_read_ret () {
 # search form = 00=set_name | 01=get_first | 02=get_next
 ocmd_dirent () {
 	vecho "${FUNCNAME[0]}($@)"
-	local x f="$1" e m=${3:-${dirent_cmd[get_first]}}
+	local x t f="$1" m=${3:-${dirent_cmd[get_first]}}
 	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
 
-	# If we are setting a filename, and the filename is 6.2 or less, then
-	# assume it's a "Model T" file and add or remove internal spaces:
-	# "A.CO" -> "A     .CO               "
-	[[ $m == ${dirent_cmd[set_name]} ]] && {
-		f=${1%.*} e=${1##*.}
-		((${#f})) && ((${#f}<6)) && ((${#e}<3)) && printf -v f '%-6s.%2s' "$f" "$e"
+	# In "Floppy Compatible" mode, if doing set_name, and the filename
+	# is 6.2 or less, then space-pad to fill 6.2: "A.CO" -> "A     .CO"
+	$FLOPPY_COMPAT && [[ "$m" == "${dirent_cmd[set_name]}" ]] && {
+		t=${1%.*} x=${1##*.}
+		((${#t})) && ((${#t}<7)) && ((${#x}<3)) && printf -v f '%-6s.%2s' "$t" "$x"
 	}
 
 	# construct the request
@@ -738,14 +747,17 @@ fcmd_condition () {
 # list all files
 lcmd_ls () {
 	vecho "${FUNCNAME[0]}($@)"
-	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f e ;ret_dat=()
+	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f x ;ret_dat=()
 
 	while ((i++<40)) ;do
 		ocmd_dirent '' '' $dirent_mode || break
 
-		# If it looks like a "Model T" filename, then collapse the internal spaces.
-		f=${file_name// /} ;e=${f##*.} ;f=${f%.*}
-		((${#f})) && ((${#f}<6)) && ((${#e}<3)) && printf -v file_name '%s.%s' "$f" "$e"
+		# If in "Floppy Compatible" mode, and it looks like a
+		# "Model T" filename, then collapse the internal spaces.
+		$FLOPPY_COMPAT && {
+			f=${file_name// /} ;x=${f##*.} ;f=${f%.*}
+			((${#f})) && ((${#f}<7)) && ((${#x}<3)) && printf -v file_name '%s.%s' "$f" "$x"
+		}
 
 		printf '%-24.24b %6u\n' "$file_name" "$file_len"
 		((dirent_mode==${dirent_cmd[get_first]})) && dirent_mode=${dirent_cmd[get_next]}
