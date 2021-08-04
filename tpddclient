@@ -441,24 +441,21 @@ verify_checksum () {
 	[[ "$x" == "$cksum" ]]
 }
 
-# check if the current operation-mode response is an error response
-# return true if error, false if not error
-# (so everything in here looks backwards)
-ck_ocmd_err () {
-	[[ "$ret_fmt" == "${opr_fmt[ret_std]}" ]] || return 1
-	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
-	err_msg+=" ${opr_msg[${ret_dat[0]}]}"
-	drive_err=$((16#${ret_dat[0]}))
-	vecho -n "${ret_dat[0]} : "
-	#(($drive_err)) && echo "$err_msg" >&2
-}
-
-# check if "format 12h" response was ok (00) or error
+# check if a ret_std format response was ok (00) or error
 ocmd_check_err () {
+	local -i e ;local x
 	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}==1)) || { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	((${#ret_dat[*]}==1)) || { err_msg+=" Corrupt Response" ; ret_dat=() ;return 1 ; }
 	vecho -n "${ret_dat[0]} : "
-	((16#${ret_dat[0]})) && echo "${opr_msg[${ret_dat[0]}]}" >&2 || vecho
+	e=$((16#${ret_dat[0]}))
+	x='OK'
+	((e)) && {
+		x='UNKNOWN ERROR'
+		((${#opr_msg[${ret_dat[0]}]})) && x="${opr_msg[${ret_dat[0]}]}"
+		err_msg+=" $x"
+	}
+	vecho "$x"
+	return $e
 }
 
 # build a valid operation-mode request block from $1=fmt and $*=data
@@ -520,7 +517,7 @@ ocmd_read_ret () {
 # search form = 00=set_name | 01=get_first | 02=get_next
 ocmd_dirent () {
 	vecho "${FUNCNAME[0]}($@)"
-	local x t f="$1" m=${3:-${dirent_cmd[get_first]}}
+	local -i e ;local x t f="$1" m=${3:-${dirent_cmd[get_first]}}
 	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
 
@@ -532,9 +529,9 @@ ocmd_dirent () {
 	}
 
 	# construct the request
-	printf -v x '%-24.24s' "$f" ;mk_hex "$x"	# filename
+	printf -v x '%-24.24s' "$f" ;mk_hex "$x"	# filename (hex[0-23])
 	printf -v hex[24] '%02x' "'${2:-F}"		# attribute - always "F"
-	printf -v hex[25] '%02x' $m			# search form
+	printf -v hex[25] '%02x' $m			# search form (set_name, get_first, get_next)
 
 	# send the request
 	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || err_msg+=" ${FUNCNAME[0]}:ocmd_send_req"
@@ -542,20 +539,29 @@ ocmd_dirent () {
 	# read the response
 	ocmd_read_ret || err_msg+=" ${FUNCNAME[0]}:ocmd_read_ret"
 
-	# check if the response was an error
-	ck_ocmd_err && { err_msg+=" ${FUNCNAME[0]}:ck_ocmd_err" ;return 1 ; }
+	# check which kind of response we got
+	case "$ret_fmt" in
+		"${opr_fmt[ret_std]}") ocmd_check_err ;e=$? ;((e)) && return $e ;;
+		"${opr_fmt[ret_dirent]}") : ;;
+		*) err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ;;
+	esac
 
-	# sanity check the normal response
-	[[ "$ret_fmt" == "${opr_fmt[ret_dirent]}" ]] || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
 	((${#ret_dat[*]}==28)) || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
 
-	# parse the normal response
+	# parse a dirent return format
 	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
-	file_len=$((16#${ret_dat[25]} * 256 + 16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
-	x="\x${ret_dat[24]}" ;ret_dat[24]= ;printf -v file_attr '%b' "$x"
+
+	file_len=$(( 16#${ret_dat[25]}*256 + 16#${ret_dat[26]} )) ;ret_dat[26]= ret_dat[25]=
+
+	printf -v file_attr '%b' "\x${ret_dat[24]}" ;ret_dat[24]=
+
 	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
 
-	vecho "${FUNCNAME[0]} m=$m f=$file_name l=$file_len"
+	vecho "${FUNCNAME[0]}: mode=$m filename=\"$file_name\" len=$file_len free=$free_sectors"
+
+	# set_name on a new file returns '00' so, don't halt in that case
+	[[ "$m" == "${dirent_cmd[set_name]}" ]] && return 0
+
 	# if first byte of filename is 00, then there are no more files
 	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
 }
@@ -634,15 +640,16 @@ ocmd_delete () {
 ocmd_read () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
+	local -i e
 	ocmd_send_req ${opr_fmt[req_read]}
 	ocmd_read_ret
 	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
-	# check if the response was an error
-	ck_ocmd_err && return 5
-
-	# sanity check
-	[[ "$ret_fmt" == "${opr_fmt[ret_read]}" ]] || return 4
+	case "$ret_fmt" in
+		"${opr_fmt[ret_std]}") ocmd_check_err ;e=$? ;((e)) && return $e ;;
+		"${opr_fmt[ret_read]}") ;;
+		*) err_msg+=" Unexpected Response" ;return 4 ;;
+	esac
 
 	# return true or not based on data or not
 	((${#ret_dat[*]}))
