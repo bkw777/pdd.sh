@@ -77,16 +77,11 @@ typeset -A opr_fmt=(
 	# returns
 	[ret_read]='10'
 	[ret_dirent]='11'
-	[ret_close]='12'
-	[ret_delete]='12'
-	[ret_status]='12'
-	[ret_open]='12'
-	[ret_write]='12'
-	[ret_error]='12'
+	[ret_std]='12'	# open close delete status write error
 )
 
 # Operation Mode Error Codes
-typeset -A err=(
+typeset -A opr_msg=(
 	[00]='Operation Complete'
 	[10]='File Not Found'
 	[30]='Command Parameter or Sequence Error'
@@ -183,7 +178,7 @@ typeset -A open_mode=(
 #
 
 # FDC Mode Commands
-typeset -A fdc=(
+typeset -A fdc_cmd=(
 	[mode]='M'
 	[condition]='D'
 	[format]='F'
@@ -270,17 +265,17 @@ do_cmd () {
 
 	# fdc-mode commands
 	# All of the drive firmware "FDC mode" functions.
-			${fdc[mode]}|mode) fcmd_mode $* ;; # select operation-mode or fdc-mode
-			${fdc[condition]}|condition) fcmd_condition $* ;; # get drive condition
-# name conflict 	#${fdc[format]}|format) fcmd_format $* ;; # format disk
-			#${fdc[formatnv]}|formatnv) fcmd_formatnv $* ;; # format disk no verify
-			#${fdc[readid]}|readid) fcmd_readid $* ;; # read id
-			#${fdc[readsect]}|readsect) fcmd_readsect $* ;; # read sector
-			#${fdc[searchid]}|searchid) fcmd_searchid $* ;; # search id
-			#${fdc[writeid]}|writeid) fcmd_writeid $* ;; # write id
-			#${fdc[writeidnv]}|writeidnv) fcmd_writeidnv $* ;; # write id no verify
-			#${fdc[writesect]}|writesect) fcmd_writesect $* ;; # write sector
-			#${fdc[writesectnv]}|writesectnv) fcmd_writesectnv $* ;; # write sector no verify
+			${fdc_cmd[mode]}|mode) fcmd_mode $* ;; # select operation-mode or fdc-mode
+			${fdc_cmd[condition]}|condition) fcmd_condition $* ;; # get drive condition
+# name conflict 	#${fdc_cmd[format]}|format) fcmd_format $* ;; # format disk
+			#${fdc_cmd[formatnv]}|formatnv) fcmd_formatnv $* ;; # format disk no verify
+			#${fdc_cmd[readid]}|readid) fcmd_readid $* ;; # read id
+			#${fdc_cmd[readsect]}|readsect) fcmd_readsect $* ;; # read sector
+			#${fdc_cmd[searchid]}|searchid) fcmd_searchid $* ;; # search id
+			#${fdc_cmd[writeid]}|writeid) fcmd_writeid $* ;; # write id
+			#${fdc_cmd[writeidnv]}|writeidnv) fcmd_writeidnv $* ;; # write id no verify
+			#${fdc_cmd[writesect]}|writesect) fcmd_writesect $* ;; # write sector
+			#${fdc_cmd[writesectnv]}|writesectnv) fcmd_writesectnv $* ;; # write sector no verify
 
 	# local/client commands
 	# High-level commands like "ls", and things like "exit"
@@ -440,9 +435,9 @@ verify_checksum () {
 # return true if error, false if not error
 # (so everything in here looks backwards)
 ck_ocmd_err () {
-	[[ "$ret_fmt" == "${opr_fmt[ret_error]}" ]] || return 1
+	[[ "$ret_fmt" == "${opr_fmt[ret_std]}" ]] || return 1
 	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
-	err_msg+=" ${err[${ret_dat[0]}]}"
+	err_msg+=" ${opr_msg[${ret_dat[0]}]}"
 	drive_err=$((16#${ret_dat[0]}))
 	vecho -n "${ret_dat[0]} : "
 	#(($drive_err)) && echo "$err_msg" >&2
@@ -453,7 +448,7 @@ ck_ret_ok () {
 	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
 	((${#ret_dat[*]}==1)) || { echo "Bad Response" ; ret_dat=() ;return 1 ; }
 	vecho -n "${ret_dat[0]} : "
-	((16#${ret_dat[0]})) && echo "${err[${ret_dat[0]}]}" >&2 || vecho
+	((16#${ret_dat[0]})) && echo "${opr_msg[${ret_dat[0]}]}" >&2 || vecho
 }
 
 # build a valid operation-mode request block from $1=fmt and $*=data
@@ -670,7 +665,7 @@ ocmd_write () {
 fcmd_mode () {
 	vecho "${FUNCNAME[0]}($@)"
 	(($#)) || return
-	mk_hex "${fdc[mode]}$1"
+	mk_hex "${fdc_cmd[mode]}$1"
 	tpdd_write ${hex[*]} 0d
 	operation_mode=$1
 }
@@ -679,7 +674,7 @@ fcmd_condition () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) && ocmd_fdc
 	local x status result length
-	mk_hex "${fdc[condition]}"
+	mk_hex "${fdc_cmd[condition]}"
 	tpdd_write ${hex[*]} 0d
 	tpdd_read 8
 	x="${rdh[*]}" ;printf -v x '%b' "\x${x// /\\x}"
@@ -692,7 +687,7 @@ fcmd_condition () {
 		x='OK'
 		((status)) && {
 			x='ERROR'
-			[[ "${fdc_err[status]}" ]] && x="${fdc_err[status]}"
+			[[ "${fdc_msg[status]}" ]] && x="${fdc_msg[status]}"
 		}
 		vecho -n "status: $status - $x"
 	}
