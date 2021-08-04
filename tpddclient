@@ -459,9 +459,9 @@ ocmd_check_err () {
 	return $e
 }
 
-# build a valid operation-mode request block from $1=fmt and $*=data
-# 5a 5a $1 len $* cksum
-# and send it to the tpdd
+# build a valid operation-mode request block and send it to the tpdd
+# 5a 5a format length data checksum
+# fmt=$1  data=$2-*
 ocmd_send_req () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
@@ -475,7 +475,7 @@ ocmd_send_req () {
 # read an operation-mode return block from the tpdd
 # parse it into the parts: format, length, data, checksum
 # verify the checksum
-# return the globals ret_fmt=format, ret_len=length, rdh[]=data
+# return the globals ret_fmt, ret_len, ret_dat[], ret_sum
 ocmd_read_ret () {
 	vecho "${FUNCNAME[0]}($@)"
 	local -i t ;local l x ;ret_fmt= ret_len= ret_dat=() ret_sum=
@@ -646,6 +646,7 @@ ocmd_read () {
 	ocmd_read_ret
 	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
+	# check if the response was an error
 	case "$ret_fmt" in
 		"${opr_fmt[ret_std]}") ocmd_check_err ;e=$? ;((e)) && return $e ;;
 		"${opr_fmt[ret_read]}") ;;
@@ -664,12 +665,10 @@ ocmd_write () {
 	((operation_mode)) || fcmd_mode 1
 	(($#)) || return 128
 	ocmd_send_req ${opr_fmt[req_write]} $* || return 129
-	#tpdd_wait 100
 
 	# manual says no return block is sent unless there's an error
 	tpdd_check || return 0
 
-	vecho "return block detected after write"
 	ocmd_read_ret ; vecho "ocmd_read_ret() err=$?"
 	ocmd_check_err
 }
