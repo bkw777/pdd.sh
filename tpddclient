@@ -454,7 +454,7 @@ ck_ocmd_err () {
 }
 
 # check if "format 12h" response was ok (00) or error
-ck_ret_ok () {
+ocmd_check_err () {
 	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
 	((${#ret_dat[*]}==1)) || { echo "Bad Response" ; ret_dat=() ;return 1 ; }
 	vecho -n "${ret_dat[0]} : "
@@ -568,7 +568,7 @@ ocmd_status () {
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_status]}
 	ocmd_read_ret
-	ck_ret_ok
+	ocmd_check_err
 }
 
 # Format Disk
@@ -583,7 +583,7 @@ ocmd_format () {
 	tpdd_wait 1200	# takes 100 seconds, allow 120
 
 	ocmd_read_ret
-	ck_ret_ok
+	ocmd_check_err
 }
 
 # switch to FDC mode
@@ -602,7 +602,7 @@ ocmd_open () {
 	local mode ;printf -v mode '%02x' $1
 	ocmd_send_req ${opr_fmt[req_open]} $mode	# open the file
 	ocmd_read_ret
-	ck_ret_ok
+	ocmd_check_err
 }
 
 # Close File
@@ -613,7 +613,7 @@ ocmd_close () {
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_close]}
 	ocmd_read_ret
-	ck_ret_ok
+	ocmd_check_err
 }
 
 # Delete File
@@ -625,7 +625,7 @@ ocmd_delete () {
 	ocmd_send_req ${opr_fmt[req_delete]}
 	tpdd_wait 100	# takes ~5 seconds, allow 10
 	ocmd_read_ret
-	ck_ret_ok
+	ocmd_check_err
 }
 
 # Read File data
@@ -663,7 +663,7 @@ ocmd_write () {
 
 	vecho "return block detected after write"
 	ocmd_read_ret ; vecho "ocmd_read_ret() err=$?"
-	ck_ret_ok
+	ocmd_check_err
 }
 
 ###############################################################################
