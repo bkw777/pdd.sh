@@ -789,7 +789,7 @@ lcmd_load () {
 	while ocmd_read ;do				# read a block of data from tpdd
 		x="${ret_dat[*]}"
 		printf '%b' "\x${x// /\\x}" >> "$d"	# write the block of data to the destination file
-		((16#$ret_len<128)) && break
+		((16#$ret_len<=128)) && break
 	done
 	ocmd_close					# close the source file
 }
