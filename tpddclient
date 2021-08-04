@@ -23,7 +23,7 @@ esac
 RTSCTS="crtscts"  # "crtscts" to enable, "-crtscts" to disable
 
 # stty flags to set the serial port parameters & tty line discipline & behavior
-# don't include -f/-F filename
+# don't include "-f/-F filename" here
 STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
 
 # read timeout in seconds
@@ -473,7 +473,7 @@ ocmd_read_ret () {
 	esac
 
 	# read <length> bytes (data)
-	l=$((16#${ret_len}))
+	l=$((16#$ret_len))
 	tpdd_read $l
 	((${#rdh[*]}==l)) || return 3
 	ret_dat=(${rdh[*]})
@@ -635,7 +635,7 @@ ocmd_read () {
 	# sanity check
 	[[ "$ret_fmt" == "${fmt[ret_read]}" ]] || return 4
 
-	# EOF
+	# return true or not based on data or not
 	((${#ret_dat[*]}))
 }
 
