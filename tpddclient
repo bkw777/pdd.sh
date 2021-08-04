@@ -619,6 +619,7 @@ ocmd_close () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_close]}
+	tpdd_wait 100 # not sure, may not need, maybe close from writing needs it?
 	ocmd_read_ret
 	ocmd_check_err
 }
@@ -811,6 +812,13 @@ lcmd_save () {
 			return $((e+64))
 		}
 	done
+
+	tpdd_wait 100
+
+	ocmd_read_ret
+	ocmd_check_err
+
+	ocmd_close
 }
 
 lcmd_rm () {
