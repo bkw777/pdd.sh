@@ -39,56 +39,15 @@ WAIT_TIMEOUT=20
 # new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds
 # old bash:  READ_TIMEOUT=1   * WAIT_TIMEOUT=2  = 2 seconds
 
-
 ###############################################################################
-# FDC Mode transactions
-#
-# send: C [ ] [P[,P]...] CR
-#
-# C = command letter, ascii letter
-# optional space between command letter and first parameter
-# P = parameter (if any), integer decimal value in ascii numbers
-# ,p = more parameters if any, seperated by commas, ascii decimal numbers
-# CR = carriage return
-#
-# recv: 8 bytes as 4 ascii hex pairs representing 4 byte values
-#
-#  1st pair is the error status
-#  remaining pairs meaning depends on the command
-#
-# Some fdc commands have another send-and-receive after that.
-# Receive the first response, if the status is not error, then:
-#
-# send: the data for a sector write
-# recv: another standard 8-byte response as above
-# or
-# send: single carriage-return
-# recv: data from a sector read
-#
-
-# FDC Mode Commands
-typeset -A fdc=(
-	[mode]='M'
-	[condition]='D'
-	[format]='F'
-	[formatnv]='G'
-	[readid]='A'
-	[readsect]='R'
-	[searchid]='S'
-	[writeid]='B'
-	[writeidnv]='C'
-	[writesect]='W'
-	[writesectnv]='X'
-)
-
-# FDC Mode Errors
-typeset -A fdc_err=(
-	[0]="OK"
-	[193]="Command Error"
+# drive operating modes
+typeset -a mode=(
+	[0]=fdc		# "FDC mode"
+	[1]=opr		# "operation mode"
 )
 
 ###############################################################################
-# Operation Mode transactions
+# "Operation Mode" transactions
 #
 # request block
 #   P preamble  2 bytes       5A5A
@@ -197,10 +156,51 @@ typeset -A open_mode=(
 	[read]=3
 )
 
-# drive operating modes
-typeset -a mode=(
-	[0]=fdc		# "FDC mode"
-	[1]=opr		# "operation mode"
+###############################################################################
+# FDC Mode transactions
+#
+# send: C [ ] [P[,P]...] CR
+#
+# C = command letter, ascii letter
+# optional space between command letter and first parameter
+# P = parameter (if any), integer decimal value in ascii numbers
+# ,p = more parameters if any, seperated by commas, ascii decimal numbers
+# CR = carriage return
+#
+# recv: 8 bytes as 4 ascii hex pairs representing 4 byte values
+#
+#  1st pair is the error status
+#  remaining pairs meaning depends on the command
+#
+# Some fdc commands have another send-and-receive after that.
+# Receive the first response, if the status is not error, then:
+#
+# send: the data for a sector write
+# recv: another standard 8-byte response as above
+# or
+# send: single carriage-return
+# recv: data from a sector read
+#
+
+# FDC Mode Commands
+typeset -A fdc=(
+	[mode]='M'
+	[condition]='D'
+	[format]='F'
+	[formatnv]='G'
+	[readid]='A'
+	[readsect]='R'
+	[searchid]='S'
+	[writeid]='B'
+	[writeidnv]='C'
+	[writesect]='W'
+	[writesectnv]='X'
+)
+
+# FDC Mode Errors
+typeset -A fdc_err=(
+	[0]="OK"
+	[193]="Command Error"
 )
 
 ###############################################################################
@@ -243,49 +243,8 @@ file_to_hex () {
 	vecho "bytes read: ${#hex[*]}"
 }
 
-# calculate the checksum of $* (hex pairs)
-# return in global $cksum (hex pair)
-calc_cksum () {
-	vecho -n "${FUNCNAME[0]}($*) :"
-	local -i s=0
-	while (($#)) ;do ((s+=16#$1)) ;shift ;done
-	s=$(((s&255)^255))
-	printf -v cksum '%02x' $s
-	vecho "$cksum"
-}
-
-# verify the checksum of a received packet
-# $* = data data data... csum  (hex pairs)
-verify_checksum () {
-	vecho "${FUNCNAME[0]}($*)"
-	local -i l=$(($#-1)) ;local x= h=($*)
-	x=${h[l]} ;h[l]=
-	calc_cksum ${h[*]}
-	vecho "received: \"$x\""
-	vecho "computed: \"$cksum\""
-	[[ "$x" == "$cksum" ]]
-}
-
-# check if the current operation-mode response is an error response
-# return true if error, false if not error
-# (so everything in here looks backwards)
-ck_ocmd_err () {
-	[[ "$ret_fmt" == "${fmt[ret_error]}" ]] || return 1
-	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
-	err_msg+=" ${err[${ret_dat[0]}]}"
-	drive_err=$((16#${ret_dat[0]}))
-	vecho -n "${ret_dat[0]} : "
-	#(($drive_err)) && echo "$err_msg" >&2
-}
-
-# check if "format 12h" response was ok (00) or error
-ck_ret_ok () {
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}==1)) || { echo "Bad Response" ; ret_dat=() ;return 1 ; }
-	vecho -n "${ret_dat[0]} : "
-	((16#${ret_dat[0]})) && echo "${err[${ret_dat[0]}]}" >&2 || vecho
-}
-
+###############################################################################
+# Main Command Dispatcher
 do_cmd () {
 	vecho "${FUNCNAME[0]}($@)"
 	local -i i ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
@@ -329,7 +288,7 @@ do_cmd () {
 			rm|del|delete) lcmd_rm "$@" ;;
 			load) lcmd_load "$@" ;;
 			save) lcmd_save "$@" || vecho "save err=$?" ;;
-			sync|drain) iosync ;;
+			sync|drain) tpdd_iosync ;;
 			q|quit|bye|exit) exit ;;
 
 	# low level manual raw/debug commands
@@ -353,6 +312,9 @@ do_cmd () {
 	}
 }
 
+###############################################################################
+# experimental junk
+
 lcmd_tpdd1_boot () {
 	local x=
 	mk_hex "S10985157C00AD7EF08B3AS901FE"
@@ -368,7 +330,7 @@ get_tpdd_port () {
 	local x=(/dev/${TPDD_TTY_PREFIX#/dev/}*)
 	[[ "${x[0]}" == "/dev/${TPDD_TTY_PREFIX}*" ]] && x=(/dev/tty*)
 	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
-	local PS3="Which serial tty device is the TPDD drive on? "
+	local PS3="Which serial port is the TPDD drive on? "
 	select PORT in ${x[*]} ;do [[ -c "$PORT" ]] && break ;done
 }
 
@@ -381,7 +343,6 @@ open_com () {
 	exec 3<>"${PORT}"
 	stty ${stty_f} "${PORT}" ${STTY}
 	test_com || abrt "Failed to open serial port \"${PORT}\""
-	iosync
 }
 
 close_com () {
@@ -441,6 +402,60 @@ tpdd_wait () {
 	vecho "$i"
 }
 
+# Drain any pending output from the drive.
+# Read and discard bytes one at a time until hitting a read timeout.
+tpdd_iosync () {
+	vecho "${FUNCNAME[0]}($@)"
+	while tpdd_check ;do tpdd_read 1 ;done
+	rdh=()
+}
+
+###############################################################################
+# "Operation Mode" helper functions
+
+# calculate the checksum of $* (hex pairs)
+# return in global $cksum (hex pair)
+calc_cksum () {
+	vecho -n "${FUNCNAME[0]}($*) :"
+	local -i s=0
+	while (($#)) ;do ((s+=16#$1)) ;shift ;done
+	s=$(((s&255)^255))
+	printf -v cksum '%02x' $s
+	vecho "$cksum"
+}
+
+# verify the checksum of a received packet
+# $* = data data data... csum  (hex pairs)
+verify_checksum () {
+	vecho "${FUNCNAME[0]}($*)"
+	local -i l=$(($#-1)) ;local x= h=($*)
+	x=${h[l]} ;h[l]=
+	calc_cksum ${h[*]}
+	vecho "received: \"$x\""
+	vecho "computed: \"$cksum\""
+	[[ "$x" == "$cksum" ]]
+}
+
+# check if the current operation-mode response is an error response
+# return true if error, false if not error
+# (so everything in here looks backwards)
+ck_ocmd_err () {
+	[[ "$ret_fmt" == "${fmt[ret_error]}" ]] || return 1
+	((${#ret_dat[*]}==1)) || { echo "Corrupt Response" >&2 ;return 0 ; }
+	err_msg+=" ${err[${ret_dat[0]}]}"
+	drive_err=$((16#${ret_dat[0]}))
+	vecho -n "${ret_dat[0]} : "
+	#(($drive_err)) && echo "$err_msg" >&2
+}
+
+# check if "format 12h" response was ok (00) or error
+ck_ret_ok () {
+	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	((${#ret_dat[*]}==1)) || { echo "Bad Response" ; ret_dat=() ;return 1 ; }
+	vecho -n "${ret_dat[0]} : "
+	((16#${ret_dat[0]})) && echo "${err[${ret_dat[0]}]}" >&2 || vecho
+}
+
 # build a valid operation-mode request block from $1=fmt and $*=data
 # 5a 5a $1 len $* cksum
 # and send it to the tpdd
@@ -489,15 +504,6 @@ ocmd_read_ret () {
 	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { echo "CHECKSUM FAILED" >&2 ; return 5 ; }
 }
 
-
-# Drain any pending output from the drive.
-# Read and discard bytes one at a time until hitting a read timeout.
-iosync () {
-	vecho "${FUNCNAME[0]}($@)"
-	while tpdd_check ;do tpdd_read 1 ;done
-	rdh=()
-}
-
 ###############################################################################
 # TPDD "Operation Mode" commands
 
@@ -507,7 +513,6 @@ iosync () {
 # filename = 24 bytes
 # attribute = "F" (always)
 # search form = 00=set_name | 01=get_first | 02=get_next
-
 ocmd_dirent () {
 	vecho "${FUNCNAME[0]}($@)"
 	local x f="$1" e m=${3:-${dirent_cmd[get_first]}}
@@ -524,8 +529,8 @@ ocmd_dirent () {
 
 	# construct the request
 	printf -v x '%-24.24s' "$f" ;mk_hex "$x"	# filename
-	printf -v hex[24] '%02x' "'${2:-F}"	# attribute - always "F"
-	printf -v hex[25] '%02x' $m	# search form
+	printf -v hex[24] '%02x' "'${2:-F}"		# attribute - always "F"
+	printf -v hex[25] '%02x' $m			# search form
 
 	# send the request
 	ocmd_send_req ${fmt[req_dirent]} ${hex[*]} || err_msg+=" ${FUNCNAME[0]}:ocmd_send_req"
@@ -668,7 +673,6 @@ fcmd_mode () {
 	mk_hex "${fdc[mode]}$1"
 	tpdd_write ${hex[*]} 0d
 	operation_mode=$1
-	iosync
 }
 
 fcmd_condition () {
