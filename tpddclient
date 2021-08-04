@@ -504,7 +504,7 @@ ocmd_read_ret () {
 	vecho "cksum=$ret_sum"
 
 	# compute our own checksum and verify it matches the supplied checksum
-	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { echo "CHECKSUM FAILED" >&2 ; return 5 ; }
+	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { err_msg+=" CHECKSUM FAILED" ; return 5 ; }
 }
 
 ###############################################################################
