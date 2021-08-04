@@ -13,8 +13,7 @@ v=0
 ${DEBUG:-false} && v=1 # 0=normal, 1=verbose
 
 # platform differences
-DEFAULT_TPDD_PORT_PREFIX=ttyUSB	# linux
-stty_f="-F"
+stty_f="-F" DEFAULT_TPDD_PORT_PREFIX=ttyUSB	# linux
 case "${OSTYPE,,}" in
 	*bsd*) stty_f="-f" DEFAULT_TPDD_PORT_PREFIX=ttyU ;; # FreeBSD/NetBSD/OpenBSD/etc
 	darwin*) stty_f="-f" DEFAULT_TPDD_PORT_PREFIX=cu.usbserial- ;; # mac osx
@@ -26,8 +25,6 @@ RTSCTS="crtscts"  # "crtscts" to enable, "-crtscts" to disable
 # stty flags to set the serial port parameters & tty line discipline & behavior
 # don't include -f/-F filename
 STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
-#STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain eof undef eol undef erase undef intr undef kill undef quit undef start undef stop undef susp undef"
-#STTY="19200 -parenb -parodd -cmspar cs8 hupcl -cstopb cread clocal ${RTSCTS} ignbrk -brkint -ignpar -parmrk -inpck -istrip -inlcr -igncr -icrnl -ixon -ixoff -iuclc -ixany -imaxbel -iutf8 -opost -olcuc -ocrnl -onlcr -onocr -onlret -ofill -ofdel nl0 cr0 tab0 bs0 vt0 ff0 -isig -icanon -iexten -echo -echoe -echok -echonl -noflsh -xcase -tostop -echoprt -echoctl -echoke -extproc"
 
 # read timeout in seconds
 # current bash can take floating point, old bash may need a whole number
@@ -253,7 +250,7 @@ calc_cksum () {
 	local -i s=0
 	while (($#)) ;do ((s+=16#$1)) ;shift ;done
 	s=$(((s&255)^255))
-	printf -v cksum "%02x" $s
+	printf -v cksum '%02x' $s
 	vecho "$cksum"
 }
 
@@ -385,7 +382,6 @@ open_com () {
 	stty ${stty_f} "${PORT}" ${STTY}
 	test_com || abrt "Failed to open serial port \"${PORT}\""
 	iosync
-	#fcmd_mode 1
 }
 
 close_com () {
@@ -452,7 +448,7 @@ ocmd_send_req () {
 	vecho "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1
 	local fmt=$1 len ;shift
-	printf -v len "%02x" $#
+	printf -v len '%02x' $#
 	calc_cksum $fmt $len $*
 	vecho "fmt=\"$fmt\" len=\"$len\" dat=\"$*\" sum=\"$cksum\""
 	tpdd_write 5a 5a $fmt $len $* $cksum
@@ -824,13 +820,13 @@ readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 
 # for _sleep()
 sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
-trap "rm -f ${sleep_fifo}" EXIT
+trap "rm -f $sleep_fifo" EXIT
 mkfifo $sleep_fifo || abrt "Error creating sleep fifo $sleep_fifo"
 exec 4<>$sleep_fifo
 
 # tpdd serial port
 PORT="/dev/${1#/dev/}" ;[[ -c "$PORT" ]] && shift || get_tpdd_port
-vecho "Using port \"${PORT}\""
+vecho "Using port \"$PORT\""
 open_com
 
 # non-interactive mode
