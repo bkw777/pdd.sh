@@ -11,6 +11,7 @@
 # DEBUG=true ./tpddclient ...
 v=0
 ${DEBUG:-false} && v=1 # 0=normal, 1=verbose
+#v=2 # log a copy of every read and write to individal local files
 
 # platform differences
 stty_f="-F" TPDD_TTY_PREFIX=ttyUSB # Linux
@@ -359,9 +360,11 @@ close_com () {
 # TPDD communication
 
 # write $* to com port as binary
+((v==2)) && typeset -i wc=0
 tpdd_write () {
 	vecho "${FUNCNAME[0]}($*)"
 	local x=$* ;rdh=()
+	((v==2)) && printf '%b' "\x${x// /\\x}" >${0##*/}.${$}.${FUNCNAME[0]}.$((wc++))
 	printf '%b' "\x${x// /\\x}" >&3
 }
 
@@ -375,6 +378,7 @@ tpdd_write () {
 # $?=0 = we read a non-null byte normally
 #    1 = we read a null byte, $x is empty because the null was eaten as a delimiter
 #  142 = we timed out, $x is empty because there was no data, not a null byte
+((v==2)) && typeset -i rc=0
 tpdd_read () {
 	vecho -n "${FUNCNAME[0]}($@) :"
 	local -i i l=$1 ;local x ;rdh=() read_err=0
@@ -389,6 +393,7 @@ tpdd_read () {
 		printf -v rdh[i] '%02x' "'$x"
 		vecho -n "${rdh[i]}"
 	}
+	((v==2)) && { x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.${$}.${FUNCNAME[0]}.$((rc++)) ; }
 	vecho " read_err:$read_err"
 }
 
