@@ -35,7 +35,7 @@ READ_TIMEOUT=0.1
 # wait this long for the drive to start delivering data
 # usually needs at least 1.5 seconds
 # some commands like format need much lnger
-WAIT_TIMEOUT=20
+WAIT_TIMEOUT=50
 
 # new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds
 # old bash:  READ_TIMEOUT=1   * WAIT_TIMEOUT=2  = 2 seconds
@@ -209,8 +209,9 @@ typeset -A fdc_msg=(
 	[193]="Command Error"
 )
 
+
 ###############################################################################
-# generic/util
+# generic/util functions
 
 abrt () {
 	echo "$0: $@" >&2
@@ -228,15 +229,15 @@ _sleep () {
 
 # Convert a plain text string to hex pairs stored in hex[]
 mk_hex () {
-	vecho "${FUNCNAME[0]}($*)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local x=$* ;local -i i l=${#x} ;hex=()
 	for ((i=0;i<l;i++)) { printf -v hex[i] '%02x' "'${x:i:1}" ; }
-	vecho "hex=(${hex[*]})"
+	vecho "$z: hex=(${hex[*]})"
 }
 
 # Read a local file into hex pairs stored in hex[]
 file_to_hex () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local x ;hex=()
 
 	exec 5<"$1"
@@ -246,13 +247,13 @@ file_to_hex () {
 	done
 	exec 5<&-
 
-	vecho "bytes read: ${#hex[*]}"
+	vecho "$z: bytes read: ${#hex[*]}"
 }
 
 ###############################################################################
 # Main Command Dispatcher
 do_cmd () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i i e ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
 	for ((i=0;i<${#a[*]};i++)) {
 		set ${a[i]}
@@ -362,9 +363,9 @@ close_com () {
 # write $* to com port as binary
 ((v==2)) && typeset -i wc=0
 tpdd_write () {
-	vecho "${FUNCNAME[0]}($*)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local x=$* ;rdh=()
-	((v==2)) && printf '%b' "\x${x// /\\x}" >${0##*/}.${$}.${FUNCNAME[0]}.$((wc++))
+	((v==2)) && printf '%b' "\x${x// /\\x}" >${0##*/}.$$.$z.$((wc++))
 	printf '%b' "\x${x// /\\x}" >&3
 }
 
@@ -380,10 +381,10 @@ tpdd_write () {
 #  142 = we timed out, $x is empty because there was no data, not a null byte
 ((v==2)) && typeset -i rc=0
 tpdd_read () {
-	vecho -n "${FUNCNAME[0]}($@) :"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i i l=$1 ;local x ;rdh=() read_err=0
-	vecho -n " l=$l "
 	tpdd_wait
+	vecho -n "$z: l=$l "
 	for ((i=0;i<l;i++)) {
 		vecho -n " $i:"
 		x= rdh[i]='00'
@@ -393,7 +394,7 @@ tpdd_read () {
 		printf -v rdh[i] '%02x' "'$x"
 		vecho -n "${rdh[i]}"
 	}
-	((v==2)) && { x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.${$}.${FUNCNAME[0]}.$((rc++)) ; }
+	((v==2)) && { x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.$z.$((rc++)) ; }
 	vecho " read_err:$read_err"
 }
 
@@ -404,7 +405,7 @@ tpdd_check () {
 
 # wait for data
 tpdd_wait () {
-	vecho -n "${FUNCNAME[0]}($@):"
+	local z=${FUNCNAME[0]} ;vecho -n "$z($@):"
 	local -i i=-1 t=${1:-${WAIT_TIMEOUT}}
 	until ((++i>t)) ;do
 		tpdd_check && break
@@ -416,7 +417,7 @@ tpdd_wait () {
 # Drain any pending output from the drive.
 # Read and discard bytes one at a time until hitting a read timeout.
 tpdd_iosync () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	while tpdd_check ;do tpdd_read 1 ;done
 	rdh=()
 }
@@ -427,7 +428,7 @@ tpdd_iosync () {
 # calculate the checksum of $* (hex pairs)
 # return in global $cksum (hex pair)
 calc_cksum () {
-	vecho -n "${FUNCNAME[0]}($*) :"
+	local z=${FUNCNAME[0]} ;vecho -n "$z($@):"
 	local -i s=0
 	while (($#)) ;do ((s+=16#$1)) ;shift ;done
 	s=$(((s&255)^255))
@@ -438,21 +439,22 @@ calc_cksum () {
 # verify the checksum of a received packet
 # $* = data data data... csum  (hex pairs)
 verify_checksum () {
-	vecho "${FUNCNAME[0]}($*)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i l=$(($#-1)) ;local x= h=($*)
 	x=${h[l]} ;h[l]=
 	calc_cksum ${h[*]}
-	vecho "received: \"$x\""
-	vecho "computed: \"$cksum\""
+	vecho "$z: received: \"$x\""
+	vecho "$z: computed: \"$cksum\""
 	[[ "$x" == "$cksum" ]]
 }
 
 # check if a ret_std format response was ok (00) or error
 ocmd_check_err () {
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i e ;local x
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	vecho "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 	((${#ret_dat[*]}==1)) || { err_msg+=" Corrupt Response" ; ret_dat=() ;return 1 ; }
-	vecho -n "${ret_dat[0]} : "
+	vecho -n "$z: ${ret_dat[0]}:"
 	e=$((16#${ret_dat[0]}))
 	x='OK'
 	((e)) && {
@@ -468,12 +470,12 @@ ocmd_check_err () {
 # 5a 5a format length data checksum
 # fmt=$1  data=$2-*
 ocmd_send_req () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	local fmt=$1 len ;shift
 	printf -v len '%02x' $#
 	calc_cksum $fmt $len $*
-	vecho "fmt=\"$fmt\" len=\"$len\" dat=\"$*\" sum=\"$cksum\""
+	vecho "$z: fmt=\"$fmt\" len=\"$len\" dat=\"$*\" sum=\"$cksum\""
 	tpdd_write 5a 5a $fmt $len $* $cksum
 }
 
@@ -482,12 +484,13 @@ ocmd_send_req () {
 # verify the checksum
 # return the globals ret_fmt, ret_len, ret_dat[], ret_sum
 ocmd_read_ret () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i t ;local l x ;ret_fmt= ret_len= ret_dat=() ret_sum=
 
 	# read 2 bytes (fmt len)
+	vecho "$z: read 2 bytes (fmt len)"
 	tpdd_read 2
-	vecho "(fmt len):(${rdh[*]})"
+	vecho "$z: (${rdh[*]})"
 	((${#rdh[*]}==2)) || return 1
 	case "${rdh[0]}" in
 		10|11|12) ret_fmt=${rdh[0]} ret_len=${rdh[1]} ;;
@@ -497,16 +500,18 @@ ocmd_read_ret () {
 
 	# read <length> bytes (data)
 	l=$((16#$ret_len))
+	vecho "$z: read 0x$ret_len($l) bytes (data)"
 	tpdd_read $l
 	((${#rdh[*]}==l)) || return 3
 	ret_dat=(${rdh[*]})
-	vecho "data=(${ret_dat[*]})"
+	vecho "$z: data=(${ret_dat[*]})"
 
 	# read 1 byte (checksum)
+	vecho "$z: read 1 byte (checksum)"
 	tpdd_read 1
 	((${#rdh[*]}==1)) || return 4
 	ret_sum=${rdh[0]}
-	vecho "cksum=$ret_sum"
+	vecho "$z: cksum=$ret_sum"
 
 	# compute our own checksum and verify it matches the supplied checksum
 	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { err_msg+=" CHECKSUM FAILED" ; return 5 ; }
@@ -522,7 +527,7 @@ ocmd_read_ret () {
 # attribute = "F" (always)
 # search form = 00=set_name | 01=get_first | 02=get_next
 ocmd_dirent () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i e ;local x t f="$1" m=${3:-${dirent_cmd[get_first]}}
 	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
@@ -540,19 +545,19 @@ ocmd_dirent () {
 	printf -v hex[25] '%02x' $m			# search form (set_name, get_first, get_next)
 
 	# send the request
-	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || err_msg+=" ${FUNCNAME[0]}:ocmd_send_req"
+	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || err_msg+=" $z:ocmd_send_req"
 
 	# read the response
-	ocmd_read_ret || err_msg+=" ${FUNCNAME[0]}:ocmd_read_ret"
+	ocmd_read_ret || err_msg+=" $z:ocmd_read_ret"
 
 	# check which kind of response we got
 	case "$ret_fmt" in
 		"${opr_fmt[ret_std]}") ocmd_check_err ;e=$? ;((e)) && return $e ;;
 		"${opr_fmt[ret_dirent]}") : ;;
-		*) err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ;;
+		*) err_msg+=" $z:Corrupt Return" ;return 1 ;;
 	esac
 
-	((${#ret_dat[*]}==28)) || { err_msg+=" ${FUNCNAME[0]}:Corrupt Return" ;return 1 ; }
+	((${#ret_dat[*]}==28)) || { err_msg+=" $z:Corrupt Return" ;return 1 ; }
 
 	# parse a dirent return format
 	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
@@ -563,7 +568,7 @@ ocmd_dirent () {
 
 	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
 
-	vecho "${FUNCNAME[0]}: mode=$m filename=\"$file_name\" len=$file_len free=$free_sectors"
+	vecho "$z: mode=$m filename=\"$file_name\" len=$file_len free=$free_sectors"
 
 	# set_name on a new file returns '00' so, don't halt in that case
 	[[ "$m" == "${dirent_cmd[set_name]}" ]] && return 0
@@ -576,7 +581,7 @@ ocmd_dirent () {
 # request: 5a 5a 07 00 ##
 # return : 07 01 ?? ##
 ocmd_status () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_status]}
 	ocmd_read_ret
@@ -587,12 +592,12 @@ ocmd_status () {
 #request: 5a 5a 06 00 ##
 #return : 12 01 ?? ##
 ocmd_format () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 
 	echo "Formatting disk..."
 	ocmd_send_req ${opr_fmt[req_format]}
-	tpdd_wait 1200	# takes 100 seconds, allow 120
+	tpdd_wait 1200	# takes ~100 seconds, allow 120
 
 	ocmd_read_ret
 	ocmd_check_err
@@ -600,6 +605,7 @@ ocmd_format () {
 
 # switch to FDC mode
 ocmd_fdc () {
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	ocmd_send_req ${opr_fmt[req_fdc]}
 	operation_mode=0
 }
@@ -609,7 +615,7 @@ ocmd_fdc () {
 # return : 12 01 ?? ##
 # MM = access mode: 01=write_new, 02=write_append, 03=read
 ocmd_open () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	local mode ;printf -v mode '%02x' $1
 	ocmd_send_req ${opr_fmt[req_open]} $mode	# open the file
@@ -621,7 +627,7 @@ ocmd_open () {
 # request: 5a 5a 02 00 ##
 # return : 12 01 ?? ##
 ocmd_close () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_close]}
 	tpdd_wait 100 # not sure, may not need, maybe close from writing needs it?
@@ -633,7 +639,7 @@ ocmd_close () {
 # request: 5a 5a 05 00 ##
 # return : 12 01 ?? ##
 ocmd_delete () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_delete]}
 	tpdd_wait 100	# takes ~5 seconds, allow 10
@@ -645,12 +651,12 @@ ocmd_delete () {
 # request: 5a 5a 03 00 ##
 # return : 10 00-80 1-128bytes ##
 ocmd_read () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	local -i e
 	ocmd_send_req ${opr_fmt[req_read]}
 	ocmd_read_ret
-	vecho "fmt=$ret_fmt len=$ret_len dat=(${ret_dat[*]}) read_err=\"$read_err\""
+	vecho "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
 	# check if the response was an error
 	case "$ret_fmt" in
@@ -667,7 +673,7 @@ ocmd_read () {
 # request: 5a 5a 04 ?? 1-128 bytes ##
 # return : 12 01 ?? ##
 ocmd_write () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	(($#)) || return 128
 	ocmd_send_req ${opr_fmt[req_write]} $* || return 129
@@ -675,7 +681,7 @@ ocmd_write () {
 	# manual says no return block is sent unless there's an error
 	tpdd_check || return 0
 
-	ocmd_read_ret ; vecho "ocmd_read_ret() err=$?"
+	ocmd_read_ret ; vecho "$x:ocmd_read_ret() err=$?"
 	ocmd_check_err
 }
 
@@ -684,7 +690,7 @@ ocmd_write () {
 
 # read an FDC-mode 8-byte result packet
 fcmd_read_result () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	local -i i ;local x ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
 
@@ -694,7 +700,7 @@ fcmd_read_result () {
 	# re-constitute the 8 hex pairs from tpdd_write(), back to the original
 	# 8 ascii characters sent by the drive
 	x="${rdh[*]}" ;printf -v x '%b' "\x${x// /\\x}"
-	vecho "$x"
+	vecho "$z:$x"
 
 	# the 8 characters sent by the drive are themselves hex pairs,
 	# representing integer values not ascii characters in this case
@@ -710,7 +716,7 @@ fcmd_read_result () {
 			[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
 			err_msg+=" $x"
 		}
-		vecho -n "status: $fdc_err - $x"
+		vecho -n "$z:status: $fdc_err - $x"
 	}
 
 	# fdc_result is 8 individual bits
@@ -727,7 +733,7 @@ fcmd_read_result () {
 # select operation mode
 # $1 0=fdc 1=operation
 fcmd_mode () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	(($#)) || return
 	mk_hex "${fdc_cmd[mode]}$1"
 	tpdd_write ${hex[*]} 0d
@@ -735,7 +741,7 @@ fcmd_mode () {
 }
 
 fcmd_condition () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	local -i ;local x
 	mk_hex "${fdc_cmd[condition]}"
@@ -759,7 +765,7 @@ fcmd_condition () {
 
 # list all files
 lcmd_ls () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f x ;ret_dat=()
 
 	while ((i++<40)) ;do
@@ -779,8 +785,8 @@ lcmd_ls () {
 
 # load a file (copy a file from tpdd to local fs)
 lcmd_load () {
-	vecho "${FUNCNAME[0]}($@)"
-	local x s d
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
+	local x s d ;local -i p=
 	[[ "$1" ]] || return 1
 	s=$1 d=${2:-$s}
 	ocmd_dirent "$s" '' ${dirent_cmd[set_name]}	# set the source filename
@@ -789,14 +795,15 @@ lcmd_load () {
 	while ocmd_read ;do				# read a block of data from tpdd
 		x="${ret_dat[*]}"
 		printf '%b' "\x${x// /\\x}" >> "$d"	# write the block of data to the destination file
-		((16#$ret_len<=128)) && break
+		#vecho "$z: block:$((p++)) ret_len:$ret_len($((16#$ret_len))) #ret_dat:${#ret_dat[*]}"
+		((16#${#ret_dat[*]}<128)) && break	# stop when we get less than 128 bytes
 	done
 	ocmd_close					# close the source file
 }
 
 # save a file (copy from local fs to disk)
 lcmd_save () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	local -i i n p= e ;local s d h x
 	[[ "$1" ]] || return 1
 	s=$1 d=${2:-$1}
@@ -804,7 +811,7 @@ lcmd_save () {
 	ocmd_open ${open_mode[write]} || return 3		# open the destination file for write(new)
 	file_to_hex "$s" || return 4				# read the source file into hex[]
 	while ((${#hex[*]})) ;do
-		vecho "packet:$((++p)) start #hex=${#hex[*]}"
+		vecho "$z: packet:$((++p)) start #hex=${#hex[*]}"
 		h=() n=${#hex[*]}
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) {
@@ -812,11 +819,11 @@ lcmd_save () {
 			hex[i]=
 		}
 		hex=(${hex[*]})
-		vecho "packet:$p end #hex=${#hex[*]}"
+		vecho "$z: packet:$p end #hex=${#hex[*]}"
 		ocmd_write ${h[*]}
 		#((v==2)) && { x="${h[*]}" ;printf '%b' "\x${x// /\\x}" >> ${FUNCNAME[0]}.$s.$$ ; }
 		e=$? ;((e)) && {
-			vecho "ocmd_write() err=$e"
+			vecho "$z:ocmd_write() err=$e"
 			return $((e+64))
 		}
 	done
@@ -830,7 +837,7 @@ lcmd_save () {
 }
 
 lcmd_rm () {
-	vecho "${FUNCNAME[0]}($@)"
+	local z=${FUNCNAME[0]} ;vecho "$z($@)"
 	[[ "$1" ]] || return 1
 	ocmd_dirent "$1" '' ${dirent_cmd[set_name]}	# set the filename
 	ocmd_delete
@@ -881,7 +888,7 @@ readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 # for _sleep()
 sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
 trap "rm -f $sleep_fifo" EXIT
-mkfifo $sleep_fifo || abrt "Error creating sleep fifo $sleep_fifo"
+mkfifo $sleep_fifo || abrt "Error creating sleep fifo \"$sleep_fifo\""
 exec 4<>$sleep_fifo
 
 # tpdd serial port
