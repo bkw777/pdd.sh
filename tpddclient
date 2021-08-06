@@ -219,8 +219,8 @@ abrt () {
 }
 
 vecho () {
-	local -i n=$1 ;shift
-	((v>n)) && echo $@ >&2
+	local -i l=$1 ;shift
+	((v>=l)) && echo "$@" >&2
 }
 
 _sleep () {
