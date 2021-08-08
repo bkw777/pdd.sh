@@ -8,10 +8,9 @@
 # config
 
 # verbose/debug
-# DEBUG=true ./tpddclient ...
-v=0
-${DEBUG:-false} && v=1 # 0=normal, 1=verbose
-#v=3 # log a copy of every read and write to individal local files
+# 0/unset=normal, 1=verbose, >1=more verbose, 3=log packets to files
+# DEBUG=1 ./tpddclient ...
+v=${DEBUG:-0}
 
 # platform differences
 stty_f="-F" TPDD_TTY_PREFIX=ttyUSB # Linux
@@ -28,21 +27,35 @@ RTSCTS="crtscts"  # "crtscts" to enable, "-crtscts" to disable
 STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
 
 # read timeout in seconds
-# current bash can take floating point, old bash may need a whole number
+# When issuing the "read" command to read bytes from the serial port, wait this
+# long (in seconds) for a byte to appear before giving up. 0.1 seconds is short
+# enough that we get the answer and proceed quickly, yet long enough that we
+# aren't killing the cpu with too-tight polling loops.
+# Mostly we don't end up in situations where we'd hang for long times even
+# if this were set to 1 or more whole seconds, because we have a way to consume
+# and react to null bytes, and tell them apart from a timeout from no data.
+# That, plus the fact that the TPDD protocol requires us to remain in-step with
+# the drive at all times anyway just to work at all, means that we always know
+# what to expect and exactly how many bytes to read or write at any given time,
+# so we're rarely ever just reading until the data stops.
+# tpdd_iosync() isn't even called any more except by a manual user do_cmd(sync).
+# Current bash can take floating point, old bash may need a whole number.
 READ_TIMEOUT=0.1
 
-# default tpdd_wait() timout in READ_TIMEOUTs
-# wait this long for the drive to start delivering data
-# usually needs at least 1.5 seconds
-# some commands like format need much lnger
+# Default tpdd_wait() timout in number-of-READ_TIMEOUTs
+# Wait this long for the drive to respond after issuing a command.
+# Some commands like dirent(get_first) can take up to 2.0 seconds to respond.
+# Some commands like format need much longer like 100 seconds.
+# tpdd_wait() takes an optional argument for max wait time. This is the default.
 WAIT_TIMEOUT=50
 
 # new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds
 # old bash:  READ_TIMEOUT=1   * WAIT_TIMEOUT=2  = 2 seconds
 
-# Assume any filenames that would fit within 6.2 are "Model T" files,
-# and automatically pad them to fill 6.2 the same way "Floppy" does.
+# Assume any filenames that would fit within 6.2 are "Model T" files, and
+# automatically pad to / collapse from 6.2 the same way "Floppy" does.
 # "A.BA" -> "A     .BA" -> "A     .BA               "
+# "A     .BA               " -> "A     .BA" -> "A.BA"
 # You need to do this to be compatible with Floppy, Flopy2, TS-DOS, etc.
 # But the drive doesn't care, and Model T's are not the only users(1).
 # So the automatic 6.2 padding can be disabled by setting this to false.
@@ -58,8 +71,11 @@ typeset -a mode=(
 )
 
 ###############################################################################
-# "Operation Mode" transactions
+# "Operation Mode" constants
 #
+#
+# operation-mode transactions:
+# 
 # request block
 #   P preamble  2 bytes       5A5A
 #   F format    1 byte        type of request block
@@ -242,7 +258,7 @@ file_to_hex () {
 	local x ;hex=()
 
 	exec 5<"$1"
-	while IFS= read -t${READ_TIMEOUT} -r -d $'\0' -n 1 -u 5 x ;do
+	while IFS= read -t ${READ_TIMEOUT} -r -d $'\0' -n 1 -u 5 x ;do
 		printf -v x '%02x' "'$x"
 		hex+=($x)
 	done
@@ -359,14 +375,13 @@ close_com () {
 }
 
 ###############################################################################
-# TPDD communication
+# low level TPDD communication
 
 # write $* to com port as binary
-((v>2)) && typeset -i wc=0
 tpdd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x=$* ;rdh=()
-	((v>2)) && printf '%b' "\x${x// /\\x}" >${0##*/}.$$.$z.$((wc++))
+	((v>2)) && { local c ;printf -v c '%03d' $((seq++)) ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.$c.$z ; }
 	printf '%b' "\x${x// /\\x}" >&3
 }
 
@@ -380,7 +395,6 @@ tpdd_write () {
 # $?=0 = we read a non-null byte normally
 #    1 = we read a null byte, $x is empty because the null was eaten as a delimiter
 #  142 = we timed out, $x is empty because there was no data, not a null byte
-((v>2)) && typeset -i rc=0
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i l=$1 ;local x ;rdh=() read_err=0
@@ -395,7 +409,7 @@ tpdd_read () {
 		printf -v rdh[i] '%02x' "'$x"
 		vecho 1 -n "${rdh[i]}"
 	}
-	((v>2)) && { x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.$z.$((rc++)) ; }
+	((v>2)) && { local c ;printf -v c '%03d' $((seq++)) ;x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.$c.$z ; }
 	vecho 1 " read_err:$read_err"
 }
 
@@ -424,7 +438,11 @@ tpdd_iosync () {
 }
 
 ###############################################################################
-# "Operation Mode" helper functions
+#                             OPERATION MODE                                  #
+###############################################################################
+
+###############################################################################
+# "Operation Mode" support functions
 
 # calculate the checksum of $* (hex pairs)
 # return in global $cksum (hex pair)
@@ -489,15 +507,24 @@ ocmd_read_ret () {
 	local -i t ;local l x ;ret_fmt= ret_len= ret_dat=() ret_sum=
 
 	# read 2 bytes (fmt len)
+	# Retry this a couple times, and accept "00 00" as a valid response even
+	# though according to the manual it's NOT. After doing ocmd_close()
+	# after ocmd_write() we might read 2 00 bytes, and then get an error
+	# from the read command if we try to read any more. But if we pause a
+	# few 10s of ms and try again, we get the expected normal format 12h
+	# return block that the manual promised, and, the data byte is even 00
+	# (no error). Unclear why the drive is issuing null bytes.
+	for ((t=1;t<3;t++)) {
 	vecho 1 "$z: read 2 bytes (fmt len)"
 	tpdd_read 2
 	vecho 1 "$z: (${rdh[*]})"
 	((${#rdh[*]}==2)) || return 1
 	case "${rdh[0]}" in
-		10|11|12) ret_fmt=${rdh[0]} ret_len=${rdh[1]} ;;
-	#	00) continue ;;
-		*) rdh=() ;return 2 ;;
+		10|11|12) ret_fmt=${rdh[0]} ret_len=${rdh[1]} ; break ;;
+		00) vecho 1 "READ TRY# $t 00 00" ;_sleep 0.5 ;continue ;;
+		*) vecho 1 "READ TRY# $t INVALID RESPONSE" ;rdh=() ;return 2 ;;
 	esac
+	}
 
 	# read <length> bytes (data)
 	l=$((16#$ret_len))
@@ -519,7 +546,8 @@ ocmd_read_ret () {
 }
 
 ###############################################################################
-# TPDD "Operation Mode" commands
+# TPDD "Operation Mode" drive functions
+# 1:1 wrappers for each "operation mode" function of the drive firmware
 
 # directory entry
 # fmt = 00
@@ -679,6 +707,13 @@ ocmd_write () {
 	(($#)) || return 128
 	ocmd_send_req ${opr_fmt[req_write]} $* || return 129
 
+	# arbitrary forced sleep, without tpdd_check()
+	# because if you tpdd_check() too soon, it will succeed, indicating
+	# "there is data available, you need to read it", but if you do try to
+	# read, the bytes you get will just be 00. But if you wait a bit before
+	# trying, then the bytes you get will be the expected 12h return block.
+	#_sleep 0.5
+
 	# manual says no return block is sent unless there's an error
 	tpdd_check || return 0
 
@@ -687,7 +722,12 @@ ocmd_write () {
 }
 
 ###############################################################################
-# "FDC Mode" helper functions
+#                                 FDC MODE                                    #
+###############################################################################
+
+###############################################################################
+# "FDC Mode" support functions
+# lower level support functions used by FDC-mode commands
 
 # read an FDC-mode 8-byte result packet
 fcmd_read_result () {
@@ -729,7 +769,8 @@ fcmd_read_result () {
 }
 
 ###############################################################################
-# TPDD "FDC Mode" commands
+# TPDD "FDC Mode" drive functions
+# 1:1 wrappers for each "FDC mode" function of the drive firmware
 
 # select operation mode
 # $1 0=fdc 1=operation
@@ -805,7 +846,7 @@ lcmd_load () {
 # save a file (copy from local fs to disk)
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i n p= e ;local s d h x
+	local -i i n e ;local s d h x
 	[[ "$1" ]] || return 1
 	s=$1 d=${2:-$1}
 	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return 2	# set the destination filename
@@ -884,6 +925,8 @@ typeset -a hex=() rdh=() ret_dat=() fdc_res_b=()
 typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_fmt= ret_len= ret_sum= err_msg=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
+((v>2)) && typeset -i seq=0
+
 
 # for _sleep()
 sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
