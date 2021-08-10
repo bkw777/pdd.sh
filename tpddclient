@@ -8,7 +8,7 @@
 # config
 
 # verbose/debug
-# 0/unset=normal, 1=verbose, >1=more verbose, 3=log packets to files
+# 0/unset=normal, 1=verbose, >1=more verbose, 3=log all tty traffic to files
 # DEBUG=1 ./tpddclient ...
 v=${DEBUG:-0}
 
@@ -381,7 +381,7 @@ close_com () {
 tpdd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x=$* ;rdh=()
-	((v>2)) && { local c=$((1000+seq++)) ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
+	((v>2)) && { local c=$((10000+seq++)) ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
 	printf '%b' "\x${x// /\\x}" >&3
 }
 
@@ -409,7 +409,7 @@ tpdd_read () {
 		printf -v rdh[i] '%02x' "'$x"
 		vecho 1 -n "${rdh[i]}"
 	}
-	((v>2)) && { local c=$((1000+seq++)) ;x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
+	((v>2)) && { local c=$((10000+seq++)) ;x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
 	vecho 1 " read_err:$read_err"
 }
 
@@ -837,34 +837,41 @@ lcmd_load () {
 	while ocmd_read ;do				# read a block of data from tpdd
 		x="${ret_dat[*]}"
 		printf '%b' "\x${x// /\\x}" >> "$d"	# write the block of data to the destination file
-		#vecho 1 "$z: block:$((p++)) ret_len:$ret_len($((16#$ret_len))) #ret_dat:${#ret_dat[*]}"
-		((16#${#ret_dat[*]}<128)) && break	# stop when we get less than 128 bytes
+		((${#ret_dat[*]}<128)) && break		# stop when we get less than 128 bytes
 	done
-	ocmd_close					# close the source file
+	ocmd_close || return $?				# close the source file
 }
 
 # save a file (copy from local fs to disk)
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i n e p= ;local s d w h x
+	local -i i n e p= m ;local s d w h x
 	[[ "$1" ]] || return 1
 	s=$1 d=${2:-$1}
 	file_to_hex "$s" || return 4 ;h=(${hex[*]})	# read the source file into h[]
-	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return 2	# set the destination filename
-	ocmd_open ${open_mode[write]} || return 3	# open the destination file for write(new)
+	m=${open_mode[write]}
 	while ((${#h[*]})) ;do
 		vecho 1 "$z: packet:$((++p)) start #h=${#h[*]}"
+
+		# Manual says dirent & open once, write multiple, close once.
+		# Doesn't work. This does dirent-open-write-close every 128 bytes.
+		# It's insanely stunningly slow but it works.
+		ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return 2	# set the destination filename
+		ocmd_open $m || return 3	# open the destination file for write(new)
+
 		w=() n=${#h[*]}
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) { w+=(${h[i]}) h[i]= ; } ;h=(${h[*]})
 		vecho 1 "$z: packet:$p end #h=${#h[*]}"
-		ocmd_write ${w[*]}
-		e=$? ;((e)) && { vecho 1 "$z:ocmd_write() err=$e" ;return $((e+64)) ; }
+		ocmd_write ${w[*]} ;e=$? ;((e)) && { vecho 1 "$z:ocmd_write() err=$e" ;return $((e+64)) ; }
+
+		tpdd_wait
+		ocmd_read_ret || return $?
+		ocmd_check_err || return $?
+		ocmd_close || return $?
+
+		((m==${open_mode[write]})) && m=${open_mode[append]}
 	done
-	tpdd_wait 100
-	ocmd_read_ret
-	ocmd_check_err
-	ocmd_close
 }
 
 lcmd_rm () {
