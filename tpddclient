@@ -647,8 +647,8 @@ ocmd_fdc () {
 ocmd_open () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local mode ;printf -v mode '%02x' $1
-	ocmd_send_req ${opr_fmt[req_open]} $mode || return $?	# open the file
+	local m ;printf -v m '%02x' $1
+	ocmd_send_req ${opr_fmt[req_open]} $m || return $?	# open the file
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
