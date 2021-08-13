@@ -3,43 +3,51 @@
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in (almost) pure bash.
 
 It's pure bash except for the following:  
- * "stty" is needed once at startup to configure the serial port.  
- * "mkfifo" is used once at startup for _sleep() without /usr/bin/sleep .  
+* "stty" is needed once at startup to configure the serial port.  
+* "mkfifo" is used once at startup for _sleep() without /usr/bin/sleep .  
+
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
 ## Usage
 ```tpddclient [tty_device] [command [args...]]```
 
-With no arguments, it will run in interactive command mode. You get a "TPDD($mode)>" prompt where you can enter commands. "help" is still not one of them ;) Sorry.
+With no arguments, it will run in interactive command mode.  
+You get a ```TPDD($mode)>``` prompt where you can enter commands.  
+"help" is still not one of them ;) Sorry.
 
-'''tty_device''' will be auto detected in most cases, failing that, you'll be shown a list of possible choices to select from, or you can specify one on the command line.
-
-commands:
+**tty_device** will be auto detected in most cases.  
+Failing that, you'll be shown a list of possible choices to select from.  
+Or you may specify one as the first argument on the command line.  
 
 There are two groups of commands, "operation mode" and "FDC mode".  
 
-| "operation mode" commands: |
+**"operation mode" commands**  
+| command| |
 | --- | --- |
-| stat\|status | Report the drive/disk status |
-| ls\|list\|dir\|directory | Directory listing |
-| rm\|del\|delete | Delete a file |
+| stat \| status | Report the drive/disk status |
+| ls \| list \| dir \| directory | Directory listing |
+| rm \| del \| delete | Delete a file |
 | load | Copy a file from the disk |
 | save | Copy a file to the disk |
 | format | Format the disk |
-| q\|quit\|bye\|exit | Order Pizza |
+| q \| quit \| bye \| exit | Order Pizza |
 | fdc | Switch to FDC mode |
 
-| "FDC mode" commands: |
+**"FDC mode" commands**
+| command | |
 | --- | --- |
-|condition | Report the drive/disk status |
-|mode | Select operation or fdc mode |
+| condition | Report the drive/disk status |
+| mode | Select operation or fdc mode |
+
 (There are several more FDC mode commands but most are not implemented yet.)
 
 There are also a bunch of low level raw/debugging commands that I'm not going to take the time to document here. Look at do_cmd() in the script.
 
-load, save and delete take a filename as an argument.
+load, save and delete take a filename as an argument.  
+```TPDD(opr)>rm GAME.BA```
 
-load and save may also optionally be given a 2nd argument for a destination filename.
+load and save may also optionally be given a 2nd argument for a destination filename.  
+```TPDD(opr)>save TheBestGameInTheWorld.bas GAME.BA```
 
 Multiple commands may be given at once, seperated by ';', to form a pre-loaded sequence.  
 Example, delete a file and then list all files:  
@@ -50,23 +58,23 @@ No built-in help yet.
 
 ## Examples
 
-* FDC mode drive condition  
-Start ./tpddclient with no args.  
-Type "fdc" at the prompt and hit enter.  
-That switches you to "FDC" mode where you can enter FDC mode commands.  
-Type "D" and hit enter (short alias for "condition").  
-You should get a message that correctly reflects whether you have a disk inserted or not, and whether that disk is currently write-protected or not.
+**FDC mode drive condition**  
+1. Run ```$ ./tpddclient``` with no args.  
+2. Type "fdc" at the prompt and hit enter.  
+ That switches you to "FDC" mode where you can enter FDC mode commands.  
+3. Type "D" and hit enter (short alias for "condition").  
+ You should get a message that correctly reflects whether you have a disk inserted or not, and whether that disk is currently write-protected or not.
 
-* List files  
-Insert a disk and run ```./tpddclient ls```  
-It shoud scan the disk, list the files and file sizes, and then exit back to the shell.
+**List files**  
+1. Insert a disk and run ```$ ./tpddclient ls```  
+ It should scan the disk, list the files and file sizes, and then exit back to the shell.
 
-* Copy a file from the disk  
-```tpddclient load DOSNEC.CO```
+**Copy a file from the disk**  
+```$ ./tpddclient load DOSNEC.CO```  
 ...rename along the way...  
-```tpddclient load DOSNEC.CO ts-dos_4.1_nec.co```
+```$ ./tpddclient load DOSNEC.CO ts-dos_4.1_nec.co```
 
-To see all the gory blow-by-blow, do ```DEBUG=1 ./tpddclient ...```  
+To see all the gory blow-by-blow, do ```$ DEBUG=1 ./tpddclient ...```  
 DEBUG=3 will additionally create log files containing every read from and write to the serial port. Each individual call to tpdd_read() or tpdd_write() creates a file with a copy of whatever was actually read from or written to the serial port.
 
 # Status
