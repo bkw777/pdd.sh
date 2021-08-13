@@ -11,6 +11,7 @@
 # * ls after every command?
 # * 2 or 3-column ls format? (so a full disk still fits on screen)
 # * FDC commands
+# * TPDD2
 # * Refactor the global variable names to have a consistent scheme.
 # * Help screen
 # * Figure out what's really going on why you can't actually change
@@ -50,7 +51,7 @@ READ_TIMEOUT_MS=100
 # Some commands like format take 100 seconds.
 TPDD_WAIT_TIMEOUT_MS=5000
 
-# true/false - Automatically convert filenames to Floppy/Flopy2-compatible 6.2
+# true/false - Automatically convert filenames to Floppy/Flopy2-compatible 6.2 .
 # When saving, pad to %-6s.%-2s  : "A.BA"      -> "A     .BA"
 # When loading, strip all spaces : "A     .BA" -> "A.BA"
 # You need to do this to be compatible with Floppy, Flopy2, TS-DOS, etc.
@@ -68,7 +69,7 @@ TPDD_WAIT_TIMEOUT_MS=5000
 
 ###############################################################################
 # drive operating modes
-typeset -a mode=(
+typeset -ra mode=(
 	[0]=fdc		# "FDC mode"
 	[1]=opr		# "operation mode"
 )
@@ -76,23 +77,8 @@ typeset -a mode=(
 ###############################################################################
 # "Operation Mode" constants
 
-# operation-mode transactions:
-# 
-# request block
-#   P preamble  2 bytes       5A5A
-#   F format    1 byte        type of request block
-#   L length    1 byte        length of data in bytes
-#   D data      0-128 bytes   data
-#   C checksum  1 byte        1's comp of LSByte of sum of format through data
-#
-# return block
-#   F format    1 byte        type of return block
-#   L length    1 byte        length of data in bytes
-#   D data      0-128 bytes   data
-#   C checksum  1 byte        1's comp of LSByte of sum of format through data
-
 # Operation Mode Request/Return Block Formats
-typeset -A opr_fmt=(
+typeset -rA opr_fmt=(
 	# requests
 	[req_dirent]='00'
 	[req_open]='01'
@@ -106,11 +92,11 @@ typeset -A opr_fmt=(
 	# returns
 	[ret_read]='10'
 	[ret_dirent]='11'
-	[ret_std]='12'	# open close delete status write error
+	[ret_std]='12'	# error open close delete status write
 )
 
 # Operation Mode Error Codes
-typeset -A opr_msg=(
+typeset -rA opr_msg=(
 	[00]='Operation Complete'
 	[10]='File Not Found'
 	[30]='Command Parameter or Sequence Error'
@@ -167,14 +153,14 @@ typeset -A opr_msg=(
 )
 
 # Directory Entry Search Forms
-typeset -A dirent_cmd=(
+typeset -rA dirent_cmd=(
 	[set_name]=0
 	[get_first]=1
 	[get_next]=2
 )
 
 # File Open Access Modes
-typeset -A open_mode=(
+typeset -rA open_mode=(
 	[write_new]=1
 	[write_append]=2
 	[read]=3
@@ -183,32 +169,9 @@ typeset -A open_mode=(
 ###############################################################################
 # "FDC Mode" constants
 
-# fdc-mode transactions:
-#
-# send: C [ ] [P[,P]...] CR
-#
-# C = command letter, ascii letter
-# optional space between command letter and first parameter
-# P = parameter (if any), integer decimal value in ascii numbers
-# ,p = more parameters if any, seperated by commas, ascii decimal numbers
-# CR = carriage return
-#
-# recv: 8 bytes as 4 ascii hex pairs representing 4 byte values
-#
-#  1st pair is the error status
-#  remaining pairs meaning depends on the command
-#
-# Some fdc commands have another send-and-receive after that.
-# Receive the first response, if the status is not error, then:
-#
-# send: the data for a sector write
-# recv: another standard 8-byte response as above
-# or
-# send: single carriage-return
-# recv: data from a sector read
 
 # FDC Mode Commands
-typeset -A fdc_cmd=(
+typeset -rA fdc_cmd=(
 	[mode]='M'
 	[condition]='D'
 	[format]='F'
@@ -223,7 +186,7 @@ typeset -A fdc_cmd=(
 )
 
 # FDC Mode Errors
-typeset -A fdc_msg=(
+typeset -rA fdc_msg=(
 	[0]="OK"
 	[193]="Command Error"
 )
@@ -445,6 +408,25 @@ tpdd_iosync () {
 ###############################################################################
 #                             OPERATION MODE                                  #
 ###############################################################################
+#
+# operation-mode transaction format reference
+#
+# request block
+#
+#   preamble  2 bytes       5A5A
+#   format    1 byte        type of request block
+#   length    1 byte        length of data in bytes
+#   data      0-128 bytes   data
+#   checksum  1 byte        1's comp of LSByte of sum of format through data
+#
+# return block
+#
+#   format    1 byte        type of return block
+#   length    1 byte        length of data in bytes
+#   data      0-128 bytes   data
+#   checksum  1 byte        1's comp of LSByte of sum of format through data
+
+
 
 ###############################################################################
 # "Operation Mode" support functions
@@ -743,6 +725,30 @@ ocmd_write () {
 ###############################################################################
 #                                 FDC MODE                                    #
 ###############################################################################
+#
+# fdc-mode transaction format reference
+#
+# send: C [ ] [P[,P]...] CR
+#
+# C = command letter, ascii letter
+# optional space between command letter and first parameter
+# P = parameter (if any), integer decimal value in ascii numbers
+# ,p = more parameters if any, seperated by commas, ascii decimal numbers
+# CR = carriage return
+#
+# recv: 8 bytes as 4 ascii hex pairs representing 4 byte values
+#
+#  1st pair is the error status
+#  remaining pairs meaning depends on the command
+#
+# Some fdc commands have another send-and-receive after that.
+# Receive the first response, if the status is not error, then:
+#
+# send: the data for a sector write
+# recv: another standard 8-byte response as above
+# or
+# send: single carriage-return
+# recv: data from a sector read
 
 ###############################################################################
 # "FDC Mode" support functions
@@ -941,7 +947,7 @@ readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 x=$((1000000+READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
 
 # for _sleep()
-sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
+readonly sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
 trap "rm -f $sleep_fifo" EXIT
 mkfifo $sleep_fifo || abrt "Error creating sleep fifo \"$sleep_fifo\""
 exec 4<>$sleep_fifo
