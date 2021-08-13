@@ -51,8 +51,8 @@ load and save may also optionally be given a 2nd argument for a destination file
 
 Multiple commands may be given at once, seperated by ';', to form a pre-loaded sequence.  
 Example, delete a file and then list all files:  
-In interactive mode: ```TPDD(opr)>rm DOSNEC.CO ;ls```
-In non-interactive mode: ```$ ./tpddclient "rm DOSNEC.CO ;ls"```
+In interactive mode: ```TPDD(opr)>rm DOSNEC.CO ;ls```  
+In non-interactive mode: ```$ ./tpddclient "rm DOSNEC.CO ;ls"```  
 
 No built-in help yet.
 
@@ -75,7 +75,8 @@ No built-in help yet.
 ```$ ./tpddclient load DOSNEC.CO ts-dos_4.1_nec.co```
 
 To see all the gory blow-by-blow, do ```$ DEBUG=1 ./tpddclient ...```  
-DEBUG=3 will additionally create log files containing every read from and write to the serial port. Each individual call to tpdd_read() or tpdd_write() creates a file with a copy of whatever was actually read from or written to the serial port.
+```$ DEBUG=3 ./tpddclient ...``` will additionally create log files containing every read from and write to the serial port.  
+Each individual call to tpdd_read() or tpdd_write() creates a file with a copy of whatever was actually read from or written to the serial port.
 
 # Status
 All the "operation mode" commands work!  
