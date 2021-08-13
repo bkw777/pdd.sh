@@ -49,7 +49,7 @@ load, save and delete take a filename as an argument.
 load and save may also optionally be given a 2nd argument for a destination filename.  
 ```TPDD(opr)>save TheBestGameInTheWorld.bas GAME.BA```
 
-Multiple commands may be given at once, seperated by ';', to form a pre-loaded sequence.  
+Multiple commands may be given at once, seperated by ';' to form a pre-loaded sequence.  
 Example, delete a file and then list all files:  
 In interactive mode: ```TPDD(opr)>rm DOSNEC.CO ;ls```  
 In non-interactive mode: ```$ ./tpddclient "rm DOSNEC.CO ;ls"```  
