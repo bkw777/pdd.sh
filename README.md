@@ -39,7 +39,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | condition | Report the drive/disk status |
 | mode | Select operation or fdc mode |
 
-(There are several more FDC mode commands but most are not implemented yet.)
+(There are several more FDC mode commands in the drive firmware but most are not implemented yet.)
 
 There are also a bunch of low level raw/debugging commands that I'm not going to take the time to document here. Look at do_cmd() in the script.
 
