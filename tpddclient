@@ -4,6 +4,19 @@
 # Brian K. White b.kenyon.w@gmail.com
 # https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
 
+# TODOS: Many ;)
+# * %done progress bar for load and save
+#   For load, do ls first to get the file size.
+#   For save, use #hex[] after file_to_hex().
+# * ls after every command?
+# * 2 or 3-column ls format? (so a full disk still fits on screen)
+# * WHY THE F CAN'T I DO "SAVE" THE RIGHT WAY?
+# * FDC commands
+# * Refactor the global variable names to have a consistent scheme.
+# * Help screen
+# * Figure out what's really going on why you can't actually change
+#   read_timout very far from 100ms without it all breaking.
+
 ###############################################################################
 # config
 
@@ -13,55 +26,45 @@
 v=${DEBUG:-0}
 
 # platform differences
-stty_f="-F" TPDD_TTY_PREFIX=ttyUSB # Linux
+			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB		# linux
 case "${OSTYPE,,}" in
-	*bsd*) stty_f="-f" TPDD_TTY_PREFIX=ttyU ;; # FreeBSD/NetBSD/OpenBSD/etc
-	darwin*) stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial- ;; # Mac OSX
+	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;		# *bsd
+	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial- ;;	# osx
 esac
 
-# enable hardware flow-control or not
-RTSCTS="crtscts"  # "crtscts" to enable, "-crtscts" to disable
+# stty flags to set the serial port parameters & tty behavior
+# For 9600-only drives like FB-100 or FDD19, change 19200 to 9600
+# (FB-100/FDD19 can run at 19200 by removing the solder blob from dip switch 1)
+# To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
+STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
 
-# stty flags to set the serial port parameters & tty line discipline & behavior
-# don't include "-f/-F filename" here
-STTY="19200 raw pass8 -echo clocal cread ${RTSCTS} flusho -drain"
-
-# read timeout in seconds
+# read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
-# long (in seconds) for a byte to appear before giving up. 0.1 seconds is short
-# enough that we get the answer and proceed quickly, yet long enough that we
-# aren't killing the cpu with too-tight polling loops.
-# Mostly we don't end up in situations where we'd hang for long times even
-# if this were set to 1 or more whole seconds, because we have a way to consume
-# and react to null bytes, and tell them apart from a timeout from no data.
-# That, plus the fact that the TPDD protocol requires us to remain in-step with
-# the drive at all times anyway just to work at all, means that we always know
-# what to expect and exactly how many bytes to read or write at any given time,
-# so we're rarely ever just reading until the data stops.
-# tpdd_iosync() isn't even called any more except by a manual user do_cmd(sync).
-# Current bash can take floating point, old bash may need a whole number.
-READ_TIMEOUT=0.1
+# long (in ms) for a byte to appear before giving up.
+# Smaller numbers make faster response but use more cpu (tighter polling loop).
+READ_TIMEOUT_MS=100
 
-# Default tpdd_wait() timout in number-of-READ_TIMEOUTs
-# Wait this long for the drive to respond after issuing a command.
-# Some commands like dirent(get_first) can take up to 2.0 seconds to respond.
-# Some commands like format need much longer like 100 seconds.
-# tpdd_wait() takes an optional argument for max wait time. This is the default.
-WAIT_TIMEOUT=50
+# Default tpdd_wait() timout in ms
+# Wait this long (by default) for the drive to respond after issuing a command.
+# Some commands like dirent(get_first) and close can take 2 seconds to respond.
+# Some commands like format take 100 seconds.
+TPDD_WAIT_TIMEOUT_MS=5000
 
-# new bash:  READ_TIMEOUT=0.1 * WAIT_TIMEOUT=20 = 2 seconds
-# old bash:  READ_TIMEOUT=1   * WAIT_TIMEOUT=2  = 2 seconds
-
-# Assume any filenames that would fit within 6.2 are "Model T" files, and
-# automatically pad to / collapse from 6.2 the same way "Floppy" does.
-# "A.BA" -> "A     .BA" -> "A     .BA               "
-# "A     .BA               " -> "A     .BA" -> "A.BA"
+# true/false - Automatically convert filenames to Floppy/Flopy2-compatible 6.2
+# When saving, pad to %-6s.%-2s  : "A.BA"      -> "A     .BA"
+# When loading, strip all spaces : "A     .BA" -> "A.BA"
 # You need to do this to be compatible with Floppy, Flopy2, TS-DOS, etc.
-# But the drive doesn't care, and Model T's are not the only users(1).
+# But the drive doesn't care, and Model T's are not the only TPDD users(1).
 # So the automatic 6.2 padding can be disabled by setting this to false.
-# Even when this is true, if a filename wouldn't fit within 6.2, then it is
-# not modified. (1) TANDY WP-2, Brother knitting machines, Cambridge Z-88
-FLOPPY_COMPAT=true
+# This can be done at run-time from the commandline:
+#     $> FLOPPY_COMPAT=false ./tpddclient save myfilename.exe
+# Even when enabled, if a filename wouldn't fit within 6.2, then it is
+# not modified, so enabled generally does the expected thing automatically.
+# (1) TANDY WP-2, Brother knitting machines, Cambridge Z-88, MS-DOS & most OS's
+: ${FLOPPY_COMPAT:=true}
+
+# end of config
+###############################################################################
 
 ###############################################################################
 # drive operating modes
@@ -72,8 +75,7 @@ typeset -a mode=(
 
 ###############################################################################
 # "Operation Mode" constants
-#
-#
+
 # operation-mode transactions:
 # 
 # request block
@@ -173,13 +175,15 @@ typeset -A dirent_cmd=(
 
 # File Open Access Modes
 typeset -A open_mode=(
-	[write]=1
-	[append]=2
+	[write_new]=1
+	[write_append]=2
 	[read]=3
 )
 
 ###############################################################################
-# "FDC Mode" transactions
+# "FDC Mode" constants
+
+# fdc-mode transactions:
 #
 # send: C [ ] [P[,P]...] CR
 #
@@ -202,7 +206,6 @@ typeset -A open_mode=(
 # or
 # send: single carriage-return
 # recv: data from a sector read
-#
 
 # FDC Mode Commands
 typeset -A fdc_cmd=(
@@ -225,7 +228,6 @@ typeset -A fdc_msg=(
 	[193]="Command Error"
 )
 
-
 ###############################################################################
 # generic/util functions
 
@@ -237,6 +239,7 @@ abrt () {
 vecho () {
 	local -i l=$1 ;shift
 	((v>=l)) && echo "$@" >&2
+	:
 }
 
 _sleep () {
@@ -258,7 +261,7 @@ file_to_hex () {
 	local x ;hex=()
 
 	exec 5<"$1"
-	while IFS= read -t ${READ_TIMEOUT} -r -d $'\0' -n 1 -u 5 x ;do
+	while IFS= read -r -d $'\0' -n 1 -u 5 x ;do
 		printf -v x '%02x' "'$x"
 		hex+=($x)
 	done
@@ -269,6 +272,7 @@ file_to_hex () {
 
 ###############################################################################
 # Main Command Dispatcher
+
 do_cmd () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i e ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
@@ -360,13 +364,13 @@ get_tpdd_port () {
 }
 
 test_com () {
-	{ true >&3 ; } 2>&-
+	{ : >&3 ; } 2>&-
 }
 
 open_com () {
 	test_com && return
 	exec 3<>"${PORT}"
-	stty ${stty_f} "${PORT}" ${STTY}
+	stty ${stty_f} "${PORT}" ${STTY_FLAGS}
 	test_com || abrt "Failed to open serial port \"${PORT}\""
 }
 
@@ -375,7 +379,7 @@ close_com () {
 }
 
 ###############################################################################
-# low level TPDD communication
+# TPDD communication primitives
 
 # write $* to com port as binary
 tpdd_write () {
@@ -386,15 +390,15 @@ tpdd_write () {
 }
 
 # read $1 bytes from com port
-# store each byte as a hex pair in rdh[]
+# store each byte as a hex pair in global rdh[]
 # deep brute force magic here to actually read null bytes
 # (we're not actually reading or storing nulls, but we are *detecting* them and recording where they were)
 # Thanks to Andrew Ayers in the M100 group on Facebook for help finding the key trick.
 #
-# return values from "read"
-# $?=0 = we read a non-null byte normally
-#    1 = we read a null byte, $x is empty because the null was eaten as a delimiter
-#  142 = we timed out, $x is empty because there was no data, not a null byte
+# return value from "read" is crucial to distiguish a timeout from a null byte
+# $?=0 = we read a non-null byte normally, $x contains a byte
+#    1 = we read a null byte, $x is empty because we ate the null as a delimiter
+# >128 = we timed out, $x is empty because there was no data, not even a null
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i l=$1 ;local x ;rdh=() read_err=0
@@ -404,7 +408,7 @@ tpdd_read () {
 		vecho 1 -n " $i:"
 		x= rdh[i]='00'
 		((read_err)) && { vecho 1 -n "XX" ; continue ; }
-		IFS= read -t ${READ_TIMEOUT} -r -d $'\0' -n 1 -u 3 x ;read_err=$?
+		IFS= read -t $read_timeout -r -d $'\0' -n 1 -u 3 x ;read_err=$?
 		(($read_err>1)) || read_err=0
 		printf -v rdh[i] '%02x' "'$x"
 		vecho 1 -n "${rdh[i]}"
@@ -421,10 +425,11 @@ tpdd_check () {
 # wait for data
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
-	local -i i=-1 t=${1:-${WAIT_TIMEOUT}}
-	until ((++i>t)) ;do
+	local -i i=-1 n wait_ms=${1:-${TPDD_WAIT_TIMEOUT_MS}}
+	((wait_ms<=READ_TIMEOUT_MS)) && n=1 || n=$((wait_ms/READ_TIMEOUT_MS))
+	until ((++i>n)) ;do
 		tpdd_check && break
-		_sleep ${READ_TIMEOUT}
+		_sleep $read_timeout
 	done
 	vecho 1 "$i"
 }
@@ -545,9 +550,27 @@ ocmd_read_ret () {
 	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { err_msg+=" CHECKSUM FAILED" ; return 5 ; }
 }
 
+# Space-pad or truncate $1 to 24 bytes.
+# If in "Floppy Compatible" mode, and if the filename is already 6.2 or less,
+# then also space-pad to %-6s.%-2s within that. Return in global tpdd_file_name
+# normal       : "hi.bat"                -> "hi.bat                  "
+# floppy_compat: "A.CO"   -> "A     .CO" -> "A     .CO               "
+# floppy_compat: "Floppy_SYS"            -> "Floppy_SYS              "
+mk_tpdd_file_name () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local -i e ;local x t f="$1" ;tpdd_file_name=
+
+	$FLOPPY_COMPAT && {
+		t=${1%.*} x=${1##*.}
+		((${#t})) && ((${#t}<7)) && ((${#x}<3)) && printf -v f '%-6s.%-2s' "$t" "$x"
+	}
+
+	printf -v tpdd_file_name '%-24.24s' "$f"
+}
+
 ###############################################################################
-# TPDD "Operation Mode" drive functions
-# 1:1 wrappers for each "operation mode" function of the drive firmware
+# "Operation Mode" drive functions
+# wrappers for each "operation mode" function of the drive firmware
 
 # directory entry
 # fmt = 00
@@ -557,52 +580,48 @@ ocmd_read_ret () {
 # search form = 00=set_name | 01=get_first | 02=get_next
 ocmd_dirent () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i e ;local x t f="$1" m=${3:-${dirent_cmd[get_first]}}
+	local -i e ;local x f="$1" m=${3:-${dirent_cmd[get_first]}}
 	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
 
-	# In "Floppy Compatible" mode, if doing set_name, and the filename
-	# is 6.2 or less, then space-pad to fill 6.2: "A.CO" -> "A     .CO"
-	$FLOPPY_COMPAT && [[ "$m" == "${dirent_cmd[set_name]}" ]] && {
-		t=${1%.*} x=${1##*.}
-		((${#t})) && ((${#t}<7)) && ((${#x}<3)) && printf -v f '%-6s.%2s' "$t" "$x"
-	}
-
 	# construct the request
-	printf -v x '%-24.24s' "$f" ;mk_hex "$x"	# filename (hex[0-23])
-	printf -v hex[24] '%02x' "'${2:-F}"		# attribute - always "F"
-	printf -v hex[25] '%02x' $m			# search form (set_name, get_first, get_next)
+	mk_tpdd_file_name "$f"			# pad/truncate filename
+	mk_hex "$tpdd_file_name"		# filename (hex[0-23])
+	printf -v hex[24] '%02x' "'${2:-F}"	# attribute - always "F"
+	printf -v hex[25] '%02x' $m		# search form (set_name, get_first, get_next)
 
 	# send the request
-	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || err_msg+=" $z:ocmd_send_req"
+	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || return $?
 
 	# read the response
-	ocmd_read_ret || err_msg+=" $z:ocmd_read_ret"
+	ocmd_read_ret || return $?
 
 	# check which kind of response we got
 	case "$ret_fmt" in
-		"${opr_fmt[ret_std]}") ocmd_check_err ;e=$? ;((e)) && return $e ;;
+		"${opr_fmt[ret_std]}") ocmd_check_err || return $? ;;
 		"${opr_fmt[ret_dirent]}") : ;;
 		*) err_msg+=" $z:Corrupt Return" ;return 1 ;;
 	esac
-
 	((${#ret_dat[*]}==28)) || { err_msg+=" $z:Corrupt Return" ;return 1 ; }
 
 	# parse a dirent return format
 	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
-
 	file_len=$(( 16#${ret_dat[25]}*256 + 16#${ret_dat[26]} )) ;ret_dat[26]= ret_dat[25]=
-
 	printf -v file_attr '%b' "\x${ret_dat[24]}" ;ret_dat[24]=
-
 	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
+	vecho 1 "$z: mode=$m filename=\"$file_name\" attr=\"$file_attr\" len=$file_len free=$free_sectors"
 
-	vecho 1 "$z: mode=$m filename=\"$file_name\" len=$file_len free=$free_sectors"
+	# if doing set_name
+	[[ "$m" == "${dirent_cmd[set_name]}" ]] && {
+		# file_attr=00 could mean invalid filename or file not found,
+		# so we don't know here whether that's an error or not.
+		# The caller will have to look at $filename and $file_attr
+		# decide for itself.
+		#((${#file_attr})) || { err_msg+=" $z:Invalid Filename" ; return 1 ; }
+		return 0
+	}
 
-	# set_name on a new file returns '00' so, don't halt in that case
-	[[ "$m" == "${dirent_cmd[set_name]}" ]] && return 0
-
-	# if first byte of filename is 00, then there are no more files
+	# get_first/get_next, filename[0]=00 means no more files
 	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
 }
 
@@ -612,9 +631,9 @@ ocmd_dirent () {
 ocmd_status () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	ocmd_send_req ${opr_fmt[req_status]}
-	ocmd_read_ret
-	ocmd_check_err
+	ocmd_send_req ${opr_fmt[req_status]} || return $?
+	ocmd_read_ret || return $?
+	ocmd_check_err || return $?
 }
 
 # Format Disk
@@ -625,17 +644,17 @@ ocmd_format () {
 	((operation_mode)) || fcmd_mode 1
 
 	echo "Formatting disk..."
-	ocmd_send_req ${opr_fmt[req_format]}
-	tpdd_wait 1200	# takes ~100 seconds, allow 120
+	ocmd_send_req ${opr_fmt[req_format]} || return $?
+	tpdd_wait 120000 || return $?	# takes ~100 seconds, allow 120
 
-	ocmd_read_ret
-	ocmd_check_err
+	ocmd_read_ret || return $?
+	ocmd_check_err || return $?
 }
 
 # switch to FDC mode
 ocmd_fdc () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	ocmd_send_req ${opr_fmt[req_fdc]}
+	ocmd_send_req ${opr_fmt[req_fdc]} || return $?
 	operation_mode=0
 }
 
@@ -647,8 +666,8 @@ ocmd_open () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	local mode ;printf -v mode '%02x' $1
-	ocmd_send_req ${opr_fmt[req_open]} $mode	# open the file
-	ocmd_read_ret
+	ocmd_send_req ${opr_fmt[req_open]} $mode || return $?	# open the file
+	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
@@ -658,9 +677,9 @@ ocmd_open () {
 ocmd_close () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	ocmd_send_req ${opr_fmt[req_close]}
-	tpdd_wait 100 # not sure, may not need, maybe close from writing needs it?
-	ocmd_read_ret
+	ocmd_send_req ${opr_fmt[req_close]} || return $?
+	tpdd_wait 10000 || return $? #  XXX TODO may not need
+	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
@@ -670,9 +689,9 @@ ocmd_close () {
 ocmd_delete () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	ocmd_send_req ${opr_fmt[req_delete]}
-	tpdd_wait 100	# takes ~5 seconds, allow 10
-	ocmd_read_ret
+	ocmd_send_req ${opr_fmt[req_delete]} || return $?
+	tpdd_wait 10000 || return $?	# takes ~5 seconds, allow 10
+	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
@@ -682,19 +701,19 @@ ocmd_delete () {
 ocmd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local -i e
-	ocmd_send_req ${opr_fmt[req_read]}
-	ocmd_read_ret
+	ocmd_send_req ${opr_fmt[req_read]} || return $?
+	ocmd_read_ret || return $?
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
 	# check if the response was an error
 	case "$ret_fmt" in
-		"${opr_fmt[ret_std]}") ocmd_check_err ;e=$? ;((e)) && return $e ;;
+		"${opr_fmt[ret_std]}") ocmd_check_err || return $? ;;
 		"${opr_fmt[ret_read]}") ;;
 		*) err_msg+=" Unexpected Response" ;return 4 ;;
 	esac
 
 	# return true or not based on data or not
+	# so we can do "while ocmd_read ;do ... ;done"
 	((${#ret_dat[*]}))
 }
 
@@ -705,7 +724,7 @@ ocmd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	(($#)) || return 128
-	ocmd_send_req ${opr_fmt[req_write]} $* || return 129
+	ocmd_send_req ${opr_fmt[req_write]} $* || return $?
 
 	# arbitrary forced sleep, without tpdd_check()
 	# because if you tpdd_check() too soon, it will succeed, indicating
@@ -717,7 +736,7 @@ ocmd_write () {
 	# manual says no return block is sent unless there's an error
 	tpdd_check || return 0
 
-	ocmd_read_ret ; vecho 1 "$z:ocmd_read_ret() err=$?"
+	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
@@ -727,7 +746,6 @@ ocmd_write () {
 
 ###############################################################################
 # "FDC Mode" support functions
-# lower level support functions used by FDC-mode commands
 
 # read an FDC-mode 8-byte result packet
 fcmd_read_result () {
@@ -769,8 +787,8 @@ fcmd_read_result () {
 }
 
 ###############################################################################
-# TPDD "FDC Mode" drive functions
-# 1:1 wrappers for each "FDC mode" function of the drive firmware
+# "FDC Mode" drive functions
+# wrappers for each "FDC mode" function of the drive firmware
 
 # select operation mode
 # $1 0=fdc 1=operation
@@ -803,16 +821,15 @@ fcmd_condition () {
 }
 
 ###############################################################################
-# local/client high-level commands
+# Local Commands
+# high level functions implemented here in the client
 
 # list all files
 lcmd_ls () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f x ;ret_dat=()
 
-	while ((i++<40)) ;do
-		ocmd_dirent '' '' $dirent_mode || break
-
+	while ocmd_dirent '' '' $dirent_mode ;do
 		# If in "Floppy Compatible" mode, and it looks like a
 		# "Model T" filename, then collapse the internal spaces.
 		$FLOPPY_COMPAT && {
@@ -826,58 +843,68 @@ lcmd_ls () {
 }
 
 # load a file (copy a file from tpdd to local fs)
+# lcmd_load source_filename [destination_filename]
 lcmd_load () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x s d ;local -i p=
 	[[ "$1" ]] || return 1
 	s=$1 d=${2:-$s}
-	ocmd_dirent "$s" '' ${dirent_cmd[set_name]}	# set the source filename
-	ocmd_open ${open_mode[read]}			# open the source file for reading
+	ocmd_dirent "$s" '' ${dirent_cmd[set_name]} || return $?	# set the source filename
+	ocmd_open ${open_mode[read]} | return $?	# open the source file for reading
 	>"$d"						# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
 		x="${ret_dat[*]}"
 		printf '%b' "\x${x// /\\x}" >> "$d"	# write the block of data to the destination file
 		((${#ret_dat[*]}<128)) && break		# stop when we get less than 128 bytes
 	done
-	ocmd_close || return $?				# close the source file
+	ocmd_close					# close the source file
 }
 
-# save a file (copy from local fs to disk)
+
+# lcmd_save() is working but TERRIBLE
+# The manual clearly states that a save-file sequence is:
+#     dirent open write write ... close
+# But that isn't working.
+#
+# This is only working by doing a full dirent-open-write-close every 128 bytes.
+# It's stunningly slow because close takes >1 seconds to update the directory.
+# But the file does eventually get written, so at least it's functional.
+#
+# save a file (copy a file from local fs to tpdd)
+# lcmd_save source_filename [destination_filename]
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i n e p= m ;local s d w h x
-	[[ "$1" ]] || return 1
+	[[ "$1" ]] || return 2
 	s=$1 d=${2:-$1}
-	file_to_hex "$s" || return 4 ;h=(${hex[*]})	# read the source file into h[]
-	m=${open_mode[write]}
+	file_to_hex "$s" || return 3 ;h=(${hex[*]})	# read the source file into h[]
+	m=${open_mode[write_new]}
 	while ((${#h[*]})) ;do
 		vecho 1 "$z: packet:$((++p)) start #h=${#h[*]}"
 
-		# Manual says dirent & open once, write multiple, close once.
-		# Doesn't work. This does dirent-open-write-close every 128 bytes.
-		# It's insanely stunningly slow but it works.
-		ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return 2	# set the destination filename
-		ocmd_open $m || return 3	# open the destination file for write(new)
+		ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
+		ocmd_open $m || return $?		# open the set file for writing
 
-		w=() n=${#h[*]}
+		w=() n=${#h[*]}				# read 128 bytes into w[]
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) { w+=(${h[i]}) h[i]= ; } ;h=(${h[*]})
 		vecho 1 "$z: packet:$p end #h=${#h[*]}"
-		ocmd_write ${w[*]} ;e=$? ;((e)) && { vecho 1 "$z:ocmd_write() err=$e" ;return $((e+64)) ; }
 
-		tpdd_wait
+		ocmd_write ${w[*]} || return $?		# append w[] to the set file
+
+		tpdd_wait				# read the response from write
 		ocmd_read_ret || return $?
 		ocmd_check_err || return $?
-		ocmd_close || return $?
+		ocmd_close || return $?			# close the set file
 
-		((m==${open_mode[write]})) && m=${open_mode[append]}
+		((m==${open_mode[write_new]})) && m=${open_mode[write_append]}
 	done
 }
 
 lcmd_rm () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	[[ "$1" ]] || return 1
-	ocmd_dirent "$1" '' ${dirent_cmd[set_name]}	# set the filename
+	ocmd_dirent "$1" '' ${dirent_cmd[set_name]} || return $?	# set the filename
 	ocmd_delete
 }
 
@@ -920,10 +947,10 @@ lcmd_com_req () {
 # Main
 typeset -a hex=() rdh=() ret_dat=() fdc_res_b=()
 typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
-cksum=00 ret_fmt= ret_len= ret_sum= err_msg=
+cksum=00 ret_fmt= ret_len= ret_sum= err_msg= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
-
+x=$((1000000+READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
 
 # for _sleep()
 sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
@@ -934,7 +961,7 @@ exec 4<>$sleep_fifo
 # tpdd serial port
 PORT="/dev/${1#/dev/}" ;[[ -c "$PORT" ]] && shift || get_tpdd_port
 vecho 1 "Using port \"$PORT\""
-open_com
+open_com || exit $?
 
 # non-interactive mode
 (($#)) && { do_cmd "$@" ; exit ; }
