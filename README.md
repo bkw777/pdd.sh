@@ -54,6 +54,14 @@ Example, delete a file and then list all files:
 In interactive mode: ```TPDD(opr)>rm DOSNEC.CO ;ls```  
 In non-interactive mode: ```$ ./tpddclient "rm DOSNEC.CO ;ls"```  
 
+Additionally some behavior may be modified by setting environment variables.
+| variable | value | effect |
+| --- | --- | --- |
+| DEBUG | 1 | prints a lot of internal progress and details while working
+| | 3 | additionally copies all serial port traffic to log files |
+| FLOPPY_COMPAT | true | (default) automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". |
+| | false | disable that padding/un-padding. Allows you to see the actual on-disk file name like <pre>"A     .BA               "</pre> and allows you to use the entire 24-byte filename field however you want |
+
 No built-in help yet.
 
 ## Examples
