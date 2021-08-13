@@ -2,65 +2,56 @@
 
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in (almost) pure bash.
 
-It's pure bash except for the following:
-* "stty" is needed once at startup to configure the serial port.  
-* "mkfifo" is used once at startup for _sleep() without /usr/bin/sleep .  
+It's pure bash except for the following:  
+ * "stty" is needed once at startup to configure the serial port.  
+ * "mkfifo" is used once at startup for _sleep() without /usr/bin/sleep .  
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
-##Functions that are at least partially implemented
-
-###Low level "operation mode" commands  
-These are essentially wrappers for the functions of the drive firmware, which are mostly not used directly by a user, but used by other commands.
-* fdc - switch to FDC mode
-* status - report the status of the drive (disk ejected, hardware fault, etc)
-* dirent - set a filename, or get the first filename, or get the next filename
-* format - format a disk
-* open - open the currently set filename for write(new), write(append), or read
-* close - close the currently open file
-* read - read a block of data from the currently open file
-* ocmd_delete - delete the currently set filename
-* write - write a block of data to the currently open file (not written yet)
-
-###High level "operation mode" commands  
-These are compound functions that use combinations of the other functions to do something actually useful.  
-* ls - dirent loop to list all files on the disk
-* rm - delete a file
-* load - copy a file from disk to local filesystem
-* save - copy a file from the local filesystem to the disk (not not written yet)
-* q - quit
-
-###"FDC mode" commands  
-* mode - select "operation mode" or "FDC mode"
-* condition - report status of the drive & disk - this is a little different from the "operation mode" status command
-
-###Other commands
-There are several low level manual debugging commands too, which are mostly just wrappers for the low level drive functions and even lower level serial communication functions.  
-com_read, com_write, etc...
-
 ## Usage
-(after connecting a TPDD drive)
-
 ```tpddclient [tty_device] [command [args...]]```
 
-In most cases it will automatically discover the tty for the serial port, assuming there is only one serial device and it's a usb-serial adapter.  
-If there are multiple usb-serial adapters connected, it will prompt you to select one.  
-If you need to override the automatic guess, just supply a tty device as the first argument on the command line.
+With no arguments, it will run in interactive command mode. You get a "TPDD($mode)>" prompt where you can enter commands. "help" is still not one of them ;) Sorry.
 
-"command" is any of the commands above. Actually look at do_cmd() in the script. That shows all the active commands and all their aliases.
+'''tty_device''' will be auto detected in most cases, failing that, you'll be shown a list of possible choices to select from, or you can specify one on the command line.
 
-If you don't supply any command on the commandline, the script runs in interactive mode where you enter the same commands at a "TPDD($mode)>" prompt.
+commands:
 
-Multiple commands may be given at once, seperated by ';', either on the commandline to send an entire sequence and exit, or given manually at the interactive mode prompt.
-Exampe, delete a file and get a listing immediately after:
+There are two groups of commands, "operation mode" and "FDC mode".  
+
+| "operation mode" commands: |
+| --- | --- |
+| stat\|status | Report the drive/disk status |
+| ls\|list\|dir\|directory | Directory listing |
+| rm\|del\|delete | Delete a file |
+| load | Copy a file from the disk |
+| save | Copy a file to the disk |
+| format | Format the disk |
+| q\|quit\|bye\|exit | Order Pizza |
+| fdc | Switch to FDC mode |
+
+| "FDC mode" commands: |
+| --- | --- |
+|condition | Report the drive/disk status |
+|mode | Select operation or fdc mode |
+(There are several more FDC mode commands but most are not implemented yet.)
+
+There are also a bunch of low level raw/debugging commands that I'm not going to take the time to document here. Look at do_cmd() in the script.
+
+load, save and delete take a filename as an argument.
+
+load and save may also optionally be given a 2nd argument for a destination filename.
+
+Multiple commands may be given at once, seperated by ';', to form a pre-loaded sequence.  
+Example, delete a file and then list all files:  
 In interactive mode: ```TPDD(opr)>rm DOSNEC.CO ;ls```
-In non-interactive mode: ```./tpddclient rm DOSNEC.CO \;ls``` or ```./tpddclient "rm DOSNEC.CO ;ls"```
+In non-interactive mode: ```$ ./tpddclient "rm DOSNEC.CO ;ls"```
 
-There is no help yet. For now just look at do_cmd() in the code and go from there.
+No built-in help yet.
 
 ## Examples
 
 * FDC mode drive condition  
-Start tpddclient with no args.  
+Start ./tpddclient with no args.  
 Type "fdc" at the prompt and hit enter.  
 That switches you to "FDC" mode where you can enter FDC mode commands.  
 Type "D" and hit enter (short alias for "condition").  
@@ -75,21 +66,12 @@ It shoud scan the disk, list the files and file sizes, and then exit back to the
 ...rename along the way...  
 ```tpddclient load DOSNEC.CO ts-dos_4.1_nec.co```
 
-To see all the gory details, do ```DEBUG=1 ./tpddclient ...```  
-DEBUG=3 will additionally create a log file containing every read from or write to the serial port.  
+To see all the gory blow-by-blow, do ```DEBUG=1 ./tpddclient ...```  
+DEBUG=3 will additionally create log files containing every read from and write to the serial port. Each individual call to tpdd_read() or tpdd_write() creates a file with a copy of whatever was actually read from or written to the serial port.
 
 # Status
-All the "operation mode" commands work except lcmd_save() isn't working yet.  
-Most of it is working. file_to_hex() reads a local file into hex pairs  
-including nulls, without externals or subshells. lcmd_save() loops through  
-the load of hex pairs and issues ocmd_write()'s in 128 byte chunks.  
-Even save() works, but only for files of 128 bytes or less.
-
-notes for myself:  
-Maybe it means you have to close the file from write_new and reopen as write_append, and close &  
-re-open before each 128-byte block?
-
-No FDC commands have been written yet except "condition" (report drive status) and "mode" (switch to fdc or operation mode).
+All the "operation mode" commands work!  
+All...most none of the "FDC mode" commands exist!  
 
 # References
 http://tandy.wiki/TPDD  

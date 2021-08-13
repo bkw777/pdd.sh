@@ -10,12 +10,12 @@
 #   For save, use #hex[] after file_to_hex().
 # * ls after every command?
 # * 2 or 3-column ls format? (so a full disk still fits on screen)
-# * WHY THE F CAN'T I DO "SAVE" THE RIGHT WAY?
 # * FDC commands
 # * Refactor the global variable names to have a consistent scheme.
 # * Help screen
 # * Figure out what's really going on why you can't actually change
 #   read_timout very far from 100ms without it all breaking.
+# * give lcmd_save() an option to append just for completeness.
 
 ###############################################################################
 # config
@@ -518,7 +518,7 @@ ocmd_read_ret () {
 	# from the read command if we try to read any more. But if we pause a
 	# few 10s of ms and try again, we get the expected normal format 12h
 	# return block that the manual promised, and, the data byte is even 00
-	# (no error). Unclear why the drive is issuing null bytes.
+	# (indicating success). Unclear why the drive is issuing null bytes.
 	for ((t=1;t<3;t++)) {
 	vecho 1 "$z: read 2 bytes (fmt len)"
 	tpdd_read 2
@@ -860,46 +860,34 @@ lcmd_load () {
 	ocmd_close					# close the source file
 }
 
-
-# lcmd_save() is working but TERRIBLE
-# The manual clearly states that a save-file sequence is:
-#     dirent open write write ... close
-# But that isn't working.
-#
-# This is only working by doing a full dirent-open-write-close every 128 bytes.
-# It's stunningly slow because close takes >1 seconds to update the directory.
-# But the file does eventually get written, so at least it's functional.
-#
 # save a file (copy a file from local fs to tpdd)
 # lcmd_save source_filename [destination_filename]
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i n e p= m ;local s d w h x
+	local -i i n e p= ;local s d w h x
 	[[ "$1" ]] || return 2
 	s=$1 d=${2:-$1}
 	file_to_hex "$s" || return 3 ;h=(${hex[*]})	# read the source file into h[]
-	m=${open_mode[write_new]}
+	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
+	ocmd_open ${open_mode[write_new]} || return $?		# open the set file for writing
 	while ((${#h[*]})) ;do
 		vecho 1 "$z: packet:$((++p)) start #h=${#h[*]}"
 
-		ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
-		ocmd_open $m || return $?		# open the set file for writing
-
-		w=() n=${#h[*]}				# read 128 bytes into w[]
+		w=() n=${#h[*]}				# move 128 bytes into w[]
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) { w+=(${h[i]}) h[i]= ; } ;h=(${h[*]})
 		vecho 1 "$z: packet:$p end #h=${#h[*]}"
 
-		ocmd_write ${w[*]} || return $?		# append w[] to the set file
+		ocmd_write ${w[*]} || return $?		# write w[] to the set file
 
 		tpdd_wait				# read the response from write
 		ocmd_read_ret || return $?
 		ocmd_check_err || return $?
-		ocmd_close || return $?			# close the set file
 
-		((m==${open_mode[write_new]})) && m=${open_mode[write_append]}
 	done
+	ocmd_close || return $?			# close the set file
 }
+
 
 lcmd_rm () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
