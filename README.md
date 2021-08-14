@@ -25,8 +25,10 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | command| |
 | --- | --- |
 | stat \| status | Report the drive/disk status |
-| ls \| list \| dir \| directory | Directory listing |
-| rm \| del \| delete | Delete a file |
+| ls \| list \| dir | Directory listing |
+| rm \| del | Delete a file |
+| cp \| copy | Copy a file |
+| mv \| ren | Rename a file |
 | load | Copy a file from the disk |
 | save | Copy a file to the disk |
 | format | Format the disk |

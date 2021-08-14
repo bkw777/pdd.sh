@@ -7,16 +7,18 @@
 # TODOS: Many ;)
 # * %done progress bar for load and save
 #   For load, do ls first to get the file size.
-#   For save, use #hex[] after file_to_hex().
+#   For save, use #fhex[] after file_to_fhex().
 # * ls after every command?
 # * 2 or 3-column ls format? (so a full disk still fits on screen)
 # * FDC commands
 # * TPDD2
-# * Refactor the global variable names to have a consistent scheme.
+# * Refactor the global variable names to have a consistent scheme
 # * Help screen
 # * Figure out what's really going on why you can't actually change
-#   read_timout very far from 100ms without it all breaking.
-# * give lcmd_save() an option to append just for completeness.
+#   read_timout very far from 100ms without it all breaking
+# * Give lcmd_save() an option to append just for completeness
+# * Re-implement lcmd_mv based on fdc commands to edit the directory
+# * Progress/status messages in normal non-debug mode
 
 ###############################################################################
 # config
@@ -211,26 +213,26 @@ _sleep () {
 }
 
 # Convert a plain text string to hex pairs stored in hex[]
-mk_hex () {
+str_to_hex () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x=$* ;local -i i l=${#x} ;hex=()
 	for ((i=0;i<l;i++)) { printf -v hex[i] '%02x' "'${x:i:1}" ; }
 	vecho 1 "$z: hex=(${hex[*]})"
 }
 
-# Read a local file into hex pairs stored in hex[]
-file_to_hex () {
+# Read a local file into hex pairs stored in fhex[]
+file_to_fhex () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x ;hex=()
+	local x ;fhex=()
 
 	exec 5<"$1"
 	while IFS= read -r -d $'\0' -n 1 -u 5 x ;do
 		printf -v x '%02x' "'$x"
-		hex+=($x)
+		fhex+=($x)
 	done
 	exec 5<&-
 
-	vecho 1 "$z: bytes read: ${#hex[*]}"
+	vecho 1 "$z: bytes read: ${#fhex[*]}"
 }
 
 ###############################################################################
@@ -254,7 +256,7 @@ do_cmd () {
 			close) ocmd_close ;e=$? ;;
 			read) ocmd_read $* ;e=$? ;;
 			write) ocmd_write $* ;e=$? ;;
-			ocmd_delete) ocmd_delete ;e=$? ;;
+			delete) ocmd_delete ;e=$? ;;
 			format) ocmd_format ;e=$? ;;
 			stat|status) ocmd_status ;e=$? ;((e)) || echo "OK" ;;
 			fdc) ocmd_fdc ;e=$? ;;
@@ -275,10 +277,12 @@ do_cmd () {
 
 	# local/client commands
 	# High-level commands like "ls", and things like "exit"
-			ls|dir|list) lcmd_ls "$@" ;e=$? ;;
-			rm|del|delete) lcmd_rm "$@" ;e=$? ;;
+			ls|dir) lcmd_ls "$@" ;e=$? ;;
+			rm|del) lcmd_rm "$@" ;e=$? ;;
 			load) lcmd_load "$@" ;e=$? ;;
-			save) lcmd_save "$@" ;e=$? ;((e)) && vecho 1 "save err=$?" ;;
+			save) lcmd_save "$@" ;e=$? ;;
+			mv|ren) lcmd_mv "$@" ;e=$? ;;
+			cp|copy) lcmd_cp "$@" ;e=$? ;;
 			sync|drain) tpdd_iosync ;e=$? ;;
 			q|quit|bye|exit) exit ;;
 
@@ -300,8 +304,8 @@ do_cmd () {
 			*) echo "Unknown command: \"$c\"" >&2 ;;
 		esac
 		((${#err_msg})) && echo "$c:$err_msg" >&2
-		return $e
 	}
+	return $e
 }
 
 ###############################################################################
@@ -309,9 +313,9 @@ do_cmd () {
 
 lcmd_tpdd1_boot () {
 	local x=
-	mk_hex "S10985157C00AD7EF08B3AS901FE"
+	str_to_hex "S10985157C00AD7EF08B3AS901FE"
 	tpdd_write ${hex[*]} 0d
-	while tpdd_read 1 ;do x+=" ${rdh[*]}" ;done
+	while tpdd_read 1 ;do x+=" ${rhex[*]}" ;done
 	printf '%b' "\x${x// /\\x}"
 }
 
@@ -347,13 +351,13 @@ close_com () {
 # write $* to com port as binary
 tpdd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x=$* ;rdh=()
+	local x=$*
 	((v>2)) && { local c=$((10000+seq++)) ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
 	printf '%b' "\x${x// /\\x}" >&3
 }
 
 # read $1 bytes from com port
-# store each byte as a hex pair in global rdh[]
+# store each byte as a hex pair in global rhex[]
 # deep brute force magic here to actually read null bytes
 # (we're not actually reading or storing nulls, but we are *detecting* them and recording where they were)
 # Thanks to Andrew Ayers in the M100 group on Facebook for help finding the key trick.
@@ -364,19 +368,19 @@ tpdd_write () {
 # >128 = we timed out, $x is empty because there was no data, not even a null
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i l=$1 ;local x ;rdh=() read_err=0
+	local -i i l=$1 ;local x ;rhex=() read_err=0
 	tpdd_wait
 	vecho 1 -n "$z: l=$l "
 	for ((i=0;i<l;i++)) {
 		vecho 1 -n " $i:"
-		x= rdh[i]='00'
+		x= rhex[i]='00'
 		((read_err)) && { vecho 1 -n "XX" ; continue ; }
 		IFS= read -t $read_timeout -r -d $'\0' -n 1 -u 3 x ;read_err=$?
 		(($read_err>1)) || read_err=0
-		printf -v rdh[i] '%02x' "'$x"
-		vecho 1 -n "${rdh[i]}"
+		printf -v rhex[i] '%02x' "'$x"
+		vecho 1 -n "${rhex[i]}"
 	}
-	((v>2)) && { local c=$((10000+seq++)) ;x="${rdh[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
+	((v>2)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
 	vecho 1 " read_err:$read_err"
 }
 
@@ -402,7 +406,7 @@ tpdd_wait () {
 tpdd_iosync () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	while tpdd_check ;do tpdd_read 1 ;done
-	rdh=()
+	rhex=()
 }
 
 ###############################################################################
@@ -504,12 +508,12 @@ ocmd_read_ret () {
 	for ((t=1;t<3;t++)) {
 	vecho 1 "$z: read 2 bytes (fmt len)"
 	tpdd_read 2
-	vecho 1 "$z: (${rdh[*]})"
-	((${#rdh[*]}==2)) || return 1
-	case "${rdh[0]}" in
-		10|11|12) ret_fmt=${rdh[0]} ret_len=${rdh[1]} ; break ;;
+	vecho 1 "$z: (${rhex[*]})"
+	((${#rhex[*]}==2)) || return 1
+	case "${rhex[0]}" in
+		10|11|12) ret_fmt=${rhex[0]} ret_len=${rhex[1]} ; break ;;
 		00) vecho 1 "READ TRY# $t 00 00" ;_sleep 0.5 ;continue ;;
-		*) vecho 1 "READ TRY# $t INVALID RESPONSE" ;rdh=() ;return 2 ;;
+		*) vecho 1 "READ TRY# $t INVALID RESPONSE" ;rhex=() ;return 2 ;;
 	esac
 	}
 
@@ -517,15 +521,15 @@ ocmd_read_ret () {
 	l=$((16#$ret_len))
 	vecho 1 "$z: read 0x$ret_len($l) bytes (data)"
 	tpdd_read $l
-	((${#rdh[*]}==l)) || return 3
-	ret_dat=(${rdh[*]})
+	((${#rhex[*]}==l)) || return 3
+	ret_dat=(${rhex[*]})
 	vecho 1 "$z: data=(${ret_dat[*]})"
 
 	# read 1 byte (checksum)
 	vecho 1 "$z: read 1 byte (checksum)"
 	tpdd_read 1
-	((${#rdh[*]}==1)) || return 4
-	ret_sum=${rdh[0]}
+	((${#rhex[*]}==1)) || return 4
+	ret_sum=${rhex[0]}
 	vecho 1 "$z: cksum=$ret_sum"
 
 	# compute our own checksum and verify it matches the supplied checksum
@@ -568,7 +572,7 @@ ocmd_dirent () {
 
 	# construct the request
 	mk_tpdd_file_name "$f"			# pad/truncate filename
-	mk_hex "$tpdd_file_name"		# filename (hex[0-23])
+	str_to_hex "$tpdd_file_name"		# filename (hex[0-23])
 	printf -v hex[24] '%02x' "'${2:-F}"	# attribute - always "F"
 	printf -v hex[25] '%02x' $m		# search form (set_name, get_first, get_next)
 
@@ -764,7 +768,7 @@ fcmd_read_result () {
 
 	# re-constitute the 8 hex pairs from tpdd_write(), back to the original
 	# 8 ascii characters sent by the drive
-	x="${rdh[*]}" ;printf -v x '%b' "\x${x// /\\x}"
+	x="${rhex[*]}" ;printf -v x '%b' "\x${x// /\\x}"
 	vecho 1 "$z:$x"
 
 	# the 8 characters sent by the drive are themselves hex pairs,
@@ -801,7 +805,7 @@ fcmd_read_result () {
 fcmd_mode () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#)) || return
-	mk_hex "${fdc_cmd[mode]}$1"
+	str_to_hex "${fdc_cmd[mode]}$1"
 	tpdd_write ${hex[*]} 0d
 	operation_mode=$1
 }
@@ -810,7 +814,7 @@ fcmd_condition () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	local -i ;local x
-	mk_hex "${fdc_cmd[condition]}"
+	str_to_hex "${fdc_cmd[condition]}"
 	tpdd_write ${hex[*]} 0d
 
 	fcmd_read_result
@@ -848,34 +852,42 @@ lcmd_ls () {
 	done
 }
 
-# load a file (copy a file from tpdd to local fs)
+# load a file (copy a file from tpdd to local file, or into global ldh[])
 # lcmd_load source_filename [destination_filename]
+# If $2 is set but empty, read into global fhex[] instead of writing a file
 lcmd_load () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x s d ;local -i p=
+	local x s d ;local -i p= m= ;fhex=()
 	[[ "$1" ]] || return 1
 	s=$1 d=${2:-$s}
+	(($#>1)) && ((${#2}==0)) && m=1 		# read into memory instead of file
 	ocmd_dirent "$s" '' ${dirent_cmd[set_name]} || return $?	# set the source filename
 	ocmd_open ${open_mode[read]} | return $?	# open the source file for reading
-	>"$d"						# start the destination file
+	((m)) && >"$d"					# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
-		x="${ret_dat[*]}"
-		printf '%b' "\x${x// /\\x}" >> "$d"	# write the block of data to the destination file
+		((m)) && {
+			fhex+=(${ret_dat[*]})		# add to hex[]
+		} || {
+			x="${ret_dat[*]}" ;printf '%b' "\x${x// /\\x}" >> "$d"	# add to file
+		}
 		((${#ret_dat[*]}<128)) && break		# stop when we get less than 128 bytes
 	done
 	ocmd_close					# close the source file
 }
 
-# save a file (copy a file from local fs to tpdd)
+# save a file (copy a file from local file or from global fhex[] to tpdd)
 # lcmd_save source_filename [destination_filename]
+# If $1 is set but empty, get data from global fhex[] instead of a file
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i n e p= ;local s d w h x
-	[[ "$1" ]] || return 2
+	(($#)) || return 2
 	s=$1 d=${2:-$1}
-	file_to_hex "$s" || return 3 ;h=(${hex[*]})	# read the source file into h[]
+	((${#d})) || return 3
+	((${#1})) && { file_to_fhex "$s" || return 4 ; }
+	h=(${fhex[*]})
 	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
-	ocmd_open ${open_mode[write_new]} || return $?		# open the set file for writing
+	ocmd_open ${open_mode[write_new]} || return $?			# open the set file for writing
 	while ((${#h[*]})) ;do
 		vecho 1 "$z: packet:$((++p)) start #h=${#h[*]}"
 
@@ -894,12 +906,31 @@ lcmd_save () {
 	ocmd_close || return $?			# close the set file
 }
 
-
 lcmd_rm () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	[[ "$1" ]] || return 1
 	ocmd_dirent "$1" '' ${dirent_cmd[set_name]} || return $?	# set the filename
 	ocmd_delete
+}
+
+## for now, mv and cp are almost the same and mostly redundant,
+## but eventually mv will be totally different, based on
+## fdc-mode commands to read and re-write the directory track
+## instead of doing copy-and-delete
+##
+## do the rm in the middle so mv works even if the disk is full
+## though that would otherwise be the riskier order of operations
+## than doing copy then delete only after copy is verified
+lcmd_mv () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	(($#==2)) || return 1
+	lcmd_load $1 '' && lcmd_rm $1 && lcmd_save '' $2
+}
+
+lcmd_cp () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	(($#==2)) || return 1
+	lcmd_load $1 '' && lcmd_save '' $2
 }
 
 ###############################################################################
@@ -921,7 +952,7 @@ lcmd_com_close () {
 
 lcmd_com_read () {
 	tpdd_read $1
-	printf '%s\n' "${rdh[@]}"
+	printf '%s\n' "${rhex[@]}"
 }
 
 lcmd_com_write () {
@@ -939,7 +970,7 @@ lcmd_com_req () {
 
 ###############################################################################
 # Main
-typeset -a hex=() rdh=() ret_dat=() fdc_res_b=()
+typeset -a hex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
 typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_fmt= ret_len= ret_sum= err_msg= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
@@ -947,9 +978,8 @@ readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 x=$((1000000+READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
 
 # for _sleep()
-readonly sleep_fifo=/tmp/.${0//\//_}.$$.sleep.fifo
-trap "rm -f $sleep_fifo" EXIT
-mkfifo $sleep_fifo || abrt "Error creating sleep fifo \"$sleep_fifo\""
+readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
+[[ -p $sleep_fifo ]] || mkfifo $sleep_fifo || abrt "Error creating sleep fifo \"$sleep_fifo\""
 exec 4<>$sleep_fifo
 
 # tpdd serial port
