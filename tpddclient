@@ -894,18 +894,22 @@ lcmd_load () {
 # If $1 is set but empty, get data from global fhex[] instead of reading a file
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i n e p= ;local s d w h x
+	local -i i n e p= l= ;local s d w h x
 	(($#)) || return 2
 	s=$1 d=${2:-$1}
 	((${#d})) || return 3
 	((${#1})) && { file_to_fhex "$s" || return 4 ; }
 	h=(${fhex[*]})
+	l=${#h[*]}				# file size
+	echo "Saving TPDD:$d"
+	progressbar 0 $l
+
 	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
 	ocmd_open ${open_mode[write_new]} || return $?			# open the set file for writing
 	while ((${#h[*]})) ;do
 		vecho 1 "$z: packet:$((++p)) start #h=${#h[*]}"
 
-		w=() n=${#h[*]}				# move 128 bytes into w[]
+		w=() n=${#h[*]} ;progressbar $((l-n)) $l
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) { w+=(${h[i]}) h[i]= ; } ;h=(${h[*]})
 		vecho 1 "$z: packet:$p end #h=${#h[*]}"
@@ -917,6 +921,7 @@ lcmd_save () {
 		ocmd_check_err || return $?
 
 	done
+	echo " DONE"
 	ocmd_close || return $?			# close the set file
 }
 
