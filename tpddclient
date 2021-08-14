@@ -235,12 +235,22 @@ file_to_fhex () {
 	vecho 1 "$z: bytes read: ${#fhex[*]}"
 }
 
+# progressbar part whole
+progressbar () {
+	((v)) && return
+	local -i i p=$1 w=$2 pct p_len w_len=40 ;local b= s=
+	#pct=$((p*100/w)) # percent done
+	p_len=$((p*w_len/w))  # progress bar length out of full bar length
+	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='=' ;s+=' ' ; }
+	printf '\r[%s]\r[%s]' "$s" "$b"
+}
+
 ###############################################################################
 # Main Command Dispatcher
 
 do_cmd () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i e ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
+	local -i i e= ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
 	for ((i=0;i<${#a[*]};i++)) {
 		set ${a[i]}
 		c=$1 ;shift
@@ -258,7 +268,7 @@ do_cmd () {
 			write) ocmd_write $* ;e=$? ;;
 			delete) ocmd_delete ;e=$? ;;
 			format) ocmd_format ;e=$? ;;
-			stat|status) ocmd_status ;e=$? ;((e)) || echo "OK" ;;
+			status) ocmd_status ;e=$? ;((e)) || echo "OK" ;;
 			fdc) ocmd_fdc ;e=$? ;;
 
 	# fdc-mode commands
@@ -276,7 +286,6 @@ do_cmd () {
 			#${fdc_cmd[writesectnv]}|writesectnv) fcmd_writesectnv $* ;e=$? ;; # write sector no verify
 
 	# local/client commands
-	# High-level commands like "ls", and things like "exit"
 			ls|dir) lcmd_ls "$@" ;e=$? ;;
 			rm|del) lcmd_rm "$@" ;e=$? ;;
 			load) lcmd_load "$@" ;e=$? ;;
@@ -857,14 +866,18 @@ lcmd_ls () {
 # If $2 is set but empty, read into global fhex[] instead of writing a file
 lcmd_load () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x s d ;local -i p= m= ;fhex=()
+	local x s d ;local -i p= m= l= ;fhex=()
 	[[ "$1" ]] || return 1
 	s=$1 d=${2:-$s}
 	(($#>1)) && ((${#2}==0)) && m=1 		# read into memory instead of file
 	ocmd_dirent "$s" '' ${dirent_cmd[set_name]} || return $?	# set the source filename
+	l=$file_len					# file size provided by dirent()
+	echo -n "Loading TPDD:$s" ;((m)) && echo || echo " to $d"
+	progressbar $p $l
 	ocmd_open ${open_mode[read]} | return $?	# open the source file for reading
 	((m)) && >"$d"					# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
+		((p+=${#ret_dat[*]})) ;progressbar $p $l
 		((m)) && {
 			fhex+=(${ret_dat[*]})		# add to hex[]
 		} || {
@@ -872,6 +885,7 @@ lcmd_load () {
 		}
 		((${#ret_dat[*]}<128)) && break		# stop when we get less than 128 bytes
 	done
+	echo ' DONE'
 	ocmd_close					# close the source file
 }
 
