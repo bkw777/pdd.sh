@@ -852,7 +852,7 @@ lcmd_ls () {
 	done
 }
 
-# load a file (copy a file from tpdd to local file, or into global ldh[])
+# load a file (copy a file from tpdd to local file or memory)
 # lcmd_load source_filename [destination_filename]
 # If $2 is set but empty, read into global fhex[] instead of writing a file
 lcmd_load () {
@@ -875,9 +875,9 @@ lcmd_load () {
 	ocmd_close					# close the source file
 }
 
-# save a file (copy a file from local file or from global fhex[] to tpdd)
+# save a file (copy a file from local file or memory to tpdd)
 # lcmd_save source_filename [destination_filename]
-# If $1 is set but empty, get data from global fhex[] instead of a file
+# If $1 is set but empty, get data from global fhex[] instead of reading a file
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i n e p= ;local s d w h x
@@ -914,13 +914,13 @@ lcmd_rm () {
 }
 
 ## for now, mv and cp are almost the same and mostly redundant,
-## but eventually mv will be totally different, based on
+## but eventually mv should be totally different, based on
 ## fdc-mode commands to read and re-write the directory track
 ## instead of doing copy-and-delete
 ##
-## do the rm in the middle so mv works even if the disk is full
+## do the rm in the middle so mv works even if the disk is full,
 ## though that would otherwise be the riskier order of operations
-## than doing copy then delete only after copy is verified
+## than doing copy, then delete only after copy is verified
 lcmd_mv () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#==2)) || return 1
