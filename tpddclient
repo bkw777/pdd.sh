@@ -50,6 +50,11 @@ TTY_READ_TIMEOUT_MS=120
 TPDD_WAIT_TIMEOUT_MS=5000
 
 # How long to wait for format to complete.
+# This is partly to tune the progress bar so it reaches 100% just as the job
+# actually completes, and partly to actually time out in case the drive never
+# responds (batteries died, cable disconnected, etc). It's ok to set this to
+# the exact normal average time with no added safety margin.
+# There are almost 10 seconds of leeway built in.
 FORMAT_WAIT_MS=100000
 
 # true/false - Automatically convert filenames to Floppy/Flopy2-compatible 6.2 .
@@ -259,7 +264,7 @@ do_cmd () {
 	for ((i=0;i<${#a[*]};i++)) {
 		set ${a[i]}
 		c=$1 ;shift
-		err_msg=
+		err_msg=()
 		case $c in
 
 	# operation-mode commands
@@ -317,7 +322,7 @@ do_cmd () {
 			'') : ;;
 			*) echo "Unknown command: \"$c\"" >&2 ;;
 		esac
-		((${#err_msg})) && echo "$c:$err_msg" >&2
+		((${#err_msg[*]})) && printf '\n%s: %s\n' "$c" "${err_msg[$@]}" >&2
 	}
 	return $e
 }
@@ -383,19 +388,19 @@ tpdd_write () {
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i l=$1 ;local x ;rhex=() read_err=0
-	tpdd_wait
+	tpdd_wait || return $?
 	vecho 1 -n "$z: l=$l "
 	for ((i=0;i<l;i++)) {
 		vecho 1 -n " $i:"
 		x= rhex[i]='00'
 		((read_err)) && { vecho 1 -n "XX" ; continue ; }
 		IFS= read -t $read_timeout -r -d $'\0' -n 1 -u 3 x ;read_err=$?
-		(($read_err>1)) || read_err=0
+		((read_err>1)) || read_err=0
 		printf -v rhex[i] '%02x' "'$x"
 		vecho 1 -n "${rhex[i]}"
 	}
 	((v>2)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
-	vecho 1 " read_err:$read_err"
+	((read_err>1)) && vecho 1 " read_err:$read_err" || :
 }
 
 # check if data is available without consuming any
@@ -415,6 +420,7 @@ tpdd_wait () {
 		_sleep $read_timeout
 	done
 	vecho 1 "$i"
+	((i<=n)) || { err_msg+=("TIMED OUT") ;return 1 ; }
 }
 
 # Drain any pending output from the drive.
@@ -479,14 +485,14 @@ ocmd_check_err () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i e ;local x
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
-	((${#ret_dat[*]}==1)) || { err_msg+=" Corrupt Response" ; ret_dat=() ;return 1 ; }
+	((${#ret_dat[*]}==1)) || { err_msg+=('Corrupt Response') ; ret_dat=() ;return 1 ; }
 	vecho 1 -n "$z: ${ret_dat[0]}:"
 	e=$((16#${ret_dat[0]}))
 	x='OK'
 	((e)) && {
 		x='UNKNOWN ERROR'
 		((${#opr_msg[${ret_dat[0]}]})) && x="${opr_msg[${ret_dat[0]}]}"
-		err_msg+=" $x"
+		err_msg+=("$x")
 	}
 	vecho 1 "$x"
 	return $e
@@ -523,7 +529,7 @@ ocmd_read_ret () {
 	# (indicating success). Unclear why the drive is issuing null bytes.
 	for ((t=1;t<3;t++)) {
 	vecho 1 "$z: read 2 bytes (fmt len)"
-	tpdd_read 2
+	tpdd_read 2 || return $?
 	vecho 1 "$z: (${rhex[*]})"
 	((${#rhex[*]}==2)) || return 1
 	case "${rhex[0]}" in
@@ -534,22 +540,22 @@ ocmd_read_ret () {
 	}
 
 	# read <length> bytes (data)
-	l=$((16#$ret_len))
+	l=$((16#${ret_len:-00}))
 	vecho 1 "$z: read 0x$ret_len($l) bytes (data)"
-	tpdd_read $l
+	tpdd_read $l || return $?
 	((${#rhex[*]}==l)) || return 3
 	ret_dat=(${rhex[*]})
 	vecho 1 "$z: data=(${ret_dat[*]})"
 
 	# read 1 byte (checksum)
 	vecho 1 "$z: read 1 byte (checksum)"
-	tpdd_read 1
+	tpdd_read 1 || return $?
 	((${#rhex[*]}==1)) || return 4
 	ret_sum=${rhex[0]}
 	vecho 1 "$z: cksum=$ret_sum"
 
 	# compute our own checksum and verify it matches the supplied checksum
-	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { err_msg+=" CHECKSUM FAILED" ; return 5 ; }
+	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { err_msg+=('CHECKSUM FAILED') ; return 5 ; }
 }
 
 # Space-pad or truncate $1 to 24 bytes.
@@ -571,12 +577,12 @@ mk_tpdd_file_name () {
 	printf -v tpdd_file_name '%-24.24s' "$f"
 }
 
-# Un-pad a Model T on-disk filename to it's normal form.
-# If in "Floppy Compatible" mode, and it looks like a
-# "Model T" filename, then collapse the internal spaces.
+# Un-pad a padded 6.2 on-disk filename to it's normal form.
+# If in "Floppy Compatible" mode, and the filename would fit within 6.2, then
+# collapse the internal spaces.
 un_tpdd_file_name () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local f="$1" x ;file_name="$f"
+	local f= x= ;file_name="$1"
 
 	$FLOPPY_COMPAT && {
 		f=${file_name// /} ;x=${f##*.} ;f=${f%.*}
@@ -617,9 +623,9 @@ ocmd_dirent () {
 	case "$ret_fmt" in
 		"${opr_fmt[ret_std]}") ocmd_check_err || return $? ;;	# got a valid error return
 		"${opr_fmt[ret_dirent]}") : ;;				# got a valid dirent return
-		*) err_msg+=" $z:Corrupt Return" ;return 1 ;;		# got no valid return
+		*) err_msg+=("$z:Corrupt Return") ;return 1 ;;		# got no valid return
 	esac
-	((${#ret_dat[*]}==28)) || { err_msg+=" $z:Corrupt Return" ;return 1 ; }
+	((${#ret_dat[*]}==28)) || { err_msg+=("$z:Corrupt Return") ;return 1 ; }
 
 	# parse a dirent return format
 	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
@@ -721,7 +727,7 @@ ocmd_read () {
 	case "$ret_fmt" in
 		"${opr_fmt[ret_std]}") ocmd_check_err || return $? ;;
 		"${opr_fmt[ret_read]}") ;;
-		*) err_msg+=" Unexpected Response" ;return 4 ;;
+		*) err_msg+=('Unexpected Response') ;return 4 ;;
 	esac
 
 	# return true or not based on data or not
@@ -809,7 +815,7 @@ fcmd_read_result () {
 		((fdc_err)) && {
 			x='ERROR'
 			[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
-			err_msg+=" $x"
+			err_msg+=("$x")
 		}
 		vecho 1 -n "$z:status: $fdc_err - $x"
 	}
@@ -1002,9 +1008,9 @@ lcmd_com_req () {
 
 ###############################################################################
 # Main
-typeset -a hex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
+typeset -a err_msg=() hex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
 typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
-cksum=00 ret_fmt= ret_len= ret_sum= err_msg= tpdd_file_name= file_name=
+cksum=00 ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
 x=$((1000000+TTY_READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
