@@ -44,8 +44,9 @@ STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
 # read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
 # long (in ms) for a byte to appear before giving up.
-# Smaller numbers make faster response but use more cpu (tighter polling loop).
-READ_TIMEOUT_MS=100
+# Smaller numbers make some operations like "ls" go faster, but make other
+# operations like "save" fail sometimes.
+READ_TIMEOUT_MS=120
 
 # Default tpdd_wait() timout in ms
 # Wait this long (by default) for the drive to respond after issuing a command.
