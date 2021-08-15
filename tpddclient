@@ -5,20 +5,15 @@
 # https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
 
 # TODOS: Many ;)
-# * %done progress bar for load and save
-#   For load, do ls first to get the file size.
-#   For save, use #fhex[] after file_to_fhex().
 # * ls after every command?
 # * 2 or 3-column ls format? (so a full disk still fits on screen)
 # * FDC commands
 # * TPDD2
 # * Refactor the global variable names to have a consistent scheme
 # * Help screen
-# * Figure out what's really going on why you can't actually change
-#   read_timout very far from 100ms without it all breaking
+# * Shorter tty read timeout where possible
 # * Give lcmd_save() an option to append just for completeness
 # * Re-implement lcmd_mv based on fdc commands to edit the directory
-# * Progress/status messages in normal non-debug mode
 
 ###############################################################################
 # config
@@ -45,14 +40,17 @@ STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
 # When issuing the "read" command to read bytes from the serial port, wait this
 # long (in ms) for a byte to appear before giving up.
 # Smaller numbers make some operations like "ls" go faster, but make other
-# operations like "save" fail sometimes.
-READ_TIMEOUT_MS=120
+# operations like "save" fail. 100 is marginal. 120 is safe.
+TTY_READ_TIMEOUT_MS=120
 
 # Default tpdd_wait() timout in ms
 # Wait this long (by default) for the drive to respond after issuing a command.
 # Some commands like dirent(get_first) and close can take 2 seconds to respond.
 # Some commands like format take 100 seconds.
 TPDD_WAIT_TIMEOUT_MS=5000
+
+# How long to wait for format to complete.
+FORMAT_WAIT_MS=100000
 
 # true/false - Automatically convert filenames to Floppy/Flopy2-compatible 6.2 .
 # When saving, pad to %-6s.%-2s  : "A.BA"      -> "A     .BA"
@@ -239,12 +237,18 @@ file_to_fhex () {
 # progressbar part whole
 progressbar () {
 	((v)) && return
-	local -i i p=$1 w=$2 pct p_len w_len=40 ;local b= s=
-	#pct=$((p*100/w)) # percent done
-	p_len=$((p*w_len/w))  # progress bar length out of full bar length
-	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='=' ;s+=' ' ; }
-	printf '\r[%s]\r[%s]' "$s" "$b"
+	local -i i p=$1 w=$2 p_len w_len=40 ;local b= s=
+	#local -i c=$((p*100/w)) # percent done
+	p_len=$((p*w_len/w))
+	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='=' ; }
+	printf "\r[%s]" "$s" "$b"
 }
+
+# busy indicator
+#spin () {
+#	printf '%s\b' "${ani[y]}"
+#	((++y>=${#ani[*]})) && y=0
+#}
 
 ###############################################################################
 # Main Command Dispatcher
@@ -400,12 +404,14 @@ tpdd_check () {
 }
 
 # wait for data
+# tpdd_wait timeout_ms busy_indication
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
-	local -i i=-1 n wait_ms=${1:-${TPDD_WAIT_TIMEOUT_MS}}
-	((wait_ms<=READ_TIMEOUT_MS)) && n=1 || n=$((wait_ms/READ_TIMEOUT_MS))
+	local -i i=-1 n t=${1:-${TPDD_WAIT_TIMEOUT_MS}} b=$2
+	((t<=TTY_READ_TIMEOUT_MS)) && n=1 || n=$((t/TTY_READ_TIMEOUT_MS))
 	until ((++i>n)) ;do
 		tpdd_check && break
+		((b)) && progressbar $i $n	# or:  ((b)) && spin
 		_sleep $read_timeout
 	done
 	vecho 1 "$i"
@@ -561,7 +567,22 @@ mk_tpdd_file_name () {
 		((${#t})) && ((${#t}<7)) && ((${#x}<3)) && printf -v f '%-6s.%-2s' "$t" "$x"
 	}
 
+	# This always, FLOPPY_COMPAT or not.
 	printf -v tpdd_file_name '%-24.24s' "$f"
+}
+
+# Un-pad a Model T on-disk filename to it's normal form.
+# If in "Floppy Compatible" mode, and it looks like a
+# "Model T" filename, then collapse the internal spaces.
+un_tpdd_file_name () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local f="$1" x ;file_name="$f"
+
+	$FLOPPY_COMPAT && {
+		f=${file_name// /} ;x=${f##*.} ;f=${f%.*}
+		((${#f})) && ((${#f}<7)) && ((${#x}<3)) && printf -v file_name '%s.%s' "$f" "$x"
+	}
+	:
 }
 
 ###############################################################################
@@ -594,9 +615,9 @@ ocmd_dirent () {
 
 	# check which kind of response we got
 	case "$ret_fmt" in
-		"${opr_fmt[ret_std]}") ocmd_check_err || return $? ;;
-		"${opr_fmt[ret_dirent]}") : ;;
-		*) err_msg+=" $z:Corrupt Return" ;return 1 ;;
+		"${opr_fmt[ret_std]}") ocmd_check_err || return $? ;;	# got a valid error return
+		"${opr_fmt[ret_dirent]}") : ;;				# got a valid dirent return
+		*) err_msg+=" $z:Corrupt Return" ;return 1 ;;		# got no valid return
 	esac
 	((${#ret_dat[*]}==28)) || { err_msg+=" $z:Corrupt Return" ;return 1 ; }
 
@@ -608,16 +629,9 @@ ocmd_dirent () {
 	vecho 1 "$z: mode=$m filename=\"$file_name\" attr=\"$file_attr\" len=$file_len free=$free_sectors"
 
 	# if doing set_name
-	[[ "$m" == "${dirent_cmd[set_name]}" ]] && {
-		# file_attr=00 could mean invalid filename or file not found,
-		# so we don't know here whether that's an error or not.
-		# The caller will have to look at $filename and $file_attr
-		# decide for itself.
-		#((${#file_attr})) || { err_msg+=" $z:Invalid Filename" ; return 1 ; }
-		return 0
-	}
+	[[ "$m" == "${dirent_cmd[set_name]}" ]] && return 0
 
-	# get_first/get_next, filename[0]=00 means no more files
+	# if doing get_first or get_next, filename[0]=00 means no more files
 	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
 }
 
@@ -641,7 +655,9 @@ ocmd_format () {
 
 	echo "Formatting disk..."
 	ocmd_send_req ${opr_fmt[req_format]} || return $?
-	tpdd_wait 120000 || return $?	# takes ~100 seconds, allow 120
+	tpdd_wait $FORMAT_WAIT_MS 1 || return $?
+	progressbar 1 1
+	echo
 
 	ocmd_read_ret || return $?
 	ocmd_check_err || return $?
@@ -849,17 +865,14 @@ lcmd_ls () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f x ;ret_dat=()
 
+	echo "------ Directory Listing ------"
 	while ocmd_dirent '' '' $dirent_mode ;do
-		# If in "Floppy Compatible" mode, and it looks like a
-		# "Model T" filename, then collapse the internal spaces.
-		$FLOPPY_COMPAT && {
-			f=${file_name// /} ;x=${f##*.} ;f=${f%.*}
-			((${#f})) && ((${#f}<7)) && ((${#x}<3)) && printf -v file_name '%s.%s' "$f" "$x"
-		}
-
+		un_tpdd_file_name "$file_name"
 		printf '%-24.24b %6u\n' "$file_name" "$file_len"
 		((dirent_mode==${dirent_cmd[get_first]})) && dirent_mode=${dirent_cmd[get_next]}
 	done
+	echo "-------------------------------"
+	echo "$((free_sectors*1280)) bytes free"
 }
 
 # load a file (copy a file from tpdd to local file or memory)
@@ -875,7 +888,7 @@ lcmd_load () {
 	l=$file_len					# file size provided by dirent()
 	echo -n "Loading TPDD:$s" ;((m)) && echo || echo " to $d"
 	progressbar $p $l
-	ocmd_open ${open_mode[read]} | return $?	# open the source file for reading
+	ocmd_open ${open_mode[read]} || return $?	# open the source file for reading
 	((m)) && >"$d"					# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
 		((p+=${#ret_dat[*]})) ;progressbar $p $l
@@ -886,8 +899,8 @@ lcmd_load () {
 		}
 		((${#ret_dat[*]}<128)) && break		# stop when we get less than 128 bytes
 	done
+	ocmd_close || return $?				# close the source file
 	echo ' DONE'
-	ocmd_close					# close the source file
 }
 
 # save a file (copy a file from local file or memory to tpdd)
@@ -922,8 +935,9 @@ lcmd_save () {
 		ocmd_check_err || return $?
 
 	done
-	echo " DONE"
 	ocmd_close || return $?			# close the set file
+	progressbar 1 1
+	echo ' DONE'
 }
 
 lcmd_rm () {
@@ -995,7 +1009,8 @@ typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_fmt= ret_len= ret_sum= err_msg= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
-x=$((1000000+READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
+x=$((1000000+TTY_READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
+#typeset -ar ani=('-' '\' '|' '/') ;typeset -i y=	# for spin()
 
 # for _sleep()
 readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
