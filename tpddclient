@@ -947,14 +947,12 @@ lcmd_rm () {
 	ocmd_delete
 }
 
-## for now, mv and cp are almost the same and mostly redundant,
-## but eventually mv should be totally different, based on
-## fdc-mode commands to read and re-write the directory track
-## instead of doing copy-and-delete
-##
-## do the rm in the middle so mv works even if the disk is full,
-## though that would otherwise be the riskier order of operations
-## than doing copy, then delete only after copy is verified
+# for now, mv and cp are almost the same and mostly redundant,
+# but eventually mv may be totally different, based on
+# fdc-mode commands to read and re-write the directory track
+# instead of doing load-delete-save
+#
+# rm before save is less safe, but it's so that it works when the disk is full
 lcmd_mv () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#==2)) || return 1
