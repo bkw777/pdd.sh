@@ -280,6 +280,7 @@ file_to_fhex () {
 	vecho 1 "$z: bytes read: ${#fhex[*]}"
 }
 
+# progress indicator
 # progressbar part whole [units]
 #   progressbar 14 120
 #   [####====================================] 11%
@@ -295,10 +296,9 @@ progressbar () {
 }
 
 # busy indicator
-# Looping animation for when you don't know how long it will take.
-# The "frames" of the animation are defined in the array anim[].
-# Frames may be longer than a single byte, but should all be the same length.
-# A simple example spinner: anim=('-' '\' '|' '/')
+# Looping animation for when you don't know how long something will take.
+# The animation "frames" are defined in the array anim[]. When called, it just
+# backspaces the length of a frame, and prints the next frame.
 spin () {
 	((v)) && return
 	printf '%b%s' "${anim[0]//?/\\b}" "${anim[y]}"
@@ -575,42 +575,29 @@ ocmd_read_ret () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i t ;local l x ;ret_fmt= ret_len= ret_dat=() ret_sum=
 
-	# read 2 bytes (fmt len)
-	# Retry this a couple times, and accept "00 00" as a valid response even
-	# though according to the manual it's NOT. After doing ocmd_close()
-	# after ocmd_write() we might read 2 00 bytes, and then get an error
-	# from the read command if we try to read any more. But if we pause a
-	# few 10s of ms and try again, we get the expected normal format 12h
-	# return block that the manual promised, and, the data byte is even 00
-	# (indicating success). Unclear why the drive is issuing null bytes.
-	for ((t=1;t<3;t++)) {
-	vecho 1 "$z: read 2 bytes (fmt len)"
+	vecho 1 "$z: reading 2 bytes (fmt len)"
 	tpdd_read 2 || return $?
 	vecho 1 "$z: (${rhex[*]})"
 	((${#rhex[*]}==2)) || return 1
 	case "${rhex[0]}" in
-		10|11|12) ret_fmt=${rhex[0]} ret_len=${rhex[1]} ; break ;;
-		00) vecho 1 "READ TRY# $t 00 00" ;_sleep 0.5 ;continue ;;
-		*) vecho 1 "READ TRY# $t INVALID RESPONSE" ;rhex=() ;return 2 ;;
+		10|11|12) ret_fmt=${rhex[0]} ret_len=${rhex[1]} ;;
+		*) { err_msg+=('INVALID RESPONSE') ;rhex=() ;return 1 ; } ;;
 	esac
-	}
 
-	# read <length> bytes (data)
 	l=$((16#${ret_len:-00}))
-	vecho 1 "$z: read 0x$ret_len($l) bytes (data)"
+	vecho 1 "$z: reading 0x$ret_len($l) bytes (data)"
 	tpdd_read $l || return $?
 	((${#rhex[*]}==l)) || return 3
 	ret_dat=(${rhex[*]})
 	vecho 1 "$z: data=(${ret_dat[*]})"
 
-	# read 1 byte (checksum)
-	vecho 1 "$z: read 1 byte (checksum)"
+	vecho 1 "$z: reading 1 byte (checksum)"
 	tpdd_read 1 || return $?
 	((${#rhex[*]}==1)) || return 4
 	ret_sum=${rhex[0]}
 	vecho 1 "$z: cksum=$ret_sum"
 
-	# compute our own checksum and verify it matches the supplied checksum
+	# compute the checksum and verify it matches the supplied checksum
 	verify_checksum $ret_fmt $ret_len ${ret_dat[*]} $ret_sum || { err_msg+=('CHECKSUM FAILED') ; return 5 ; }
 }
 
@@ -690,10 +677,11 @@ ocmd_dirent () {
 	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
 	vecho 1 "$z: mode=$m filename=\"$file_name\" attr=\"$file_attr\" len=$file_len free=$free_sectors"
 
-	# if doing set_name
+	# If doing set_name, and we got this far, then return success. Only the
+	# caller knows if they expected file_name & file_attr to be null or not.
 	[[ "$m" == "${dirent_cmd[set_name]}" ]] && return 0
 
-	# if doing get_first or get_next, filename[0]=00 means no more files
+	# If doing get_first or get_next, filename[0]=00 means no more files.
 	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
 }
 
@@ -797,17 +785,7 @@ ocmd_write () {
 	((operation_mode)) || fcmd_mode 1
 	(($#)) || return 128
 	ocmd_send_req ${opr_fmt[req_write]} $* || return $?
-
-	# arbitrary forced sleep, without tpdd_check()
-	# because if you tpdd_check() too soon, it will succeed, indicating
-	# "there is data available, you need to read it", but if you do try to
-	# read, the bytes you get will just be 00. But if you wait a bit before
-	# trying, then the bytes you get will be the expected 12h return block.
-	#_sleep 0.5
-
-	# manual says no return block is sent unless there's an error
-	tpdd_check || return 0
-
+	tpdd_check || return 0		# no return block sent unless error
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
