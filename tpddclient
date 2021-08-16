@@ -267,6 +267,7 @@ progressbar () {
 
 # busy indicator
 spin () {
+	((v)) && return
 	printf '%s\b' "${ani[y]}"
 	((++y>=${#ani[*]})) && y=0
 }
