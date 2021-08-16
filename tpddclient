@@ -23,40 +23,6 @@
 # DEBUG=1 ./tpddclient ...
 v=${DEBUG:-0}
 
-# platform differences
-			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB		# linux
-case "${OSTYPE,,}" in
-	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;		# *bsd
-	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial- ;;	# osx
-esac
-
-# stty flags to set the serial port parameters & tty behavior
-# For 9600-only drives like FB-100 or FDD19, change 19200 to 9600
-# (FB-100/FDD19 can run at 19200 by removing the solder blob from dip switch 1)
-# To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
-STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
-
-# read timeout in ms
-# When issuing the "read" command to read bytes from the serial port, wait this
-# long (in ms) for a byte to appear before giving up.
-# Smaller numbers make some operations like "ls" go faster, but make other
-# operations like "save" fail. 100 is marginal. 120 is safe.
-TTY_READ_TIMEOUT_MS=120
-
-# Default tpdd_wait() timout in ms
-# Wait this long (by default) for the drive to respond after issuing a command.
-# Some commands like dirent(get_first) and close can take 2 seconds to respond.
-# Some commands like format take 100 seconds.
-TPDD_WAIT_TIMEOUT_MS=5000
-
-# How long to wait for format to complete.
-# This is partly to tune the progress bar so it reaches 100% just as the job
-# actually completes, and partly to actually time out in case the drive never
-# responds (batteries died, cable disconnected, etc). It's ok to set this to
-# the exact normal average time with no added safety margin.
-# There are almost 10 seconds of leeway built in.
-FORMAT_WAIT_MS=100000
-
 # true/false - Automatically convert filenames to Floppy/Flopy2-compatible 6.2 .
 # When saving, pad to %-6s.%-2s  : "A.BA"      -> "A     .BA"
 # When loading, strip all spaces : "A     .BA" -> "A.BA"
@@ -69,6 +35,48 @@ FORMAT_WAIT_MS=100000
 # not modified, so enabled generally does the expected thing automatically.
 # (1) TANDY WP-2, Brother knitting machines, Cambridge Z-88, MS-DOS & most OS's
 : ${FLOPPY_COMPAT:=true}
+
+# Default rs232 tty device name, with platform differences
+# The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
+			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB		# linux
+case "${OSTYPE,,}" in
+	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;		# *bsd
+	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial- ;;	# osx
+esac
+
+# stty flags to set the serial port parameters & tty behavior
+# For 9600-only drives like FB-100 or FDD19, change 19200 to 9600
+# (FB-100/FDD19 can run at 19200 by removing the solder blob from dip switch 1)
+# To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
+STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
+
+###############################################################################
+
+# tty read timeout in ms
+# When issuing the "read" command to read bytes from the serial port, wait this
+# long (in ms) for a byte to appear before giving up.
+# Smaller numbers make some operations like "ls" go faster, but make other
+# operations like "save" fail. 100 is marginal. 120 is safe.
+TTY_READ_TIMEOUT_MS=120
+
+# Default tpdd_wait() timout in ms
+# Wait this long (by default) for the drive to respond after issuing a command.
+# Some commands like dirent(get_first) and close can take 2 seconds to respond.
+# Some commands like format take 100 seconds.
+TPDD_WAIT_TIMEOUT_MS=5000
+
+# How long to wait for format to complete
+# Usually takes just under 100 seconds.
+FORMAT_WAIT_MS=102000
+
+# How long to wait for delete to complete
+# Delete takes from 3 to 20 seconds. Larger files take longer.
+# 65534 byte file takes 20.2 seconds, so 30 seconds should be safe.
+DELETE_WAIT_MS=30000
+
+# If you try to save a file with more than this many bytes, the drive will
+# error with "Disk Full", even if the disk isn't full.
+MAX_FILE_SIZE=65534
 
 # end of config
 ###############################################################################
@@ -123,7 +131,7 @@ typeset -rA opr_msg=(
 	[4E]='Read Error E'
 	[4F]='Read Error F'
 	[50]='Write-Protected Disk'
-	[60]='Disk Full'
+	[60]='Disk Full or Max File Size Exceeded' # 'Disk Full'
 	[70]='Disk Insertion Error 0'
 	[71]='Disk Not Inserted'      # 'Disk Insertion Error 1'
 	[72]='Disk Insertion Error 2'
@@ -206,7 +214,7 @@ abrt () {
 }
 
 vecho () {
-	local -i l=$1 ;shift
+	local -i l="$1" ;shift
 	((v>=l)) && echo "$@" >&2
 	:
 }
@@ -219,7 +227,7 @@ _sleep () {
 # Convert a plain text string to hex pairs stored in hex[]
 str_to_hex () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x=$* ;local -i i l=${#x} ;hex=()
+	local x="$*" ;local -i i l=${#x} ;hex=()
 	for ((i=0;i<l;i++)) { printf -v hex[i] '%02x' "'${x:i:1}" ; }
 	vecho 1 "$z: hex=(${hex[*]})"
 }
@@ -229,31 +237,39 @@ file_to_fhex () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x ;fhex=()
 
-	exec 5<"$1"
+	[[ -f "$1" ]] || { err_msg+=("\"$1\" not found") ;return 1 ; }
+
+	exec 5<"$1" || return $?
 	while IFS= read -r -d $'\0' -n 1 -u 5 x ;do
 		printf -v x '%02x' "'$x"
 		fhex+=($x)
+		((${#fhex[*]}>MAX_FILE_SIZE)) && { err_msg+=("\"$1\" exceeds ${MAX_FILE_SIZE} bytes") ; break ; }
 	done
 	exec 5<&-
 
+	((${#err_msg[*]})) && return 1
 	vecho 1 "$z: bytes read: ${#fhex[*]}"
 }
 
-# progressbar part whole
+# progressbar part whole [units]
+# No units: progressbar 14 120
+# [####====================================] 11%
+# With units: progressbar 14 120 seconds
+# [####====================================] 11% (14/120 seconds)
 progressbar () {
 	((v)) && return
-	local -i i p=$1 w=$2 p_len w_len=40 ;local b= s=
-	#local -i c=$((p*100/w)) # percent done
+	local -i i p=$1 w=$2 p_len w_len=40 ;local b= s= u=$3
+	local -i c=$((p*100/w))
 	p_len=$((p*w_len/w))
 	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='=' ; }
-	printf "\r[%s]" "$s" "$b"
+	printf '\r%79s\r[%s] %d%%%s' '' "$b" "$c" "${u:+ ($p/$w $u)}"
 }
 
 # busy indicator
-#spin () {
-#	printf '%s\b' "${ani[y]}"
-#	((++y>=${#ani[*]})) && y=0
-#}
+spin () {
+	printf '%s\b' "${ani[y]}"
+	((++y>=${#ani[*]})) && y=0
+}
 
 ###############################################################################
 # Main Command Dispatcher
@@ -322,7 +338,7 @@ do_cmd () {
 			'') : ;;
 			*) echo "Unknown command: \"$c\"" >&2 ;;
 		esac
-		((${#err_msg[*]})) && printf '\n%s: %s\n' "$c" "${err_msg[$@]}" >&2
+		((${#err_msg[*]})) && printf '\n%s: %s\n' "$c" "${err_msg[@]}" >&2
 	}
 	return $e
 }
@@ -400,7 +416,7 @@ tpdd_read () {
 		vecho 1 -n "${rhex[i]}"
 	}
 	((v>2)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
-	((read_err>1)) && vecho 1 " read_err:$read_err" || :
+	((read_err>1)) && vecho 1 " read_err:$read_err" || vecho 1 ''
 }
 
 # check if data is available without consuming any
@@ -412,15 +428,18 @@ tpdd_check () {
 # tpdd_wait timeout_ms busy_indication
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
-	local -i i=-1 n t=${1:-${TPDD_WAIT_TIMEOUT_MS}} b=$2
-	((t<=TTY_READ_TIMEOUT_MS)) && n=1 || n=$((t/TTY_READ_TIMEOUT_MS))
+	local d=(: spin progressbar)
+	local -i i=-1 n t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
+	((t<TTY_READ_TIMEOUT_MS)) && t=$TTY_READ_TIMEOUT_MS
+	n=$((t/TTY_READ_TIMEOUT_MS))
 	until ((++i>n)) ;do
 		tpdd_check && break
-		((b)) && progressbar $i $n	# or:  ((b)) && spin
+		${d[b]} $i $n
 		_sleep $read_timeout
 	done
+	((i>n)) && { err_msg+=('TIMED OUT') ;return 1 ; }
+	${d[b]} 1 1
 	vecho 1 "$i"
-	((i<=n)) || { err_msg+=("TIMED OUT") ;return 1 ; }
 }
 
 # Drain any pending output from the drive.
@@ -659,10 +678,9 @@ ocmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 
-	echo "Formatting disk..."
+	echo "Formatting disk"
 	ocmd_send_req ${opr_fmt[req_format]} || return $?
-	tpdd_wait $FORMAT_WAIT_MS 1 || return $?
-	progressbar 1 1
+	tpdd_wait $FORMAT_WAIT_MS 2 || return $?
 	echo
 
 	ocmd_read_ret || return $?
@@ -696,7 +714,6 @@ ocmd_close () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_close]} || return $?
-	tpdd_wait 10000 || return $? #  XXX TODO may not need
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
@@ -708,7 +725,7 @@ ocmd_delete () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_delete]} || return $?
-	tpdd_wait 10000 || return $?	# takes ~5 seconds, allow 10
+	tpdd_wait $DELETE_WAIT_MS 1 || return $?
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
@@ -893,20 +910,21 @@ lcmd_load () {
 	ocmd_dirent "$s" '' ${dirent_cmd[set_name]} || return $?	# set the source filename
 	l=$file_len					# file size provided by dirent()
 	echo -n "Loading TPDD:$s" ;((m)) && echo || echo " to $d"
-	progressbar $p $l
+	progressbar 0 $l "bytes"
 	ocmd_open ${open_mode[read]} || return $?	# open the source file for reading
-	((m)) && >"$d"					# start the destination file
+	((m)) || >"$d"					# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
-		((p+=${#ret_dat[*]})) ;progressbar $p $l
 		((m)) && {
 			fhex+=(${ret_dat[*]})		# add to hex[]
 		} || {
 			x="${ret_dat[*]}" ;printf '%b' "\x${x// /\\x}" >> "$d"	# add to file
 		}
+		((p+=${#ret_dat[*]})) ;progressbar $p $l "bytes"
 		((${#ret_dat[*]}<128)) && break		# stop when we get less than 128 bytes
 	done
 	ocmd_close || return $?				# close the source file
-	echo ' DONE'
+	((p==l)) || { err_msg+=('Error') ; return 1 ; }
+	echo
 }
 
 # save a file (copy a file from local file or memory to tpdd)
@@ -914,7 +932,7 @@ lcmd_load () {
 # If $1 is set but empty, get data from global fhex[] instead of reading a file
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i n e p= l= ;local s d w h x
+	local -i i n e p= l= b= ;local s d w h x
 	(($#)) || return 2
 	s=$1 d=${2:-$1}
 	((${#d})) || return 3
@@ -922,14 +940,14 @@ lcmd_save () {
 	h=(${fhex[*]})
 	l=${#h[*]}				# file size
 	echo "Saving TPDD:$d"
-	progressbar 0 $l
+	progressbar 0 $l "bytes"
 
 	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
 	ocmd_open ${open_mode[write_new]} || return $?			# open the set file for writing
 	while ((${#h[*]})) ;do
 		vecho 1 "$z: packet:$((++p)) start #h=${#h[*]}"
 
-		w=() n=${#h[*]} ;progressbar $((l-n)) $l
+		w=() n=${#h[*]}
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) { w+=(${h[i]}) h[i]= ; } ;h=(${h[*]})
 		vecho 1 "$z: packet:$p end #h=${#h[*]}"
@@ -940,17 +958,19 @@ lcmd_save () {
 		ocmd_read_ret || return $?
 		ocmd_check_err || return $?
 
+		progressbar $((b+=n)) $l "bytes"
 	done
 	ocmd_close || return $?			# close the set file
-	progressbar 1 1
-	echo ' DONE'
+	echo
 }
 
 lcmd_rm () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	[[ "$1" ]] || return 1
+	echo -n "Deleting TPDD:$1 "
 	ocmd_dirent "$1" '' ${dirent_cmd[set_name]} || return $?	# set the filename
-	ocmd_delete
+	ocmd_delete || return $?
+	echo 'DONE'
 }
 
 # for now, mv and cp are almost the same and mostly redundant,
@@ -1014,7 +1034,7 @@ cksum=00 ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
 x=$((1000000+TTY_READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
-#typeset -ar ani=('-' '\' '|' '/') ;typeset -i y=	# for spin()
+typeset -ar ani=('-' '\' '|' '/') ;typeset -i y=
 
 # for _sleep()
 readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
