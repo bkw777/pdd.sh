@@ -219,19 +219,20 @@ typeset -rA fdc_cmd=(
 	[mode]='M'
 	[condition]='D'
 	[format]='F'
-	[formatnv]='G'
-	[readid]='A'
-	[readsect]='R'
-	[searchid]='S'
-	[writeid]='B'
-	[writeidnv]='C'
-	[writesect]='W'
-	[writesectnv]='X'
+	[format_nv]='G'
+	[read_id]='A'
+	[read_sector]='R'
+	[search_id]='S'
+	[write_id]='B'
+	[write_id_nv]='C'
+	[write_sector]='W'
+	[write_sector_nv]='X'
 )
 
 # FDC Mode Errors
 typeset -rA fdc_msg=(
 	[0]="OK"
+	#[17]="" # seen when trying to read logical sector 0 , logical sectors start at 1
 	[193]="Command Error"
 )
 
@@ -337,14 +338,14 @@ do_cmd () {
 			${fdc_cmd[mode]}|mode) fcmd_mode $* ;e=$? ;; # select operation-mode or fdc-mode
 			${fdc_cmd[condition]}|condition) fcmd_condition $* ;e=$? ;; # get drive condition
 # name conflict 	#${fdc_cmd[format]}|format) fcmd_format $* ;e=$? ;; # format disk
-			#${fdc_cmd[formatnv]}|formatnv) fcmd_formatnv $* ;e=$? ;; # format disk no verify
-			#${fdc_cmd[readid]}|readid) fcmd_readid $* ;e=$? ;; # read id
-			#${fdc_cmd[readsect]}|readsect) fcmd_readsect $* ;e=$? ;; # read sector
-			#${fdc_cmd[searchid]}|searchid) fcmd_searchid $* ;e=$? ;; # search id
-			#${fdc_cmd[writeid]}|writeid) fcmd_writeid $* ;e=$? ;; # write id
-			#${fdc_cmd[writeidnv]}|writeidnv) fcmd_writeidnv $* ;e=$? ;; # write id no verify
-			#${fdc_cmd[writesect]}|writesect) fcmd_writesect $* ;e=$? ;; # write sector
-			#${fdc_cmd[writesectnv]}|writesectnv) fcmd_writesectnv $* ;e=$? ;; # write sector no verify
+			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;e=$? ;; # format disk no verify
+			#${fdc_cmd[read_id]}|read_id) fcmd_read_id $* ;e=$? ;; # read id
+			${fdc_cmd[read_sector]}|read_sector) fcmd_read_sector $* ;e=$? ;; # read sector
+			#${fdc_cmd[search_id]}|search_id) fcmd_search_id $* ;e=$? ;; # search id
+			#${fdc_cmd[write_id]}|write_id) fcmd_write_id $* ;e=$? ;; # write id
+			#${fdc_cmd[write_id_nv]}|write_id_nv) fcmd_write_id_nv $* ;e=$? ;; # write id no verify
+			#${fdc_cmd[write_sector]}|write_sector) fcmd_write_sector $* ;e=$? ;; # write sector
+			#${fdc_cmd[write_sect_nv]}|write_sector_nv) fcmd_write_sector_nv $* ;e=$? ;; # write sector no verify
 
 	# local/client commands
 			ls|dir) lcmd_ls "$@" ;e=$? ;;
@@ -353,7 +354,6 @@ do_cmd () {
 			save) lcmd_save "$@" ;e=$? ;;
 			mv|ren) lcmd_mv "$@" ;e=$? ;;
 			cp|copy) lcmd_cp "$@" ;e=$? ;;
-			sync|drain) tpdd_iosync ;e=$? ;;
 			q|quit|bye|exit) exit ;;
 
 	# low level manual raw/debug commands
@@ -365,6 +365,8 @@ do_cmd () {
 			com_ret) lcmd_com_ret ;e=$? ;; # read a return packet
 			com_req) lcmd_com_req $* ;e=$? ;; # write a request packet
 			sum) calc_cksum $* ;e=$? ;;
+			sync|drain) tpdd_iosync ;e=$? ;;
+			sleep) _sleep $* ;e=$? ;;
 
 	# playground
 			# send the TPDD1 bootstrap S-records
@@ -829,7 +831,7 @@ fcmd_read_result () {
 	local -i i ;local x ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
 
 	# read 8 bytes
-	tpdd_read 8
+	tpdd_read 8 || return $?
 
 	# re-constitute the 8 hex pairs from tpdd_write(), back to the original
 	# 8 ascii characters sent by the drive
@@ -850,13 +852,13 @@ fcmd_read_result () {
 			[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
 			err_msg+=("$x")
 		}
-		vecho 1 -n "$z:status: $fdc_err - $x"
+		vecho 1 "$z:status: $fdc_err - $x"
 	}
 
 	# fdc_result is 8 individual bits
 	# convert to an array for convenience
-	fdc_result_b=()
-	for ((i=7;i>=0;i--)) { fdc_result_b+=(${D2B[fdc_res]:i:1}) ; }
+	fdc_res_b=()
+	for ((i=7;i>=0;i--)) { fdc_res_b+=(${D2B[fdc_res]:i:1}) ; }
 
 	return $fdc_err
 }
@@ -878,21 +880,42 @@ fcmd_mode () {
 fcmd_condition () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local -i ;local x
+	local x
 	str_to_hex "${fdc_cmd[condition]}"
-	tpdd_write ${hex[*]} 0d
+	tpdd_write ${hex[*]} 0d || return $?
 
-	fcmd_read_result
-	((fdc_status)) && return $fdc_status
+	fcmd_read_result || return $?
+	((fdc_err)) && return $fdc_err
 
 	# result bit 7 - disk not inserted
-	x= ;((fdc_result_b[7])) && x=' Not'
+	x= ;((fdc_res_b[7])) && x=' Not'
 	echo -n "Disk${x} Inserted"
-	((fdc_result_b[7])) && { echo ;return ; }
+	((fdc_res_b[7])) && { echo ;return ; }
 
 	# result bit 5 - disk write-protected
-	x='Writable' ;((fdc_result_b[5])) && x='Write-protected'
+	x='Writable' ;((fdc_res_b[5])) && x='Write-protected'
 	echo ", $x"
+}
+
+# read_sector physical_sector(0-79) logical_sector(1-20) filename
+fcmd_read_sector () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	(($#<3)) && { err_msg+=('Missing Argument') ;return 1 ; }
+	((operation_mode)) && ocmd_fdc
+	local x file; local -i psect=$1 lsect=$2 lsl=
+	local -ra lsc=([64]=20 [80]=16 [128]=10 [256]=5 [512]=2 [1024]=1 [1280]=1)
+	((psect>-1)) || ((psect<80)) || { err_msg+=("Physical Sector \"$psect\" out of range") ;return 1 ; }
+	((lsect>0)) || ((lsect<lsc)) || { err_msg+=("Logical Sector \"$lsect\" out of range") ;return 1 ; }
+	str_to_hex "${fdc_cmd[read_sector]}$psect,$lsect"
+	tpdd_write ${hex[*]} 0d || return $?
+	fcmd_read_result || return $?
+	((fdc_err)) && return $fdc_err
+	((fdc_res==psect)) || { err_msg+=("Wrong Physical Sector") ;return 1 ; }
+	lsl=$fdc_len
+	tpdd_write 0d || return $?
+	tpdd_read $lsl || return $?
+	((${#rhex[*]}<lsl)) && { err_msg+=("Got ${#rhex[*]} of $lsl bytes") ; return 1 ; }
+	x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$3
 }
 
 ###############################################################################
@@ -1069,8 +1092,11 @@ PORT="/dev/${1#/dev/}" ;[[ -c "$PORT" ]] && shift || get_tpdd_port
 vecho 1 "Using port \"$PORT\""
 open_com || exit $?
 
+# ensure we always start in operation mode
+fcmd_mode 1
+
 # non-interactive mode
 (($#)) && { do_cmd "$@" ; exit ; }
 
 # interactive mode
-while read -p"TPDD(${mode[operation_mode]})>" x ;do do_cmd "$x" ;done
+while read -p"TPDD(${mode[operation_mode]})>" ic ;do do_cmd "$ic" ;done
