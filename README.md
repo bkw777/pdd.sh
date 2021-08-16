@@ -9,7 +9,7 @@ It's pure bash except for the following:
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
 ## Usage
-```tpddclient [tty_device] [command [args...]]```
+```pdd [tty_device] [command [args...]]```
 
 With no arguments, it will run in interactive command mode.  
 You get a ```TPDD($mode)>``` prompt where you can enter commands.  
@@ -54,7 +54,7 @@ load and save may also optionally be given a 2nd argument for a destination file
 Multiple commands may be given at once, seperated by ';' to form a pre-loaded sequence.  
 Example, delete a file and then list all files:  
 In interactive mode: ```TPDD(opr)>rm DOSNEC.CO ;ls```  
-In non-interactive mode: ```$ ./tpddclient "rm DOSNEC.CO ;ls"```  
+In non-interactive mode: ```$ ./pdd "rm DOSNEC.CO ;ls"```  
 
 Additionally some behavior may be modified by setting environment variables.
 | variable | value | effect |
@@ -69,23 +69,23 @@ No built-in help yet.
 ## Examples
 
 **FDC mode drive condition**  
-1. Run ```$ ./tpddclient``` with no args.  
+1. Run ```$ ./pdd``` with no args.  
 2. Type "fdc" at the prompt and hit enter.  
  That switches you to "FDC" mode where you can enter FDC mode commands.  
 3. Type "D" and hit enter (short alias for "condition").  
  You should get a message that correctly reflects whether you have a disk inserted or not, and whether that disk is currently write-protected or not.
 
 **List files**  
-1. Insert a disk and run ```$ ./tpddclient ls```  
+1. Insert a disk and run ```$ ./pdd ls```  
  It should scan the disk, list the files and file sizes, and then exit back to the shell.
 
 **Copy a file from the disk**  
-```$ ./tpddclient load DOSNEC.CO```  
+```$ ./pdd load DOSNEC.CO```  
 ...rename along the way...  
-```$ ./tpddclient load DOSNEC.CO ts-dos_4.1_nec.co```
+```$ ./pdd load DOSNEC.CO ts-dos_4.1_nec.co```
 
-To see all the gory blow-by-blow, do ```$ DEBUG=1 ./tpddclient ...```  
-```$ DEBUG=3 ./tpddclient ...``` will additionally create log files containing every read from and write to the serial port.  
+To see all the gory blow-by-blow, do ```$ DEBUG=1 ./pdd ...```  
+```$ DEBUG=3 ./pdd ...``` will additionally create log files containing every read from and write to the serial port.  
 Each individual call to tpdd_read() or tpdd_write() creates a file with a copy of whatever was actually read from or written to the serial port.
 
 # Status

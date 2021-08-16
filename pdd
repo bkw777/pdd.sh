@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# tpddclient.sh - TPDD1 client in (almost) pure bash
+# pdd.sh - TPDD1 client in (almost) pure bash
 # Brian K. White b.kenyon.w@gmail.com
 # https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
 
@@ -20,7 +20,7 @@
 
 # verbose/debug
 # 0/unset=normal, 1=verbose, >1=more verbose, 3=log all tty traffic to files
-# DEBUG=1 ./tpddclient ...
+# DEBUG=1 ./pdd ...
 v=${DEBUG:-0}
 
 # true/false - Automatically convert filenames to Floppy/Flopy2-compatible 6.2 .
@@ -30,7 +30,7 @@ v=${DEBUG:-0}
 # But the drive doesn't care, and Model T's are not the only TPDD users(1).
 # So the automatic 6.2 padding can be disabled by setting this to false.
 # This can be done at run-time from the commandline:
-#     $> FLOPPY_COMPAT=false ./tpddclient save myfilename.exe
+#     $> FLOPPY_COMPAT=false ./pdd save myfilename.exe
 # Even when enabled, if a filename wouldn't fit within 6.2, then it is
 # not modified, so enabled generally does the expected thing automatically.
 # (1) TANDY WP-2, Brother knitting machines, Cambridge Z-88, MS-DOS & most OS's
