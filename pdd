@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-#
 # pdd.sh - TPDD1 client in (almost) pure bash
 # Brian K. White b.kenyon.w@gmail.com
 # https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
@@ -10,7 +9,7 @@
 # * FDC commands
 # * TPDD2
 # * Refactor the global variable names to have a consistent scheme
-# * Help screen
+# * Help
 # * Shorter tty read timeout where possible
 # * Give lcmd_save() an option to append just for completeness
 # * Re-implement lcmd_mv based on fdc commands to edit the directory
@@ -55,11 +54,13 @@ STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
 # All frames in a given set should be the same length. Use the "anim" or "play"
 # command to test the animation without having to save and delete a file.
 # Example: "anim 100" just plays the animation for 100 frames.
-#SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/')	# spinner
-#SPINNER_ANIMATION_FRAMES=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )')	# warp
+#SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/') # spinner
+#SPINNER_ANIMATION_FRAMES=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
 #SPINNER_ANIMATION_FRAMES=("... ..!" ".!...!!" ".'...!'" ". !..' " "!.!.! ." "'.!!'!." " .'!.'." ".. '. !" ) # fire, kinda
 #SPINNER_ANIMATION_FRAMES=('[ ]' '[.]' '[o]' '[O]' "[']") # bloop
-SPINNER_ANIMATION_FRAMES=('[o]' '[ ]')		# blinker
+#SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast blink
+SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow blink
+#SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
 #SPINNER_ANIMATION_FRAMES=(
 #	'stock ticker... '
 #	'tock ticker... s'
@@ -301,7 +302,7 @@ progressbar () {
 # backspaces the length of a frame, and prints the next frame.
 spin () {
 	((v)) && return
-	printf '%b%s' "${anim[0]//?/\\b}" "${anim[y]}"
+	printf '%b\b%s ' "${anim[0]//?/\\b}" "${anim[y]}"
 	((++y>=${#anim[*]})) && y=0
 }
 
@@ -467,7 +468,7 @@ tpdd_wait () {
 	local -i i=-1 n t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
 	((t<TTY_READ_TIMEOUT_MS)) && t=$TTY_READ_TIMEOUT_MS
 	n=$((t/TTY_READ_TIMEOUT_MS))
-	((b==1)) && printf '%s' "${anim[0]//?/ }"
+	((b==1)) && printf '%s ' "${anim[0]//?/ }"
 	until ((++i>n)) ;do
 		tpdd_check && break
 		${d[b]} $i $n
@@ -475,7 +476,7 @@ tpdd_wait () {
 	done
 	((i>n)) && { err_msg+=('TIMED OUT') ;return 1 ; }
 	${d[b]} 1 1
-	((b==1)) && printf '%b%s%b' "${anim[0]//?/\\b}" "${anim[0]//?/ }" "${anim[0]//?/\\b}"
+	((b==1)) && printf '%b\b%s %b\b' "${anim[0]//?/\\b}" "${anim[0]//?/ }" "${anim[0]//?/\\b}"
 	vecho 1 "$i"
 }
 
