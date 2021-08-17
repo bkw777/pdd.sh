@@ -26,9 +26,9 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | --- | --- | --- |
 | status | | Report the drive/disk status |
 | ls \| list \| dir | | Directory listing |
-| rm \| del | | Delete a file |
-| cp \| copy | source dest | Copy a TPDD file to another TPDD file |
-| mv \| ren | | Rename a file |
+| rm \| del | disk_filename | Delete a file |
+| cp \| copy | disk_src_filename disk_dest_filename | Copy a file on-disk to another file on-disk |
+| mv \| ren | disk_src_filename disk_dest_filename | Rename a file on-disk |
 | load | disk_src_filename \[local_dest_filename\] | Copy a file from the disk |
 | save | local_src_filename \[disk_dest_filename\] | Copy a file to the disk |
 | format | | Format the disk - 64-byte sector size |
