@@ -13,9 +13,15 @@
 # * Shorter tty read timeout where possible
 # * Give lcmd_save() an option to append just for completeness
 # * Re-implement lcmd_mv based on fdc commands to edit the directory
+# * Read whole disk in FDC mode
+# * Write whole disk in FDC mode
 
 ###############################################################################
-# config
+# CONFIG
+#
+
+###############################################################################
+# behavior
 
 # verbose/debug
 # 0/unset=normal, 1=verbose, >1=more verbose, 3=log all tty traffic to files
@@ -81,6 +87,7 @@ SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow blink
 #)
 
 ###############################################################################
+# tunables
 
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
@@ -104,12 +111,13 @@ FORMAT_WAIT_MS=102000
 # 65534 byte file takes 20.2 seconds, so 30 seconds should be safe.
 DELETE_WAIT_MS=30000
 
-# If you try to save a file with more than this many bytes, the drive will
-# error with "Disk Full", even if the disk isn't full.
-MAX_FILE_SIZE=65534
-
-# end of config
+#
+# CONFIG
 ###############################################################################
+
+###############################################################################
+# CONSTANTS
+#
 
 ###############################################################################
 # drive operating modes
@@ -120,6 +128,10 @@ typeset -ra mode=(
 
 ###############################################################################
 # "Operation Mode" constants
+
+# If you try to save a file with more than this many bytes, the drive will
+# error with "Disk Full", even if the disk isn't full.
+typeset -ri TPDD_MAX_FILE_SIZE=65534
 
 # Operation Mode Request/Return Block Formats
 typeset -rA opr_fmt=(
@@ -213,7 +225,6 @@ typeset -rA open_mode=(
 ###############################################################################
 # "FDC Mode" constants
 
-
 # FDC Mode Commands
 typeset -rA fdc_cmd=(
 	[mode]='M'
@@ -230,11 +241,39 @@ typeset -rA fdc_cmd=(
 )
 
 # FDC Mode Errors
-typeset -rA fdc_msg=(
+# There is no documentation for the FDC error codes
+# I am accumulating this list as I encounter them
+typeset -ra fdc_msg=(
 	[0]="OK"
-	#[17]="" # seen when trying to read logical sector 0 , logical sectors start at 1
-	[193]="Command Error"
+	[17]="Parameter Out Of Range" # rs 1 0,
+	[18]="Parameter Out Of Range" # rs 0 2, rs 1 21
+	[33]="Parameter Invalid" # ff x
+	[51]="Parameter Out Of Range" # ff 8
+	[193]="Command Error" # rs 0 0
 )
+
+# FDC Format Disk sector size codes
+typeset -ra fdc_format_sector_size=(
+	[0]=64
+	[1]=80
+	[2]=128
+	[3]=256
+	[4]=512
+	[5]=1024
+	[6]=1280
+)
+
+
+###############################################################################
+# general constants
+
+# Physical Sector Length
+typeset -ri PSL=1280
+
+#
+# CONSTANTS
+###############################################################################
+
 
 ###############################################################################
 # generic/util functions
@@ -274,7 +313,7 @@ file_to_fhex () {
 	while IFS= read -r -d $'\0' -n 1 -u 5 x ;do
 		printf -v x '%02x' "'$x"
 		fhex+=($x)
-		((${#fhex[*]}>MAX_FILE_SIZE)) && { err_msg+=("\"$1\" exceeds ${MAX_FILE_SIZE} bytes") ; break ; }
+		((${#fhex[*]}>TPDD_MAX_FILE_SIZE)) && { err_msg+=("\"$1\" exceeds ${TPDD_MAX_FILE_SIZE} bytes") ; break ; }
 	done
 	exec 5<&-
 
@@ -329,15 +368,15 @@ do_cmd () {
 			read) ocmd_read $* ;e=$? ;;
 			write) ocmd_write $* ;e=$? ;;
 			delete) ocmd_delete ;e=$? ;;
-			format) ocmd_format ;e=$? ;;
+			format) ocmd_format ;e=$? ;; # Creates 64-byte logical sectors.
 			status) ocmd_status ;e=$? ;((e)) || echo "OK" ;;
-			fdc) ocmd_fdc ;e=$? ;;
+			fdc) ocmd_fdc ;e=$? ; exit=: ;;
 
 	# fdc-mode commands
 	# All of the drive firmware "FDC mode" functions.
-			${fdc_cmd[mode]}|mode) fcmd_mode $* ;e=$? ;; # select operation-mode or fdc-mode
+			${fdc_cmd[mode]}|mode) fcmd_mode $* ;e=$? ;exit=: ;; # select operation-mode or fdc-mode
 			${fdc_cmd[condition]}|condition) fcmd_condition $* ;e=$? ;; # get drive condition
-			#${fdc_cmd[format]}|ff) fcmd_format $* ;e=$? ;; # format disk
+			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;e=$? ;; # format disk - selectable sector size
 			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;e=$? ;; # format disk no verify
 			#${fdc_cmd[read_id]}|read_id|ri) fcmd_read_id $* ;e=$? ;; # read id
 			${fdc_cmd[read_sector]}|read_sector|rs) fcmd_read_sector $* ;e=$? ;; # read sector
@@ -367,6 +406,7 @@ do_cmd () {
 			sum) calc_cksum $* ;e=$? ;;
 			sync|drain) tpdd_iosync ;e=$? ;;
 			sleep) _sleep $* ;e=$? ;;
+			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;;
 
 	# playground
 			# send the TPDD1 bootstrap S-records
@@ -702,6 +742,8 @@ ocmd_status () {
 # Format Disk
 #request: 5a 5a 06 00 ##
 #return : 12 01 ?? ##
+# The operation-mode format command (this) creates 64-byte sectors.
+# The FDC-mode format command can format in other sector sizes.
 ocmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
@@ -720,6 +762,7 @@ ocmd_fdc () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	ocmd_send_req ${opr_fmt[req_fdc]} || return $?
 	operation_mode=0
+	_sleep 0.1
 }
 
 # Open File
@@ -828,7 +871,7 @@ ocmd_write () {
 fcmd_read_result () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local -i i ;local x ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
+	local -i i ;local x b ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
 
 	# read 8 bytes
 	tpdd_read 8 || return $?
@@ -840,27 +883,21 @@ fcmd_read_result () {
 
 	# the 8 characters sent by the drive are themselves hex pairs,
 	# representing integer values not ascii characters in this case
-	fdc_err=$((16#${x:0:2})) # first 2 status
-	fdc_res=$((16#${x:2:2})) # next 2  result
-	fdc_len=$((16#${x:4:4})) # last 4  length
+	fdc_err=$((16#${x:0:2})) # first 2 = status
+	fdc_res=$((16#${x:2:2})) # next 2  = result
+	fdc_len=$((16#${x:4:4})) # last 4  = length
 
-	# look up the error message for fdc_err if not 0
-	((v)) && {
-		x='OK'
-		((fdc_err)) && {
-			x='ERROR'
-			[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
-			err_msg+=("$x")
-		}
-		vecho 1 "$z:status: $fdc_err - $x"
-	}
+	# look up the status/error message for fdc_err
+	x= ;[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
+	((fdc_err)) && err_msg+=("${x:-ERROR}")
 
-	# fdc_result is 8 individual bits
-	# convert to an array for convenience
+	# For some commands, fdc_result is actually 8 individual bit flags.
+	# Provide the individual bits in fdc_res_b[] for convenience.
 	fdc_res_b=()
 	for ((i=7;i>=0;i--)) { fdc_res_b+=(${D2B[fdc_res]:i:1}) ; }
 
-	return $fdc_err
+	b="${fdc_res_b[*]}" ;b="${b// /}"
+	vecho 1 "$z: err:$fdc_err:\"${fdc_msg[fdc_err]}\" res:$fdc_res($b) len:$fdc_len"
 }
 
 ###############################################################################
@@ -868,15 +905,18 @@ fcmd_read_result () {
 # wrappers for each "FDC mode" function of the drive firmware
 
 # select operation mode
-# $1 0=fdc 1=operation
+# fcmd_mode <0-1>
+# 0=fdc 1=operation
 fcmd_mode () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#)) || return
 	str_to_hex "${fdc_cmd[mode]}$1"
 	tpdd_write ${hex[*]} 0d
 	operation_mode=$1
+	_sleep 0.1
 }
 
+# report drive condition
 fcmd_condition () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
@@ -897,13 +937,33 @@ fcmd_condition () {
 	echo ", $x"
 }
 
-# read_sector physical_sector(0-79) logical_sector(1-20) filename
+# format disk
+# fdc_format [logical_sector_size_code]
+# size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280
+# Defaut (in the drive firmware, not by us) is 3 (256)
+fcmd_format () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	((operation_mode)) && ocmd_fdc
+	typeset -i s=${1:-3}	# drive firmware already uses 3 if not give, this 3-if-empty is just so our display & logic matches what the drive will do
+	((${#fdc_format_sector_size[s]})) || { err_msg+=("Invalid Sector Size \"$s\"") ;return 1 ; }
+	str_to_hex ${fdc_cmd[format]}$1
+	echo "Formatting Disk with ${fdc_format_sector_size[s]}-Byte Sector Size..."
+	tpdd_write ${hex[*]} 0d || return $?
+	tpdd_wait $FORMAT_WAIT_MS 2 || return $?
+	echo
+	fcmd_read_result || return $?
+	((fdc_err)) && err_msg+=("Sector:$fdc_res")
+	return $fdc_err
+}
+
+# read a logical sector
+# fcmd_read_sector physical logical [filename]
+# physical=0-79 logical=1-20
 fcmd_read_sector () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	#(($#<3)) && { err_msg+=('Missing Argument') ;return 1 ; }
 	((operation_mode)) && ocmd_fdc
 	local x file; local -i psect=$1 lsect=$2 lsl=
-	local -ra lsc=([64]=20 [80]=16 [128]=10 [256]=5 [512]=2 [1024]=1 [1280]=1)
 	#((psect>-1)) || ((psect<80)) || { err_msg+=("Physical Sector \"$psect\" out of range") ;return 1 ; }
 	#((lsect>0)) || ((lsect<lsc)) || { err_msg+=("Logical Sector \"$lsect\" out of range") ;return 1 ; }
 	str_to_hex "${fdc_cmd[read_sector]}$psect,$lsect"
@@ -918,8 +978,8 @@ fcmd_read_sector () {
 	((${#3})) && {
 		x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$3
 	} || {
-		echo "Physical Sector: $fdc_res"
-		echo "Logical Sector: $lsect"
+		printf "| %8s | %8s | %8s |\n" 'Physical' 'Logical' 'Length'
+		printf "| %8u | %8u | %8u |\n" "$fdc_res" "$lsect" "$lsl"
 		echo "${rhex[*]}"
 	}
 }
@@ -1102,7 +1162,8 @@ open_com || exit $?
 fcmd_mode 1
 
 # non-interactive mode
-(($#)) && { do_cmd "$@" ; exit ; }
+exit=exit
+(($#)) && { do_cmd "$@" ; $exit ; }
 
 # interactive mode
-while read -p"TPDD(${mode[operation_mode]})>" ic ;do do_cmd "$ic" ;done
+while read -p"TPDD(${mode[operation_mode]})> " ic ;do do_cmd "$ic" ;done
