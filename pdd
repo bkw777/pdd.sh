@@ -383,7 +383,7 @@ do_cmd () {
 			${fdc_cmd[condition]}|condition) fcmd_condition $* ;e=$? ;; # get drive condition
 			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;e=$? ;; # format disk - selectable sector size
 			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;e=$? ;; # format disk no verify
-			#${fdc_cmd[read_id]}|read_id|ri) fcmd_read_id $* ;e=$? ;; # read id
+			${fdc_cmd[read_id]}|read_id|ri) fcmd_read_id $* ;e=$? ;; # read id
 			${fdc_cmd[read_sector]}|read_sector|rs) fcmd_read_sector $* ;e=$? ;; # read sector
 			#${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;e=$? ;; # search id
 			#${fdc_cmd[write_id]}|write_id|wi) fcmd_write_id $* ;e=$? ;; # write id
@@ -966,7 +966,7 @@ fcmd_format () {
 fcmd_read_sector () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local x file; local -i psect=$1 lsect=${2:-1} lsl=
+	local x ;local -i psect=$1 lsect=${2:-1} lsl=
 	str_to_hex "${fdc_cmd[read_sector]}$psect,$lsect"
 	tpdd_write ${hex[*]} 0d || return $?
 	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
@@ -982,6 +982,39 @@ fcmd_read_sector () {
 		printf "| %8s | %8s | %8s |\n" 'Physical' 'Logical' 'Length'
 		printf "| %8u | %8u | %8u |\n" "$fdc_res" "$lsect" "$lsl"
 		echo "${rhex[*]}"
+	}
+}
+
+# read sector id
+# fcmd_read_id physical_sector [filename]
+# physical_sector=0-79
+# ID sections is supposed to be
+#  2 bytes - sector length
+#  2 bytes - sector number
+#  1 byte  - logical sector length code
+# 12 bytes - ID Reserve
+#  2 bytes - ID CRC
+#
+# Not clear how it's supposed to work.
+# always returns 13 bytes (code below limits it to 13 now but if you remove
+# that limit and try to read more, you don't get any more)
+#
+fcmd_read_id () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	((operation_mode)) && ocmd_fdc
+	local x ;local -i psect=$1 dl=13
+	str_to_hex "${fdc_cmd[read_id]}$psect"
+	tpdd_write ${hex[*]} 0d || return $?
+	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
+	tpdd_write 0d || return $?
+	tpdd_read $dl || return $?
+	((${#rhex[*]}<dl)) && { err_msg+=("Got ${#rhex[*]} of $dl bytes") ; return 1 ; }
+	((${#2})) && {
+		x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$2
+	} || {
+		printf "Sector %u  Length %u\n" "$psect" "$fdc_len"
+		printf "ID DATA: %s\n" "${rhex[*]}"
 	}
 }
 
