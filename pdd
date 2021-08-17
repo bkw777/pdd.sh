@@ -750,7 +750,10 @@ ocmd_status () {
 # Operation-Mode Format Disk
 #request: 5a 5a 06 00 ##
 #return : 12 01 ?? ##
-# "operation-mode" format creates 64-byte logical sectors
+# "operation-mode" format is somehow special and different from FDC-mode format.
+# It creates 64-byte logical sectors, but if you use the FDC-mode format command
+# "ff 0" to format with 64-byte logical sectors, and then try save a file,
+# "ls" will show the file's contents were written into the directory sector.
 ocmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
@@ -954,7 +957,7 @@ fcmd_format () {
 	((operation_mode)) && ocmd_fdc
 	typeset -i s=${1:-6}
 	str_to_hex ${fdc_cmd[format]}$s
-	echo "Formatting Disk with ${fdc_format_sector_size[s]:-\"\"}-Byte Sector Size"
+	echo "Formatting Disk with ${fdc_format_sector_size[s]:-\"\"}-Byte Logical Sectors"
 	tpdd_write ${hex[*]} 0d || return $?
 	tpdd_wait $FORMAT_WAIT_MS 2 || return $?
 	echo
@@ -969,21 +972,19 @@ fcmd_format () {
 fcmd_read_sector () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local x ;local -i psect=$1 lsect=${2:-1} lsl=
-	str_to_hex "${fdc_cmd[read_sector]}$psect,$lsect"
+	local x ;local -i ps=$1 ls=${2:-1}
+	str_to_hex "${fdc_cmd[read_sector]}$ps,$ls"
 	tpdd_write ${hex[*]} 0d || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
-	((fdc_res==psect)) || { err_msg+=('Unexpected Physical Sector Returned') ;return 1 ; }
-	lsl=$fdc_len
+	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0d || return $?
-	tpdd_read $lsl || return $?
-	((${#rhex[*]}<lsl)) && { err_msg+=("Got ${#rhex[*]} of $lsl bytes") ; return 1 ; }
+	tpdd_read $fdc_len || return $?
+	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
 	((${#3})) && {
 		x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$3
 	} || {
-		printf "| %8s | %8s | %8s |\n" 'Physical' 'Logical' 'Length'
-		printf "| %8u | %8u | %8u |\n" "$fdc_res" "$lsect" "$lsl"
+		printf 'Physical %2u | Logical %2u | Length %4u\n' "$fdc_res" "$ls" "$fdc_len"
 		echo "${rhex[*]}"
 	}
 }
@@ -994,18 +995,18 @@ fcmd_read_sector () {
 fcmd_read_id () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local x ;local -i psect=$1 dl=13
+	local x ;local -i psect=$1 l=13
 	str_to_hex "${fdc_cmd[read_id]}$psect"
 	tpdd_write ${hex[*]} 0d || return $?
 	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
 	tpdd_write 0d || return $?
-	tpdd_read $dl || return $?
-	((${#rhex[*]}<dl)) && { err_msg+=("Got ${#rhex[*]} of $dl bytes") ; return 1 ; }
+	tpdd_read $l || return $?
+	((${#rhex[*]}<l)) && { err_msg+=("Got ${#rhex[*]} of $l bytes") ; return 1 ; }
 	((${#2})) && {
 		x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$2
 	} || {
-		printf "Sector: %u  Length: %u  ID_Data: %s\n" "$psect" "$fdc_len" "${rhex[*]}"
+		printf "Physical Sector %2u | Length %2u | ID_Data %s\n" "$psect" "$fdc_len" "${rhex[*]}"
 	}
 }
 
