@@ -245,7 +245,7 @@ typeset -rA fdc_cmd=(
 # I am accumulating this list as I encounter them
 typeset -ra fdc_msg=(
 	[0]="OK"
-	[17]="Parameter Out Of Range" # rs 1 0,
+	[17]="Parameter Out Of Range" # rs 0 0, rs 1 0
 	[18]="Parameter Out Of Range" # rs 0 2, rs 1 21
 	[33]="Parameter Invalid" # ff x
 	[51]="Parameter Out Of Range" # ff 8
@@ -416,7 +416,7 @@ do_cmd () {
 			'') : ;;
 			*) echo "Unknown command: \"$c\"" >&2 ;;
 		esac
-		((${#err_msg[*]})) && printf '\n%s: %s\n' "$c" "${err_msg[@]}" >&2
+		((${#err_msg[*]})) && printf '\n%s: %s\n' "$c" "${err_msg[*]}" >&2
 	}
 	return $e
 }
@@ -968,8 +968,8 @@ fcmd_read_sector () {
 	#((lsect>0)) || ((lsect<lsc)) || { err_msg+=("Logical Sector \"$lsect\" out of range") ;return 1 ; }
 	str_to_hex "${fdc_cmd[read_sector]}$psect,$lsect"
 	tpdd_write ${hex[*]} 0d || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res_b[*]}") ;return $? ; }
-	((fdc_err)) && { err_msg+=("fdc_err:$fdc_err res:${fdc_res_b[*]}") ;return $fdc_err ; }
+	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
 	((fdc_res==psect)) || { err_msg+=('Unexpected Physical Sector Returned') ;return 1 ; }
 	lsl=$fdc_len
 	tpdd_write 0d || return $?
