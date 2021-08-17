@@ -40,7 +40,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | M&#160;\|&#160;mode | 0\|1 | Select operation(0) or fdc(1) mode |
 | D&#160;\|&#160;condition | | Report the drive/disk status |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk, sector size 64 80 128 256 512 1024 1280. (default 256 if not specified) |
-| R&#160;\|&#160;rs&#160;\|&#160;read_sector | \<0-79\>&#160;\<1-20\>&#160;[local_filename] | Read one logical sector at address: physical(0-79) logical(1-20). Save to locale_filename if given, else display on screen. |
+| R&#160;\|&#160;rs&#160;\|&#160;read_sector | \<0-79\>&#160;\<1-20\>&#160;[local_filename] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen. |
 | A&#160;\|&#160;ri&#160;\|&#160;read_id | | not yet implemented |
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | | not yet implemented |
