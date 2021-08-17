@@ -27,10 +27,10 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | status | | Report the drive/disk status |
 | ls \| list \| dir | | Directory listing |
 | rm \| del | disk_filename | Delete a file |
-| cp \| copy | disk_src_filename disk_dest_filename | Copy a file on-disk to another file on-disk |
-| mv \| ren | disk_src_filename disk_dest_filename | Rename a file on-disk |
-| load | disk_src_filename \[local_dest_filename\] | Copy a file from the disk |
-| save | local_src_filename \[disk_dest_filename\] | Copy a file to the disk |
+| cp \| copy | disk_src_filename&#160;disk_dest_filename | Copy a file on-disk to another file on-disk |
+| mv \| ren | disk_src_filename&#160;disk_dest_filename | Rename a file on-disk |
+| load | disk_src_filename&#160;\[local_dest_filename\] | Copy a file from the disk |
+| save | local_src_filename&#160;\[disk_dest_filename\] | Copy a file to the disk |
 | format | | Format the disk - 64-byte sector size |
 | fdc | | Switch to FDC mode |
 
@@ -40,7 +40,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | M \| mode | 0\|1 | Select operation(0) or fdc(1) mode |
 | D \| condition | | Report the drive/disk status |
 | F\| ff \| fdc_format | ''\|0-6 | Format disk, sector size 64 80 128 (256) 512 1024 1280 |
-| R \| rs \| read_sector | 0-79 1-20 [local_filename] | Read one logical sector at address: physical(0-79) logical(1-20). Save to locale_filename if given, else display on screen. |
+| R \| rs \| read_sector | 0-79&#160;1-20&#160;[local_filename] | Read one logical sector at address: physical(0-79) logical(1-20). Save to locale_filename if given, else display on screen. |
 | A \| ri \| read_id | | not yet implemented |
 | S \| si \| search_id | | not yet implemented |
 | B \| wi \| write_id | | not yet implemented |
