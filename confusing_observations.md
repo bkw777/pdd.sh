@@ -8,11 +8,15 @@ A physical sector is 1280 bytes, and the largest possible logical sector is 1280
 
 There are 2 different format-disk commands, an operation-mode version and an FDC-mode version.
 
-The operation-mode format command, ```format```, usually formats a disk with 64-byte logical sectors.  
-However I have also seen it create a strange format where physical sector 0 has 64-byte logical sectors, and the remaining physical sectors 1-79 all have 80-byte logical sectors.  
-I can't reproduce this at-will, it's just happened a few times.
+### operation-mode
+The operation-mode format is somehow special and different from FDC-mode format.
+```format``` (usually*) creates 64-byte logical sectors, but if you use the FDC-mode format command ```ff 0``` to format with 64-byte logical sectors, and then try save a file, ```ls``` will show the file's contents were written into the directory sector.
 
-The FDC-mode format command, ```ff``` or ```fdc_format```, creates a uniform format with the specified logical sector size applied the same on all physical sectors.  
+9*) I have also seen it create a strange format where physical sector 0 has 64-byte logical sectors, and the remaining physical sectors 1-79 all have 80-byte logical sectors. I can't reproduce this at-will, it's just happened at least once.
+
+### FDC-mode
+The FDC-mode format command, ```ff``` or ```fdc_format```, creates a uniform format with the specified logical sector size applied the same on all physical sectors.
+
 The drive firmware uses size 3 (256 bytes) by default if not specified, but we apply our own default of 6 (1280 bytes) instead in the script.  
 | command | sector size in bytes |
 | --- | --- |
@@ -25,28 +29,27 @@ The drive firmware uses size 3 (256 bytes) by default if not specified, but we a
 | ```ff 5``` | 1024 |
 | ```ff 6``` | 1280 |
 
+### Disks seen in the wild
 The TPDD1 utility disk is actually formatted with 1280-byte logical sectors, yet still works with normal operation-mode filesystem commands.  
 *Perhaps* the way this works is, since 1280-bytes is the entire physical sector, maybe it's possible to treat the logical sector as raw space and construct the correct formatting within that space yourself?  
 This is why this util defaults to 1280-byte logical sectors when not specified instead of letting the drive firmware's default of 256 take effect.  
 
+The Disk Power KC-85 distribution disk appears to be a normal disk formatted with the operation-mode format, 64-byte logical sectors.
+
+### Examining a disk
 The format of a given sector can be seen from the read_sector or read_id commands.  
-This is a disk with that strange format described dabove.  
+This is a disk with that strange format described above.  
 ```
 $ ./pdd "rs ;rs 0 13 ;rs 1 1 ;rs 1 13 ;rs 79 1"
-| Physical |  Logical |   Length |
-|        0 |        1 |       64 |
+Physical  0 | Logical  1 | Length   64
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-| Physical |  Logical |   Length |
-|        0 |       13 |       64 |
+Physical  0 | Logical 13 | Length   64
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-| Physical |  Logical |   Length |
-|        1 |        1 |       80 |
+Physical  1 | Logical  1 | Length   80
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-| Physical |  Logical |   Length |
-|        1 |       13 |       80 |
+Physical  1 | Logical 13 | Length   80
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-| Physical |  Logical |   Length |
-|       79 |        1 |       80 |
+Physical 79 | Logical  1 | Length   80
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 bkw@negre:~/src/pdd.sh$
 ```
@@ -54,16 +57,11 @@ bkw@negre:~/src/pdd.sh$
 Same disk...  
 ```
 $ ./pdd "ri ;ri 1 ;ri 2 ;ri 25 ;ri 79"
-Sector 0  Length 64
-ID DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00
-Sector 1  Length 80
-ID DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00
-Sector 2  Length 80
-ID DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00
-Sector 25  Length 80
-ID DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00
-Sector 79  Length 80
-ID DATA: 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  0 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  1 | Length 80 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  2 | Length 80 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 25 | Length 80 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 79 | Length 80 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
 $ 
 ```
 
