@@ -64,26 +64,30 @@ Additionally some behavior may be modified by setting environment variables.
 | FLOPPY_COMPAT | true | (default) automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". |
 | | false | disable that padding/un-padding. Allows you to see the actual on-disk file name like <pre>"A     .BA               "</pre> and allows you to use the entire 24-byte filename field however you want |
 
+You generally don't need to explicitly use the operation/fdc mode switch commands, as all mode-specific commands include a check to switch to the necessary mode on the fly.
+
 No built-in help yet.
 
 ## Examples
-
-**List files**  
-```$ ./pdd ls```
+In all cases, the same commands can be given either at the command line, or at the interactive prompt.  
+Example, to list the directory, where the command is: ```ls```, can be used either of these ways:  
+```$ ./pdd ls``` or ```TPDD(opr)> ls```
 
 **Copy a file from the disk**  
-```$ ./pdd load DOSNEC.CO```  
+```load DOSNEC.CO```  
 
 **Copy a file from the disk and save to a different local name**  
-```$ ./pdd load DOSNEC.CO ts-dos_4.1_nec.co```
+```load DOSNEC.CO ts-dos_4.1_nec.co```
 
 **Stacked Commands: Delete File, then Directory List**  
 In interactive mode:  
-```TPDD(opr)>rm DOSNEC.CO ;ls```  
-In non-interactive mode:..
+```TPDD(opr)> rm DOSNEC.CO ;ls```  
+In non-interactive mode, quote the list because of the ";"  
 ```$ ./pdd "rm DOSNEC.CO ;ls"```  
+...or you could use backslash to escape it:  
+```$ ./pdd rm DOSNEC.CO \;ls```
 
-**FDC mode drive condition**  
+**FDC-mode drive condition**  
 Interactive:  
 ```
 $ ./pdd
@@ -92,26 +96,20 @@ TPDD(fdc)> condition
 Disk Inserted, Writable
 TPDD(fdc)>
 ```
-Non-interactive, stacked commands, short commands, explicit quit added to override the fdc command's "don't-exit" behavior:  
+Non-interactive:  
 ```
-$ ./pdd "fdc;D;q"
+$ ./pdd D
 Disk Inserted, Writable
 $ 
 ```
+Verbose/debug mode:  
+```$ DEBUG=1 ./pdd ...``` or ```TPDD(opr)> debug 1```  
 
-To see all the gory blow-by-blow, do ```$ DEBUG=1 ./pdd ...``` or ```TPDD(opr)> debug 1```  
-
-```$ DEBUG=3 ./pdd ...``` or ```TPDD(opr> debug 3``` -> each individual call to tpdd_read() or tpdd_write() creates a file with a copy of whatever was actually read from or written to the serial port.
+Log raw serial port traffic:  
+Every call to tpdd_read() or tpdd_write() also creates a local file with a copy of whatever was actually read from or written to the serial port.  
+```$ DEBUG=3 ./pdd ...``` or ```TPDD(opr> debug 3```
 
 # General Info
-
-## operation vs fdc mode
-The drives power-on default operating mode is controlled by the dip switches on the bottom of the drive. Except for special situations like the TPDD1 bootstrap procedure, the switches are usaually set so that the drive boots up in "operation mode".
-
-This script also always issues the ```mode 1``` command on start-up before processing any other commands, so even aside from the power-on default, we always start off in a known state, in "operation mode".
-
-You can start off in FDC mode by putting the fdc command on the command line. In that case the script will stay in interactive mode even though a command was given on the command line.  
-```./pdd fdc```
 
 ## Formatting
 Disks are arranged in 40 physical tracks, with 2 physical sectors per track, and 1 to 20 logical sectors per physical sector depending of the logical sector size.  
