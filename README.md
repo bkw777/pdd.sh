@@ -1,6 +1,6 @@
 # pdd.sh
 
-A [TPDD client](http://tandy.wiki/TPDD_client) implemented in (almost) pure bash.
+A [TPDD client](http://tandy.wiki/TPDD_client) implemented in pure\* bash.
 
 It's pure bash except for the following:  
 * "stty" is needed once at startup to configure the serial port.  
