@@ -1,4 +1,4 @@
-# TPDD_bash
+# pdd.sh
 
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in (almost) pure bash.
 
