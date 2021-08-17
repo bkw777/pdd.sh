@@ -67,7 +67,7 @@ You generally don't need to explicitly use the "fdc" or "mode" commands to switc
 No built-in help yet.
 
 ## Examples
-In all cases, the same commands can be given either at the command line, or at the interactive prompt.  
+The same commands can be given either on the command line, or at the interactive prompt.  
 Example, to list the directory, where the command is: ```ls```, can be used either of these ways:  
 ```$ ./pdd ls``` or ```TPDD(opr)> ls```
 
