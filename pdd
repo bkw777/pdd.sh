@@ -15,6 +15,7 @@
 # * Re-implement lcmd_mv based on fdc commands to edit the directory
 # * Read whole disk in FDC mode
 # * Write whole disk in FDC mode
+# * Confirmation prompts before overwriting files (local and disk)
 
 ###############################################################################
 # CONFIG
@@ -62,10 +63,10 @@ STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
 # Example: "anim 100" just plays the animation for 100 frames.
 #SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/') # spinner
 #SPINNER_ANIMATION_FRAMES=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
-#SPINNER_ANIMATION_FRAMES=("... ..!" ".!...!!" ".'...!'" ". !..' " "!.!.! ." "'.!!'!." " .'!.'." ".. '. !" ) # fire, kinda
+SPINNER_ANIMATION_FRAMES=("... ..!" ".!...!!" ".'...!'" ". !..' " "!.!.! ." "'.!!'!." " .'!.'." ".. '. !" ) # fire, kinda
 #SPINNER_ANIMATION_FRAMES=('[ ]' '[.]' '[o]' '[O]' "[']") # bloop
 #SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast blink
-SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow blink
+#SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow blink
 #SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
 #SPINNER_ANIMATION_FRAMES=(
 #	'stock ticker... '
@@ -104,7 +105,9 @@ TPDD_WAIT_TIMEOUT_MS=5000
 
 # How long to wait for format to complete
 # Usually takes just under 100 seconds.
-FORMAT_WAIT_MS=102000
+# If you ever get a timeout while formatting, increase this by 1000 until
+# you no longer get timeouts.
+FORMAT_WAIT_MS=105000
 
 # How long to wait for delete to complete
 # Delete takes from 3 to 20 seconds. Larger files take longer.
@@ -690,7 +693,7 @@ un_tpdd_file_name () {
 # fmt = 00
 # len = 1a
 # filename = 24 bytes
-# attribute = "F" (always)
+# attribute = "F" (always F for any file, null for unused entries)
 # search form = 00=set_name | 01=get_first | 02=get_next
 ocmd_dirent () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -744,16 +747,15 @@ ocmd_status () {
 	ocmd_check_err || return $?
 }
 
-# Format Disk
+# Operation-Mode Format Disk
 #request: 5a 5a 06 00 ##
 #return : 12 01 ?? ##
-# The operation-mode format command (this) creates 64-byte sectors.
-# The FDC-mode format command can format in other sector sizes.
+# "operation-mode" format creates 64-byte logical sectors
 ocmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 
-	echo "Formatting disk"
+	echo "Formatting Disk with \"operation mode\" format"
 	ocmd_send_req ${opr_fmt[req_format]} || return $?
 	tpdd_wait $FORMAT_WAIT_MS 2 || return $?
 	echo
@@ -872,7 +874,7 @@ ocmd_write () {
 ###############################################################################
 # "FDC Mode" support functions
 
-# read an FDC-mode 8-byte result packet
+# read an FDC-mode 8-byte result block
 fcmd_read_result () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
@@ -881,13 +883,13 @@ fcmd_read_result () {
 	# read 8 bytes
 	tpdd_read 8 || return $?
 
-	# re-constitute the 8 hex pairs from tpdd_write(), back to the original
-	# 8 ascii characters sent by the drive
+	# tpdd_read() encodes every byte as a hex pair, re-constitute the 8 hex
+	# pairs back to the original 8 ascii characters sent by the drive
 	x="${rhex[*]}" ;printf -v x '%b' "\x${x// /\\x}"
 	vecho 1 "$z:$x"
 
-	# the 8 characters sent by the drive are themselves hex pairs,
-	# representing integer values not ascii characters in this case
+	# The 8 characters sent by the drive are themselves hex pairs,
+	# representing two 8-bit and one 16-bit integer values.
 	fdc_err=$((16#${x:0:2})) # first 2 = status
 	fdc_res=$((16#${x:2:2})) # next 2  = result
 	fdc_len=$((16#${x:4:4})) # last 4  = length
@@ -896,7 +898,7 @@ fcmd_read_result () {
 	x= ;[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
 	((fdc_err)) && err_msg+=("${x:-ERROR:${fdc_err}}")
 
-	# For some commands, fdc_result is actually 8 individual bit flags.
+	# For some commands, fdc_res is actually 8 individual bit flags.
 	# Provide the individual bits in fdc_res_b[] for convenience.
 	fdc_res_b=()
 	for ((i=7;i>=0;i--)) { fdc_res_b+=(${D2B[fdc_res]:i:1}) ; }
@@ -942,15 +944,16 @@ fcmd_condition () {
 	echo ", $x"
 }
 
-# format disk
-# fdc_format [logical_sector_size_code]
-# size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280
-# The drive firmware uses 3 if not given
+# FDC-mode format disk
+# fcmd_format [logical_sector_size_code]
+# size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes
+# The drive firmware defaults to size code 3 when not given.
+# We intercept that and fill in our own default of 6 instead.
 fcmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	typeset -i s=${1:-3}
-	str_to_hex ${fdc_cmd[format]}$1
+	typeset -i s=${1:-6}
+	str_to_hex ${fdc_cmd[format]}$s
 	echo "Formatting Disk with ${fdc_format_sector_size[s]:-\"\"}-Byte Sector Size"
 	tpdd_write ${hex[*]} 0d || return $?
 	tpdd_wait $FORMAT_WAIT_MS 2 || return $?
@@ -985,20 +988,9 @@ fcmd_read_sector () {
 	}
 }
 
-# read sector id
+# This may not be right yet. The data doesn't make sense with the manual.
+# read sector id section
 # fcmd_read_id physical_sector [filename]
-# physical_sector=0-79
-# ID sections is supposed to be
-#  2 bytes - sector length
-#  2 bytes - sector number
-#  1 byte  - logical sector length code
-# 12 bytes - ID Reserve
-#  2 bytes - ID CRC
-#
-# Not clear how it's supposed to work.
-# always returns 13 bytes (code below limits it to 13 now but if you remove
-# that limit and try to read more, you don't get any more)
-#
 fcmd_read_id () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
@@ -1013,8 +1005,7 @@ fcmd_read_id () {
 	((${#2})) && {
 		x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$2
 	} || {
-		printf "Sector %u  Length %u\n" "$psect" "$fdc_len"
-		printf "ID DATA: %s\n" "${rhex[*]}"
+		printf "Sector: %u  Length: %u  ID_Data: %s\n" "$psect" "$fdc_len" "${rhex[*]}"
 	}
 }
 
@@ -1022,7 +1013,7 @@ fcmd_read_id () {
 # Local Commands
 # high level functions implemented here in the client
 
-# list all files
+# list disk directory
 lcmd_ls () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f x ;ret_dat=()
@@ -1103,13 +1094,19 @@ lcmd_save () {
 	echo
 }
 
+# delete one or more files
+# lcmd_rm filename [filenames...]
 lcmd_rm () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	[[ "$1" ]] || return 1
-	echo -n "Deleting TPDD:$1 "
-	ocmd_dirent "$1" '' ${dirent_cmd[set_name]} || return $?	# set the filename
-	ocmd_delete || return $?
-	printf '\r%79s\rDeleted TPDD:%s\n' '' "$1"
+	(($#)) || return 1
+	local f
+	for f in $* ;do
+		echo -n "Deleting TPDD:$f "
+		ocmd_dirent "$f" '' ${dirent_cmd[set_name]} || return $? # set a filename
+		# TODO - examine direct return to skip if file not exist
+		ocmd_delete || return $?			# delete the set filename
+		printf '\r%79s\rDeleted TPDD:%s\n' '' "$f"
+	done
 }
 
 # for now, mv and cp are almost the same and mostly redundant,
