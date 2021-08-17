@@ -49,8 +49,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 **general/other commands**  
 | command | arguments | Description |
 | --- | --- | -- |
-| q \| quit \| bye \| exit | | Order Pizza |
-| debug | ''\|0-3 | Debug/verbose level - Set the specified debug level, or toggle between 0 & 1 of no level given |
+| q&#160;\|&#160;quit \| bye \| exit | | Order Pizza |
+| debug | \[0-3\] | Debug/verbose level - Set the specified debug level, or toggle between 0 & 1 of no level given |
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
@@ -59,12 +59,10 @@ Multiple commands may be given at once, seperated by ';' to form a pre-loaded se
 Additionally some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
-| DEBUG | 1 | prints a lot of internal progress and details while working
-| | 3 | additionally copies all serial port traffic to log files |
-| FLOPPY_COMPAT | true | (default) automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". |
-| | false | disable that padding/un-padding. Allows you to see the actual on-disk file name like <pre>"A     .BA               "</pre> and allows you to use the entire 24-byte filename field however you want |
+| DEBUG | # | same as debug command above |
+| FLOPPY_COMPAT | true\|false | (default is true) automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>"A     .BA               "</pre> and allows you to use the entire 24-byte filename field however you want |
 
-You generally don't need to explicitly use the operation/fdc mode switch commands, as all mode-specific commands include a check to switch to the necessary mode on the fly.
+You generally don't need to explicitly use the "fdc" or "mode" commands to switch to operation-mode or fdc-mode. All mode-specific commands switch the mode as necessary on the fly.
 
 No built-in help yet.
 
