@@ -41,7 +41,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | D&#160;\|&#160;condition | | Report the drive/disk status |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk, sector size 64 80 128 256 512 1024 1280. (default 1280 if not specified) |
 | R&#160;\|&#160;rs&#160;\|&#160;read_sector | \<0-79\>&#160;\<1-20\>&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen. |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \<0-79\>&#160;\[local_filename\] | Read Sector ID Section |
+| A&#160;\|&#160;ri&#160;\|&#160;read_id | \<0-79\>&#160;\[local_filename\] | Read Sector ID Section (may not be correct yet)|
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | | not yet implemented |
 | W&#160;\|&#160;ws&#160;\|&#160;write_sector | | not yet implemented |
