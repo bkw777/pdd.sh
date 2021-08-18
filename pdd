@@ -6,14 +6,13 @@
 # TODOS: Many ;)
 # * ls after every command?
 # * 2 or 3-column ls format? (so a full disk still fits on screen)
-# * FDC commands
+# * FDC commands (half done)
 # * TPDD2
 # * Refactor the global variable names to have a consistent scheme
 # * Help
 # * Shorter tty read timeout where possible
 # * Give lcmd_save() an option to append just for completeness
 # * Re-implement lcmd_mv based on fdc commands to edit the directory
-# * Read whole disk in FDC mode
 # * Write whole disk in FDC mode
 # * Confirmation prompts before overwriting files (local and disk)
 
@@ -387,7 +386,7 @@ do_cmd () {
 			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;e=$? ;; # format disk - selectable sector size
 			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;e=$? ;; # format disk no verify
 			${fdc_cmd[read_id]}|read_id|ri) fcmd_read_id $* ;e=$? ;; # read id
-			${fdc_cmd[read_sector]}|read_sector|rs) fcmd_read_sector $* ;e=$? ;; # read sector
+			${fdc_cmd[read_sector]}|read_logical|rl) fcmd_read_logical $* ;e=$? ;; # read one logical sector
 			#${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;e=$? ;; # search id
 			#${fdc_cmd[write_id]}|write_id|wi) fcmd_write_id $* ;e=$? ;; # write id
 			#${fdc_cmd[write_id_nv]}|write_id_nv) fcmd_write_id_nv $* ;e=$? ;; # write id no verify
@@ -969,9 +968,9 @@ fcmd_format () {
 }
 
 # read a logical sector
-# fcmd_read_sector physical logical [filename]
+# fcmd_read_logical physical logical [filename]
 # physical=0-79 logical=1-20
-fcmd_read_sector () {
+fcmd_read_logical () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	local x ;local -i ps=$1 ls=${2:-1}
@@ -1138,12 +1137,12 @@ lcmd_read_physical () {
 		progressbar 0 1 "$u"
 		>${2#*:}
 	}
-	fcmd_read_sector $p 1 "$2"
+	fcmd_read_logical $p 1 "$2"
 	t=$((1280/fdc_len))
 	((m)) && progressbar 1 $t "$u"
 	for ((l=2;l<=t;l++)) {
 		((m)) && progressbar $l $t "$u"
-		fcmd_read_sector $p $l "$2"
+		fcmd_read_logical $p $l "$2"
 	}
 	((m)) && echo
 }
