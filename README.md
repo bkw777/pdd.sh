@@ -26,20 +26,18 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | --- | --- | --- |
 | status | | Report the drive/disk status |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
-| rm&#160;\|&#160;del | disk_filename | Delete a file |
-| cp&#160;\|&#160;copy | disk_src_filename&#160;disk_dest_filename | Copy a file on-disk to another file on-disk |
-| mv&#160;\|&#160;ren | disk_src_filename&#160;disk_dest_filename | Rename a file on-disk |
-| load | disk_src_filename&#160;\[local_dest_filename\] | Copy a file from the disk |
-| save | local_src_filename&#160;\[disk_dest_filename\] | Copy a file to the disk |
-| format | | Format the disk - 64-byte sector size |
-| fdc | | Switch to FDC mode |
+| rm&#160;\|&#160;del | filename | Delete a file |
+| cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file on-disk to another file on-disk |
+| mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file on-disk |
+| load | src_filename(disk)&#160;\[dest_filename(local)\] | Copy a file from the disk |
+| save | src_filename(local)&#160;\[dest_filename(disk)\] | Copy a file to the disk |
+| format | | Format the disk with "operation-mode" filesystem format |
 
 **"FDC mode" commands**
 | command | arguments | Description |
 | --- | --- | -- |
-| M&#160;\|&#160;mode | 0\|1 | Select operation(0) or fdc(1) mode |
 | D&#160;\|&#160;condition | | Report the drive/disk status |
-| F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk, sector size 64 80 128 256 512 1024 1280. (default 1280 if not specified) |
+| F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector. (default 1280 if not specified) |
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen.<br>default physical 0 logical 1 |
 | A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | Read Sector ID Data [(may not be correct yet)](confusing_observations.md#sector-id-section)<br>default physical sector 0 |
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
@@ -52,7 +50,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | command | arguments | Description |
 | --- | --- | -- |
 | q&#160;\|&#160;quit \| bye \| exit | | Order Pizza |
-| debug | \[0-3\] | Debug/verbose level - Set the specified debug level, or toggle between 0 & 1 of no level given |
+| debug | \[0-3\] | Debug/verbose level - Toggle on/off each time it's called, or set the specified debug level if given<br>0 - debug mode off<br>1 - debug mode on<br>3 - debug mode on, plus every call to either tpdd_read() or tpdd_write() creates a log file with a copy of the data |
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
@@ -62,11 +60,7 @@ Additionally some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
 | DEBUG | # | same as debug command above |
-| FLOPPY_COMPAT | true\|false | (default is true) automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>"A     .BA               "</pre> and allows you to use the entire 24-byte filename field however you want |
-
-You generally don't need to explicitly use the "fdc" or "mode" commands to switch to operation-mode or fdc-mode. All mode-specific commands switch the mode as necessary on the fly.
-
-No built-in help yet.
+| FLOPPY_COMPAT | true\|false | (default is true) automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
 
 ## Examples
 The same commands can be given either on the command line, or at the interactive prompt.  
