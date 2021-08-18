@@ -113,6 +113,9 @@ FORMAT_WAIT_MS=105000
 # 65534 byte file takes 20.2 seconds, so 30 seconds should be safe.
 DELETE_WAIT_MS=30000
 
+# How long to wait for close to complete
+CLOSE_WAIT_MS=20000
+
 #
 # CONFIG
 ###############################################################################
@@ -665,7 +668,7 @@ mk_tpdd_file_name () {
 
 	$FLOPPY_COMPAT && {
 		t=${1%.*} x=${1##*.}
-		((${#t})) && ((${#t}<7)) && ((${#x}<3)) && printf -v f '%-6s.%-2s' "$t" "$x"
+		[[ "$1" =~ \. ]] && ((${#t})) && ((${#t}<7)) && ((${#x}<3)) && printf -v f '%-6s.%-2s' "$t" "$x"
 	}
 
 	# This always, FLOPPY_COMPAT or not.
@@ -681,7 +684,7 @@ un_tpdd_file_name () {
 
 	$FLOPPY_COMPAT && {
 		f=${file_name// /} ;x=${f##*.} ;f=${f%.*}
-		((${#f})) && ((${#f}<7)) && ((${#x}<3)) && printf -v file_name '%s.%s' "$f" "$x"
+		[[ "$f" =~ \. ]] && ((${#f})) && ((${#f}<7)) && ((${#x}<3)) && printf -v file_name '%s.%s' "$f" "$x"
 	}
 	:
 }
@@ -796,6 +799,7 @@ ocmd_close () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	ocmd_send_req ${opr_fmt[req_close]} || return $?
+	tpdd_wait ${CLOSE_WAIT_MS}
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
@@ -1076,12 +1080,12 @@ lcmd_save () {
 	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
 	ocmd_open ${open_mode[write_new]} || return $?			# open the set file for writing
 	while ((${#h[*]})) ;do
-		vecho 1 "$z: packet:$((++p)) start #h=${#h[*]}"
+		vecho 1 "$z: packet:$((++p)) start #h[]=${#h[*]}"
 
 		w=() n=${#h[*]}
 		((n>128)) && n=128
 		for ((i=0;i<n;i++)) { w+=(${h[i]}) h[i]= ; } ;h=(${h[*]})
-		vecho 1 "$z: packet:$p end #h=${#h[*]}"
+		vecho 1 "$z: packet:$p end #h[]=${#h[*]}"
 
 		ocmd_write ${w[*]} || return $?		# write w[] to the set file
 
