@@ -12,7 +12,9 @@ There are 2 different format-disk commands, an operation-mode version and an FDC
 The operation-mode format is somehow special and different from FDC-mode format.
 ```format``` (usually*) creates 64-byte logical sectors, but if you use the FDC-mode format command ```ff 0``` to format with 64-byte logical sectors, and then try save a file, ```ls``` will show the file's contents were written into the directory sector.
 
-9*) I have also seen it create a strange format where physical sector 0 has 64-byte logical sectors, and the remaining physical sectors 1-79 all have 80-byte logical sectors. I can't reproduce this at-will, it's just happened at least once.
+(*) I have also seen it create a strange format where physical sector 0 has 64-byte logical sectors, and the remaining physical sectors 1-79 all have 80-byte logical sectors. I can't reproduce this at-will, it's just happened at least once.
+
+... Maybe that strange format was from aboring a format mid-way?
 
 ### FDC-mode
 The FDC-mode format command, ```ff``` or ```fdc_format```, creates a uniform format with the specified logical sector size applied the same on all physical sectors.
@@ -40,7 +42,7 @@ The Disk Power KC-85 distribution disk appears to be a normal disk formatted wit
 The format of a given sector can be seen from the read_sector or read_id commands.  
 This is a disk with that strange format described above.  
 ```
-$ ./pdd "rs ;rs 0 13 ;rs 1 1 ;rs 1 13 ;rs 79 1"
+$ ./pdd "rl ;rl 0 13 ;rl 1 1 ;rl 1 13 ;rl 79 1"
 Physical  0 | Logical  1 | Length   64
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 Physical  0 | Logical 13 | Length   64
@@ -51,7 +53,7 @@ Physical  1 | Logical 13 | Length   80
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 Physical 79 | Logical  1 | Length   80
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-bkw@negre:~/src/pdd.sh$
+$
 ```
 
 Same disk...  
