@@ -96,3 +96,88 @@ The drive reports a logical sector size correctly as part of this same command's
 
 So whatever this byte is, it's not the logical sector size code.  
 
+You can use bash's shell expansion to get all 80 sectors at once like this:  
+```
+$ ./pdd ri 0 \;ri\ {1..79}
+Physical Sector  0 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  1 | Length 64 | ID_Data ff 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  2 | Length 64 | ID_Data ff 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  3 | Length 64 | ID_Data ff 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  4 | Length 64 | ID_Data 05 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  5 | Length 64 | ID_Data ff 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  6 | Length 64 | ID_Data 07 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  7 | Length 64 | ID_Data 08 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  8 | Length 64 | ID_Data 09 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector  9 | Length 64 | ID_Data 0a 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 10 | Length 64 | ID_Data ff 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 11 | Length 64 | ID_Data 0c 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 12 | Length 64 | ID_Data 0d 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 13 | Length 64 | ID_Data 0e 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 14 | Length 64 | ID_Data 0f 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 15 | Length 64 | ID_Data 10 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 16 | Length 64 | ID_Data 11 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 17 | Length 64 | ID_Data 12 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 18 | Length 64 | ID_Data 13 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 19 | Length 64 | ID_Data 14 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 20 | Length 64 | ID_Data 15 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 21 | Length 64 | ID_Data 16 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 22 | Length 64 | ID_Data 17 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 23 | Length 64 | ID_Data 18 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 24 | Length 64 | ID_Data 19 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 25 | Length 64 | ID_Data 1a 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 26 | Length 64 | ID_Data 1b 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 27 | Length 64 | ID_Data 1c 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 28 | Length 64 | ID_Data 1d 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 29 | Length 64 | ID_Data 1e 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 30 | Length 64 | ID_Data 1f 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 31 | Length 64 | ID_Data 20 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 32 | Length 64 | ID_Data 21 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 33 | Length 64 | ID_Data 22 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 34 | Length 64 | ID_Data 23 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 35 | Length 64 | ID_Data 24 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 36 | Length 64 | ID_Data 25 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 37 | Length 64 | ID_Data 26 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 38 | Length 64 | ID_Data 27 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 39 | Length 64 | ID_Data 28 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 40 | Length 64 | ID_Data 29 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 41 | Length 64 | ID_Data 2a 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 42 | Length 64 | ID_Data 2b 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 43 | Length 64 | ID_Data 2c 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 44 | Length 64 | ID_Data 2d 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 45 | Length 64 | ID_Data 2e 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 46 | Length 64 | ID_Data 2f 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 47 | Length 64 | ID_Data 30 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 48 | Length 64 | ID_Data 31 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 49 | Length 64 | ID_Data 32 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 50 | Length 64 | ID_Data 33 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 51 | Length 64 | ID_Data 34 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 52 | Length 64 | ID_Data 35 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 53 | Length 64 | ID_Data 36 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 54 | Length 64 | ID_Data 37 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 55 | Length 64 | ID_Data 38 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 56 | Length 64 | ID_Data 39 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 57 | Length 64 | ID_Data 3a 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 58 | Length 64 | ID_Data 3b 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 59 | Length 64 | ID_Data 3c 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 60 | Length 64 | ID_Data 3d 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 61 | Length 64 | ID_Data 3e 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 62 | Length 64 | ID_Data ff 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 63 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 64 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 65 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 66 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 67 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 68 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 69 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 70 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 71 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 72 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 73 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 74 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 75 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 76 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 77 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 78 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+Physical Sector 79 | Length 64 | ID_Data 00 00 00 00 00 00 00 00 00 00 00 00 00
+$
+```
