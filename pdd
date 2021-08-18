@@ -684,7 +684,7 @@ un_tpdd_file_name () {
 
 	$FLOPPY_COMPAT && {
 		f=${file_name// /} ;x=${f##*.} ;f=${f%.*}
-		[[ "$f" =~ \. ]] && ((${#f})) && ((${#f}<7)) && ((${#x}<3)) && printf -v file_name '%s.%s' "$f" "$x"
+		[[ "$1" =~ \. ]] && ((${#f})) && ((${#f}<7)) && ((${#x}<3)) && printf -v file_name '%s.%s' "$f" "$x"
 	}
 	:
 }
