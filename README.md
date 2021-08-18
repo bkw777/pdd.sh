@@ -40,7 +40,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | M&#160;\|&#160;mode | 0\|1 | Select operation(0) or fdc(1) mode |
 | D&#160;\|&#160;condition | | Report the drive/disk status |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk, sector size 64 80 128 256 512 1024 1280. (default 1280 if not specified) |
-| R&#160;\|&#160;rs&#160;\|&#160;read_sector | \[0-79\]&#160;\[1-20\]&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen.<br>default physical 0 logical 1 |
+| R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen.<br>default physical 0 logical 1 |
 | A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | Read Sector ID Data [(may not be correct yet)](confusing_observations.md#sector-id-section)<br>default physical sector 0 |
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | | not yet implemented |
@@ -74,10 +74,13 @@ Example, to list the directory, where the command is: ```ls```, can be used eith
 ```$ ./pdd ls``` or ```TPDD(opr)> ls```
 
 **Copy a file from the disk**  
-```load DOSNEC.CO```  
+```$ ./pdd load DOSNEC.CO```
 
 **Copy a file from the disk and save to a different local name**  
-```load DOSNEC.CO ts-dos_4.1_nec.co```
+```$ ./pdd load DOSNEC.CO ts-dos_4.1_nec.co```
+
+**Copy a file to the disk**  
+```$ ./pdd save ts-dos_4.1_nec.co DOSNEC.CO```
 
 **Stacked Commands: Delete File, then Directory List**  
 In interactive mode:  
@@ -104,30 +107,36 @@ $
 ```
 
 **Verbose/debug mode**  
-```$ DEBUG=1 ./pdd ...``` or ```TPDD(opr)> debug 1```  
+```$ DEBUG=1 ./pdd ...``` or ```TPDD(opr)> debug 1```
 
 Log raw serial port traffic:  
 Make every call to tpdd_read() or tpdd_write() also create a local file with a copy of whatever was actually read from or written to the serial port.  
 ```$ DEBUG=3 ./pdd ...``` or ```TPDD(opr)> debug 3```
 
 **Find out a disk's logical sector size**  
-Most disks are formatted with 20 64-byte logical sectors per physical sector, since that's what the operation-mode format function in the firmware does, but there are exceptions. The TPDD1 Utility Disk seems like a normal disk, but it's actually formatted with 1 1280-byte logical sector per physical sector. You need to know this to use FDC-Mode commands.  
-The logical sector size that a disk is formatted with can be seen by running the read_sector or read_id commands on any sector.  
-The simplest is just run either command with no arguents, which will use physical sector 0 & logical sector 1 by default.  
-```$ ./pdd ri``` or ```$ ./pdd rs```
+Most disks are formatted with 20 64-byte logical sectors per physical sector, since that's what the operation-mode format function in the firmware does, but there are exceptions. The TPDD1 Utility Disk seems like a normal disk, but it's actually formatted with 1 1280-byte logical sector per physical sector. You need to know this to use some FDC-Mode commands.  
+The logical sector size that a disk is formatted with can be seen by running the read_physical, read_logical, or read_id commands on any sector.  
+The quickest is to run either ```ri``` or ```rl``` with no arguments:  
+```$ ./pdd ri``` or ```$ ./pdd rl```
 
 **Read the Sector ID Data for all 80 physical sectors**  
-(using fancy bash shell expansion to get something the program doesn't provide itself)  
+(using bash shell expansion to brute-force something the program doesn't provide itself)  
 ```$ ./pdd ri\ {0..79}\;```
 
-**Read all logical sectors in all physical sectors**  
+**Hex dump a physical sector to file**
+```$ ./pdd rp 3 h:mydisk_p3.hex```
+
+**Binary dump a physical sector to file**
+```$ ./pdd rp 0 b:mydisk_p0.bin```
+
+**Dump entire disk**  
 ```$ ./pdd dd```
 
-**Hex dump entire disk to file.hex**  
-```$ ./pdd dd h:file.hex```
+**Hex dump entire disk to file mydisk.hex**  
+```$ ./pdd dd h:mydisk.hex```
 
-**Binary dump entire disk to file.bin**  
-```$ ./pdd dd b:file.bin```
+**Binary dump entire disk to file mydisk.bin**  
+```$ ./pdd dd b:mydisk.bin```
 
 # Status
 All the "operation mode" commands work.  

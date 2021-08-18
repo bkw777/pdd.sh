@@ -1131,24 +1131,35 @@ lcmd_cp () {
 
 # read all logical sectors in a physical sector
 lcmd_read_physical () {
-	local -i p=$1 l n
+	local -i p=$1 l t m= ;local u=
+	((${#2})) && ((${#3}==0)) && {
+		m=1 u='logical sectors'
+		echo "Dumping physical sector $p to ${2#*:}"
+		progressbar 0 1 "$u"
+		>${2#*:}
+	}
 	fcmd_read_sector $p 1 "$2"
-	n=$((1280/fdc_len))
-	for ((l=2;l<=n;l++)) { fcmd_read_sector $p $l "$2" ; }
+	t=$((1280/fdc_len))
+	((m)) && progressbar 1 $t "$u"
+	for ((l=2;l<=t;l++)) {
+		((m)) && progressbar $l $t "$u"
+		fcmd_read_sector $p $l "$2"
+	}
+	((m)) && echo
 }
 
 # read all physical sectors on the disk
 lcmd_dd () {
-	local -i p m
+	local -i p m t=80 ;local u=
 	[[ "$1" =~ ^[bh]:* ]] && {
-		m=1
-		>${1#*:}
+		m=1 u='physical sectors'
 		echo "Dumping disk to ${1#*:}"
-		progressbar 0 80 sectors
+		progressbar 0 $t "$u"
+		>${1#*:}
 	}
-	for ((p=0;p<80;p++)) {
-		lcmd_read_physical $p "$1"
-		((m)) && progressbar $((p+1)) 80 sectors
+	for ((p=0;p<t;p++)) {
+		lcmd_read_physical $p "$1" 1
+		((m)) && progressbar $((p+1)) $t "$u"
 	}
 	((m)) && echo
 }
