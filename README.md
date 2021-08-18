@@ -45,6 +45,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | W&#160;\|&#160;ws&#160;\|&#160;write_sector | | not yet implemented |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[h\|b:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
 | dd&#160;\|&#160;dump_disk | \[h\|b:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
+| wd&#160;\|&#160;write_disk | filename | Write raw logical sectors to disk from a dump_disk hex dump file<br>*not fully working* |
 
 **general/other commands**  
 | command | arguments | Description |

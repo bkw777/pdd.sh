@@ -56,18 +56,31 @@ esac
 # To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
 STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
 
-# This is silly but fun. Define your own animation frames for the spinner.
-# As many frames as you want, frames can be as many bytes wide as you you want.
-# All frames in a given set should be the same length. Use the "anim" or "play"
-# command to test the animation without having to save and delete a file.
-# Example: "anim 100" just plays the animation for 100 frames.
-#SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/') # spinner
+# This is silly but fun. Define your own animation for the busy-indicator.
+# Any number of frames, any number of characters per frame, just keep all frames
+# in any given set the same size. Use the "anim" command to test.
+# Example: "$ ./pdd anim 100" just plays the animation for 100 frames.
+#SPINNER_ANIMATION_FRAMES=('*' ' ') # minimalist example
+#SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/') # traditional spinner
+#SPINNER_ANIMATION_FRAMES=('    ' '.   ' '.   ' '..  ' '..  ' '... ' '... ' '....' '....') # working...
 #SPINNER_ANIMATION_FRAMES=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
-#SPINNER_ANIMATION_FRAMES=("... ..!" ".!...!!" ".'...!'" ". !..' " "!.!.! ." "'.!!'!." " .'!.'." ".. '. !" ) # fire, kinda
-#SPINNER_ANIMATION_FRAMES=('[ ]' '[.]' '[o]' '[O]' "[']") # bloop
-#SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast blink
-#SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow blink
-SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
+SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!!.!!" "..'!!''" "!..!'!.") # fire, kinda
+#SPINNER_ANIMATION_FRAMES=("|'|" '|:|' '|.|' '| |') # road
+#SPINNER_ANIMATION_FRAMES=("|'| |" '|:| |' '|.| |' '| |.|' "|'|:|" "|:|'|" '|.| |' '| | |') # 2 way traffic
+#SPINNER_ANIMATION_FRAMES=('(  ' ' _ ' '  )' ' " ') # roll ccw
+#SPINNER_ANIMATION_FRAMES=('(  ' ' " ' '  )' ' _ ') # roll cw
+#SPINNER_ANIMATION_FRAMES=('(    ' ' "   ' '  "  ' '   " ' '    )' '   _ ' '  _  ' ' _   ') # oval cw
+#SPINNER_ANIMATION_FRAMES=(' ' '.' 'o' 'O' "'") # bloop
+#SPINNER_ANIMATION_FRAMES=(' . ' ' o ' ' O ' '(_)' '\_/' ')_(' '\_/' '(_)' ' O ' ' o ')
+#SPINNER_ANIMATION_FRAMES=('/T\' '/Y\' '/V\' '/U\' '/V\' '/Y\') # weird mouth thing
+#SPINNER_ANIMATION_FRAMES=('"     ' ' o    ' '  _   ' '   o  ' '    O ' '     "' '    o ' '   _  ' '  o   ' ' O    ') # bounce
+#SPINNER_ANIMATION_FRAMES=("'__./" "_'._/" "_.'_/" ".__'/") # treadmill
+#SPINNER_ANIMATION_FRAMES=("'  ." " '. " " .' " ".  '") # juggle
+#SPINNER_ANIMATION_FRAMES=('----' '----' '----' '---^' '--^-' '-^--' '^---') # pulse
+#SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast disk activity light
+#SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow disk activity light
+#SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
+#SPINNER_ANIMATION_FRAMES=('         ' '|        ' ' |       ' ' W|      ' ' WA|     ' ' WAX|    ' ' WAX |   ' ' WAX O|  ' ' WAX ON| ' ' WAX ON |' ' WAX ON  ' ' WAX ON  ' ' WAX ON  ' ' WAX ON |' ' WAX ON| ' ' WAX O|  ' ' WAX |   ' ' WAX|    ' ' WA|     ' ' W|      ' ' |       ' '|        ' '         ' '        |' '       | ' '      |F ' '     |FF ' '    |OFF ' '   | OFF ' '  |X OFF ' ' |AX OFF ' '|WAX OFF ' ' WAX OFF ' ' WAX OFF ' ' WAX OFF ' '|WAX OFF ' ' |AX OFF ' '  |X OFF ' '   | OFF ' '    |OFF ' '     |FF ' '      |F ' '       | ' '        |' '         ' '         ' '         ')
 #SPINNER_ANIMATION_FRAMES=(
 #	'stock ticker... '
 #	'tock ticker... s'
@@ -86,6 +99,7 @@ SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' 
 #	'. stock ticker..'
 #	' stock ticker...'
 #)
+
 
 ###############################################################################
 # tunables
@@ -116,6 +130,9 @@ DELETE_WAIT_MS=30000
 
 # How long to wait for close to complete
 CLOSE_WAIT_MS=20000
+
+# The initial dirent(get_first) for a directory listing
+LIST_WAIT_MS=10000
 
 #
 # CONFIG
@@ -181,7 +198,7 @@ typeset -rA opr_msg=(
 	[50]='Write-Protected Disk'
 	[60]='Disk Full or Max File Size Exceeded' # 'Disk Full'
 	[70]='Disk Insertion Error 0'
-	[71]='Disk Not Inserted'      # 'Disk Insertion Error 1'
+	[71]='Disk Not Inserted' # 'Disk Insertion Error 1'
 	[72]='Disk Insertion Error 2'
 	[73]='Disk Insertion Error 3'
 	[74]='Disk Insertion Error 4'
@@ -199,7 +216,7 @@ typeset -rA opr_msg=(
 	[80]='Hardware Fault 0'
 	[81]='Hardware Fault 1'
 	[82]='Hardware Fault 2'
-	[83]='Hardware Fault 3'
+	[83]='Defective Disk (power-cycle to clear error)' # 'Hardware Fault 3'
 	[84]='Hardware Fault 4'
 	[85]='Hardware Fault 5'
 	[86]='Hardware Fault 6'
@@ -317,7 +334,7 @@ file_to_fhex () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x ;fhex=()
 
-	[[ -f "$1" ]] || { err_msg+=("\"$1\" not found") ;return 1 ; }
+	[[ -r "$1" ]] || { err_msg+=("\"$1\" not found") ;return 1 ; }
 
 	exec 5<"$1" || return $?
 	while IFS= read -r -d $'\0' -n 1 -u 5 x ;do
@@ -405,6 +422,7 @@ do_cmd () {
 			q|quit|bye|exit) exit ;;
 			rp|read_physical) lcmd_read_physical "$@" ;e=$? ;;
 			dd|dump_disk) lcmd_dd "$@" ;e=$? ;;
+			wd|write_disk) lcmd_hex_file_to_disk "$@" ;e=$? ;;
 
 	# low level manual raw/debug commands
 			com_test) lcmd_com_test ;e=$? ;; # check if port open
@@ -714,6 +732,8 @@ ocmd_dirent () {
 	# send the request
 	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || return $?
 
+	[[ "$m" == "${dirent_cmd[get_first]}" ]] && tpdd_wait ${LIST_WAIT_MS}
+
 	# read the response
 	ocmd_read_ret || return $?
 
@@ -993,6 +1013,22 @@ fcmd_read_logical () {
 	esac
 }
 
+# write a logical sector
+# fcmd_write_logical physical logical length sector_data(hex pairs)
+fcmd_write_logical () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	((operation_mode)) && ocmd_fdc
+	local x ;local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 3 # discarding $3-length for now
+	str_to_hex "${fdc_cmd[write_sector]}$ps,$ls"
+	tpdd_write ${hex[*]} 0d || return $?
+	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	tpdd_write $* || return $?
+	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	:
+}
+
 # This may not be right yet. The data doesn't make sense with the manual.
 # read sector id section
 # fcmd_read_id physical_sector [filename]
@@ -1021,13 +1057,13 @@ fcmd_read_id () {
 # list disk directory
 lcmd_ls () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i dirent_mode=${dirent_cmd[get_first]} i= ;local f x ;ret_dat=()
+	local -i m=${dirent_cmd[get_first]}
 
 	echo "------ Directory Listing ------"
-	while ocmd_dirent '' '' $dirent_mode ;do
+	while ocmd_dirent '' '' $m ;do
 		un_tpdd_file_name "$file_name"
 		printf '%-24.24b %6u\n' "$file_name" "$file_len"
-		((dirent_mode==${dirent_cmd[get_first]})) && dirent_mode=${dirent_cmd[get_next]}
+		((m==${dirent_cmd[get_first]})) && m=${dirent_cmd[get_next]}
 	done
 	echo "-------------------------------"
 	echo "$((free_sectors*PHYSICAL_SECTOR_LENGTH)) bytes free"
@@ -1174,6 +1210,29 @@ lcmd_dd () {
 	((m)) && echo
 }
 
+# read a hex dump file and write the contents back to a disk
+# lcmd_hex_file_to_disk filename
+lcmd_hex_file_to_disk () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local d s ;local -i i t
+
+	echo "Restoring disk from $1"
+
+	exec 5<"$1" || return $?
+	mapfile -u 5 d || return $?
+	exec 5<&-
+
+	# TODO here, look at a sector length and format the disk accordingly
+
+	t=${#d[*]}
+	for ((i=0;i<t;i++)) {
+		fcmd_write_logical ${d[i]} || return $?
+		s=(${d[i]})
+		progressbar $i $t "P:${s[0]} L:${s[1]}"
+	}
+	echo
+}
+
 ###############################################################################
 # manual/raw debug commands
 
@@ -1228,7 +1287,7 @@ typeset -ar anim=("${SPINNER_ANIMATION_FRAMES[@]}") ;typeset -i y=
 
 # for _sleep()
 readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
-[[ -p $sleep_fifo ]] || mkfifo $sleep_fifo || abrt "Error creating sleep fifo \"$sleep_fifo\""
+[[ -p $sleep_fifo ]] || mkfifo "$sleep_fifo" || abrt "Error creating sleep fifo \"$sleep_fifo\""
 exec 4<>$sleep_fifo
 
 # tpdd serial port
