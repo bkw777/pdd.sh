@@ -250,17 +250,17 @@ typeset -rA fdc_cmd=(
 # There is no documentation for the FDC error codes
 # These are guesses from experimenting
 typeset -ra fdc_msg=(
-	[0]="OK"
-	[17]="Logical Sector Number Below Range"
-	[18]="Logical Sector Number Above Range"
-	[19]="Physical Sector Number Above Range"
-	[33]="Parameter Invalid, Wrong Type"
-	[50]="Invalid Logical Sector Size Code"
-	[51]="Logical Sector Size Code Above Range"
-	[161]="Read Error"
-	[176]="Write-Protected Disk"
-	[193]="Invalid Command"
-	[209]="Disk Not Inserted"
+	[0]='OK'
+	[17]='Logical Sector Number Below Range'
+	[18]='Logical Sector Number Above Range'
+	[19]='Physical Sector Number Above Range'
+	[33]='Parameter Invalid, Wrong Type'
+	[50]='Invalid Logical Sector Size Code'
+	[51]='Logical Sector Size Code Above Range'
+	[161]='Read Error'
+	[176]='Write-Protected Disk'
+	[193]='Invalid Command'
+	[209]='Disk Not Inserted'
 )
 
 # FDC Format Disk Logical Sector Size Codes
@@ -278,8 +278,7 @@ typeset -ra fdc_format_sector_size=(
 ###############################################################################
 # general constants
 
-# Physical Sector Length
-typeset -ri PSL=1280
+typeset -ri PHYSICAL_SECTOR_LENGTH=1280 PHYSICAL_SECTOR_COUNT=80
 
 #
 # CONSTANTS
@@ -448,6 +447,7 @@ lcmd_tpdd1_boot () {
 # serial port operations
 
 get_tpdd_port () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x=(/dev/${TPDD_TTY_PREFIX#/dev/}*)
 	[[ "${x[0]}" == "/dev/${TPDD_TTY_PREFIX}*" ]] && x=(/dev/tty*)
 	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
@@ -460,6 +460,7 @@ test_com () {
 }
 
 open_com () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	test_com && return
 	exec 3<>"${PORT}"
 	stty ${stty_f} "${PORT}" ${STTY_FLAGS}
@@ -671,7 +672,6 @@ mk_tpdd_file_name () {
 		[[ "$1" =~ \. ]] && ((${#t})) && ((${#t}<7)) && ((${#x}<3)) && printf -v f '%-6s.%-2s' "$t" "$x"
 	}
 
-	# This always, FLOPPY_COMPAT or not.
 	printf -v tpdd_file_name '%-24.24s' "$f"
 }
 
@@ -987,9 +987,9 @@ fcmd_read_logical () {
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
 	case "$3" in
-		'') printf 'Physical %2u | Logical %2u | Length %4u\n%s\n' "$fdc_res" "$ls" "$fdc_len" "${rhex[*]}" ;;
 		h:*) printf '%02u %02u %04u %s\n' "$fdc_res" "$ls" "$fdc_len" "${rhex[*]}" >>${3#*:} ;;
 		b:*) x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >>${3#*:} ;;
+		*) printf 'Physical %2u | Logical %2u | Length %4u\n%s\n' "$fdc_res" "$ls" "$fdc_len" "${rhex[*]}" ;;
 	esac
 }
 
@@ -1030,7 +1030,7 @@ lcmd_ls () {
 		((dirent_mode==${dirent_cmd[get_first]})) && dirent_mode=${dirent_cmd[get_next]}
 	done
 	echo "-------------------------------"
-	echo "$((free_sectors*1280)) bytes free"
+	echo "$((free_sectors*PHYSICAL_SECTOR_LENGTH)) bytes free"
 }
 
 # load a file (copy a file from tpdd to local file or memory)
@@ -1138,15 +1138,17 @@ lcmd_cp () {
 
 # read all logical sectors in a physical sector
 lcmd_read_physical () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	[[ "$1" =~ ^[bh]:* ]] && set 0 $1
 	local -i p=$1 l t m= ;local u=
-	((${#2})) && ((${#3}==0)) && {
+	((${#3}==0)) && [[ "$2" =~ ^[bh]:* ]] && {
 		m=1 u='logical sectors'
 		echo "Dumping physical sector $p to ${2#*:}"
 		progressbar 0 1 "$u"
 		>${2#*:}
 	}
 	fcmd_read_logical $p 1 "$2"
-	t=$((1280/fdc_len))
+	t=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
 	((m)) && progressbar 1 $t "$u"
 	for ((l=2;l<=t;l++)) {
 		((m)) && progressbar $l $t "$u"
@@ -1157,7 +1159,8 @@ lcmd_read_physical () {
 
 # read all physical sectors on the disk
 lcmd_dd () {
-	local -i p m t=80 ;local u=
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local -i p m t=$PHYSICAL_SECTOR_COUNT ;local u=
 	[[ "$1" =~ ^[bh]:* ]] && {
 		m=1 u='physical sectors'
 		echo "Dumping disk to ${1#*:}"
