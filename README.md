@@ -100,12 +100,19 @@ $ ./pdd D
 Disk Inserted, Writable
 $ 
 ```
-Verbose/debug mode:  
+
+**Verbose/debug mode**  
 ```$ DEBUG=1 ./pdd ...``` or ```TPDD(opr)> debug 1```  
 
 Log raw serial port traffic:  
 Make every call to tpdd_read() or tpdd_write() also create a local file with a copy of whatever was actually read from or written to the serial port.  
 ```$ DEBUG=3 ./pdd ...``` or ```TPDD(opr)> debug 3```
+
+**Find out a disk's logical sector size**  
+Most disks are formatted with 20 64-byte logical sectors per physical sector, since that's what the operation-mode format function in the firmware does, but there are exceptions. The TPDD1 Utility Disk seems like a normal disk, but it's actually formatted with 1 1280-byte logical sector per physical sector. You need to know this to use FDC-Mode commands.  
+The logical sector size that a disk is formatted with can be seen by running the read_sector or read_id commands on any sector.  
+The simplest is just run either command with no arguents, which will use physical sector 0 & logical sector 1 by default.  
+```$ ./pdd ri``` or ```$ ./pdd rs```
 
 **Shell globbing expansion tricks to do FDC-mode commands on ranges of sectors at once**  
 ...to work-around that the program doesn't provide these conveniences itself yet
