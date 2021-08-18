@@ -107,6 +107,22 @@ Log raw serial port traffic:
 Make every call to tpdd_read() or tpdd_write() also create a local file with a copy of whatever was actually read from or written to the serial port.  
 ```$ DEBUG=3 ./pdd ...``` or ```TPDD(opr)> debug 3```
 
+**Shell globbing expansion tricks to do FDC-mode commands on ranges of sectors at once**  
+...to work-around that the program doesn't provide these conveniences itself yet
+
+To read the Sector ID Data for all 80 physical sectors:  
+```$ ./pdd ri\ {0..79}\;```
+
+To read all 20 logical sectors in 1 physical sector on a 64-byte logical sector disk (most disks):  
+(physical sector 4 in this example)  
+```$ ./pdd rs\ 4\ {1..20}\;```
+
+To read the entire disk from a 64-byte logical sector disk (most disks):  
+```$ ./pdd rs\ {0..79}\ {1..20}\;```
+
+To read the entire disk from a 1280-byte logical sector disk (TPDD1 Utility Disk):  
+```$ ./pdd rs\ {0..79}\;```
+
 # Status
 All the "operation mode" commands work.  
 Half way through the "FDC mode" commands  
