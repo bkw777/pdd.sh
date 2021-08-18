@@ -40,11 +40,13 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | M&#160;\|&#160;mode | 0\|1 | Select operation(0) or fdc(1) mode |
 | D&#160;\|&#160;condition | | Report the drive/disk status |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk, sector size 64 80 128 256 512 1024 1280. (default 1280 if not specified) |
-| R&#160;\|&#160;rs&#160;\|&#160;read_sector | \<0-79\>&#160;\<1-20\>&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen. |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \<0-79\>&#160;\[local_filename\] | Read Sector ID Section [(may not be correct yet)](confusing_observations.md#sector-id-section) |
+| R&#160;\|&#160;rs&#160;\|&#160;read_sector | \[0-79\]&#160;\[1-20\]&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen.<br>default physical 0 logical 1 |
+| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | Read Sector ID Data [(may not be correct yet)](confusing_observations.md#sector-id-section)<br>default physical sector 0 |
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | | not yet implemented |
 | W&#160;\|&#160;ws&#160;\|&#160;write_sector | | not yet implemented |
+| rp&#160;\|&#160;read_physical | \[0-79\] \[h\|b:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
+| dd&#160;\|&#160;dump_disk | \[h\|b:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
 
 **general/other commands**  
 | command | arguments | Description |
@@ -114,21 +116,18 @@ The logical sector size that a disk is formatted with can be seen by running the
 The simplest is just run either command with no arguents, which will use physical sector 0 & logical sector 1 by default.  
 ```$ ./pdd ri``` or ```$ ./pdd rs```
 
-**Shell globbing expansion tricks to do FDC-mode commands on ranges of sectors at once**  
-...to work-around that the program doesn't provide these conveniences itself yet
-
-To read the Sector ID Data for all 80 physical sectors:  
+**Read the Sector ID Data for all 80 physical sectors**  
+(using fancy bash shell expansion to get something the program doesn't provide itself)  
 ```$ ./pdd ri\ {0..79}\;```
 
-To read all 20 logical sectors in 1 physical sector on a 64-byte logical sector disk (most disks):  
-(physical sector 4 in this example)  
-```$ ./pdd rs\ 4\ {1..20}\;```
+**Read all logical sectors in all physical sectors**  
+```$ ./pdd dd```
 
-To read the entire disk from a 64-byte logical sector disk (most disks):  
-```$ ./pdd rs\ {0..79}\ {1..20}\;```
+**Hex dump entire disk to file.hex**  
+```$ ./pdd dd h:file.hex```
 
-To read the entire disk from a 1280-byte logical sector disk (TPDD1 Utility Disk):  
-```$ ./pdd rs\ {0..79}\;```
+**Binary dump entire disk to file.bin**  
+```$ ./pdd dd b:file.bin```
 
 # Status
 All the "operation mode" commands work.  

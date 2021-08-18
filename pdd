@@ -341,7 +341,7 @@ progressbar () {
 	local -i c=$((p*100/w))
 	p_len=$((p*w_len/w))
 	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='=' ; }
-	printf '\r%79s\r[%s] %d%%%s' '' "$b" "$c" "${u:+ ($p/$w $u)}"
+	printf '\r%79s\r[%s] %d%%%s' '' "$b" "$c" "${u:+ ($p/$w $u)} "
 }
 
 # busy indicator
@@ -402,6 +402,8 @@ do_cmd () {
 			mv|ren) lcmd_mv "$@" ;e=$? ;;
 			cp|copy) lcmd_cp "$@" ;e=$? ;;
 			q|quit|bye|exit) exit ;;
+			rp|read_physical) lcmd_read_physical "$@" ;e=$? ;;
+			dd|dump_disk) lcmd_dd "$@" ;e=$? ;;
 
 	# low level manual raw/debug commands
 			com_test) lcmd_com_test ;e=$? ;; # check if port open
@@ -981,12 +983,11 @@ fcmd_read_sector () {
 	tpdd_write 0d || return $?
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
-	((${#3})) && {
-		x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$3
-	} || {
-		printf 'Physical %2u | Logical %2u | Length %4u\n' "$fdc_res" "$ls" "$fdc_len"
-		echo "${rhex[*]}"
-	}
+	case "$3" in
+		'') printf 'Physical %2u | Logical %2u | Length %4u\n%s\n' "$fdc_res" "$ls" "$fdc_len" "${rhex[*]}" ;;
+		h:*) printf '%02u %02u %04u %s\n' "$fdc_res" "$ls" "$fdc_len" "${rhex[*]}" >>${3#*:} ;;
+		b:*) x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >>${3#*:} ;;
+	esac
 }
 
 # This may not be right yet. The data doesn't make sense with the manual.
@@ -1119,13 +1120,37 @@ lcmd_rm () {
 lcmd_mv () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#==2)) || return 1
-	lcmd_load $1 '' && lcmd_rm $1 && lcmd_save '' $2
+	lcmd_load "$1" '' && lcmd_rm "$1" && lcmd_save '' "$2"
 }
 
 lcmd_cp () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#==2)) || return 1
-	lcmd_load $1 '' && lcmd_save '' $2
+	lcmd_load "$1" '' && lcmd_save '' "$2"
+}
+
+# read all logical sectors in a physical sector
+lcmd_read_physical () {
+	local -i p=$1 l n
+	fcmd_read_sector $p 1 "$2"
+	n=$((1280/fdc_len))
+	for ((l=2;l<=n;l++)) { fcmd_read_sector $p $l "$2" ; }
+}
+
+# read all physical sectors on the disk
+lcmd_dd () {
+	local -i p m
+	[[ "$1" =~ ^[bh]:* ]] && {
+		m=1
+		>${1#*:}
+		echo "Dumping disk to ${1#*:}"
+		progressbar 0 80 sectors
+	}
+	for ((p=0;p<80;p++)) {
+		lcmd_read_physical $p "$1"
+		((m)) && progressbar $((p+1)) 80 sectors
+	}
+	((m)) && echo
 }
 
 ###############################################################################
