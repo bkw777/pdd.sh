@@ -9,7 +9,7 @@ It's pure bash except for the following:
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
 ## Usage
-```pdd [tty_device] [command [args...]]```
+```pdd [tty_device] [command [args...]] [;commands...]```
 
 With no arguments, it will run in interactive command mode.  
 You get a ```TPDD($mode)>``` prompt where you can enter commands.  
