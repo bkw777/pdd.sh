@@ -45,7 +45,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | physical&#160;logical&#160;size&#160;hex-pairs... | Write one logical sector to disk |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[h\|b:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
 | dd&#160;\|&#160;dump_disk | \[h\|b:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
-| h2d&#160;\|&#160;restore_disk | filename | Write raw logical sectors to disk from a dump_disk hex dump file<br>*not fully working* |
+| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file<br>*not fully working* |
 
 **general/other commands**  
 | command | arguments | Description |
