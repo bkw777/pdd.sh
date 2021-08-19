@@ -139,6 +139,7 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 # Status
 All the "operation mode" commands work.  
 Half way through the "FDC mode" commands  
+The dump & restore all sectors commands are working, but not the Sector ID data section yet, so a restored disk is not *fully* identical to the original.
 
 # References
 http://tandy.wiki/TPDD  
