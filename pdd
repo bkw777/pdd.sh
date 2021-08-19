@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pdd.sh - TPDD1 client in (almost) pure bash
+# pdd.sh - TPDD1 client in pure bash
 # Brian K. White b.kenyon.w@gmail.com
 # https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
 
@@ -14,8 +14,12 @@
 # * Give lcmd_save() an option to append just for completeness
 # * Re-implement lcmd_mv based on fdc commands to edit the directory
 # * Write whole disk in FDC mode
-# * Confirmation prompts before overwriting files (local and disk)
+# * Confirmation prompts
+#   overwrite disk or local file
+#   format disk
+#   restore disk from dump file
 # * Investigate: can't save zero-byte files?
+# * Add ID Section data to dump & restore
 
 ###############################################################################
 # CONFIG
@@ -57,12 +61,13 @@ esac
 STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
 
 # This is silly but fun. Define your own animation for the busy-indicator.
-# Any number of frames, any number of characters per frame, just keep all frames
-# in any given set the same size. Use the "anim" command to test.
-# Example: "$ ./pdd anim 100" just plays the animation for 100 frames.
+# Use "anim" to test. "$ ./pdd anim 100" plays the animation for 100 frames.
 #SPINNER_ANIMATION_FRAMES=('*' ' ') # minimalist example
 #SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/') # traditional spinner
 #SPINNER_ANIMATION_FRAMES=('    ' '.   ' '.   ' '..  ' '..  ' '... ' '... ' '....' '....') # working...
+#SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast disk activity light
+#SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow disk activity light
+#SPINNER_ANIMATION_FRAMES=('----' '----' '----' '---^' '--^-' '-^--' '^---') # pulse
 #SPINNER_ANIMATION_FRAMES=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
 SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!!.!!" "..'!!''" "!..!'!.") # fire, kinda
 #SPINNER_ANIMATION_FRAMES=("|'|" '|:|' '|.|' '| |') # road
@@ -71,35 +76,11 @@ SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!
 #SPINNER_ANIMATION_FRAMES=('(  ' ' " ' '  )' ' _ ') # roll cw
 #SPINNER_ANIMATION_FRAMES=('(    ' ' "   ' '  "  ' '   " ' '    )' '   _ ' '  _  ' ' _   ') # oval cw
 #SPINNER_ANIMATION_FRAMES=(' ' '.' 'o' 'O' "'") # bloop
-#SPINNER_ANIMATION_FRAMES=(' . ' ' o ' ' O ' '(_)' '\_/' ')_(' '\_/' '(_)' ' O ' ' o ')
-#SPINNER_ANIMATION_FRAMES=('/T\' '/Y\' '/V\' '/U\' '/V\' '/Y\') # weird mouth thing
 #SPINNER_ANIMATION_FRAMES=('"     ' ' o    ' '  _   ' '   o  ' '    O ' '     "' '    o ' '   _  ' '  o   ' ' O    ') # bounce
 #SPINNER_ANIMATION_FRAMES=("'__./" "_'._/" "_.'_/" ".__'/") # treadmill
 #SPINNER_ANIMATION_FRAMES=("'  ." " '. " " .' " ".  '") # juggle
-#SPINNER_ANIMATION_FRAMES=('----' '----' '----' '---^' '--^-' '-^--' '^---') # pulse
-#SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast disk activity light
-#SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow disk activity light
 #SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
 #SPINNER_ANIMATION_FRAMES=('         ' '|        ' ' |       ' ' W|      ' ' WA|     ' ' WAX|    ' ' WAX |   ' ' WAX O|  ' ' WAX ON| ' ' WAX ON |' ' WAX ON  ' ' WAX ON  ' ' WAX ON  ' ' WAX ON |' ' WAX ON| ' ' WAX O|  ' ' WAX |   ' ' WAX|    ' ' WA|     ' ' W|      ' ' |       ' '|        ' '         ' '        |' '       | ' '      |F ' '     |FF ' '    |OFF ' '   | OFF ' '  |X OFF ' ' |AX OFF ' '|WAX OFF ' ' WAX OFF ' ' WAX OFF ' ' WAX OFF ' '|WAX OFF ' ' |AX OFF ' '  |X OFF ' '   | OFF ' '    |OFF ' '     |FF ' '      |F ' '       | ' '        |' '         ' '         ' '         ')
-#SPINNER_ANIMATION_FRAMES=(
-#	'stock ticker... '
-#	'tock ticker... s'
-#	'ock ticker... st'
-#	'ck ticker... sto'
-#	'k ticker... stoc'
-#	' ticker... stock'
-#	'ticker... stock '
-#	'icker... stock t'
-#	'cker... stock ti'
-#	'ker... stock tic'
-#	'er... stock tick'
-#	'r... stock ticke'
-#	'... stock ticker'
-#	'.. stock ticker.'
-#	'. stock ticker..'
-#	' stock ticker...'
-#)
-
 
 ###############################################################################
 # tunables
@@ -274,6 +255,7 @@ typeset -ra fdc_msg=(
 	[33]='Parameter Invalid, Wrong Type'
 	[50]='Invalid Logical Sector Size Code'
 	[51]='Logical Sector Size Code Above Range'
+	[160]='Disk Not Formatted'
 	[161]='Read Error'
 	[176]='Write-Protected Disk'
 	[193]='Invalid Command'
@@ -409,7 +391,7 @@ do_cmd () {
 			#${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;e=$? ;; # search id
 			#${fdc_cmd[write_id]}|write_id|wi) fcmd_write_id $* ;e=$? ;; # write id
 			#${fdc_cmd[write_id_nv]}|write_id_nv) fcmd_write_id_nv $* ;e=$? ;; # write id no verify
-			#${fdc_cmd[write_sector]}|write_sector|ws) fcmd_write_sector $* ;e=$? ;; # write sector
+			${fdc_cmd[write_sector]}|write_logical|wl) fcmd_write_logical $* ;e=$? ;; # write sector
 			#${fdc_cmd[write_sect_nv]}|write_sector_nv) fcmd_write_sector_nv $* ;e=$? ;; # write sector no verify
 
 	# local/client commands
@@ -421,8 +403,8 @@ do_cmd () {
 			cp|copy) lcmd_cp "$@" ;e=$? ;;
 			q|quit|bye|exit) exit ;;
 			rp|read_physical) lcmd_read_physical "$@" ;e=$? ;;
-			dd|dump_disk) lcmd_dd "$@" ;e=$? ;;
-			wd|write_disk) lcmd_hex_file_to_disk "$@" ;e=$? ;;
+			dd|dump_disk) lcmd_dump_disk "$@" ;e=$? ;;
+			h2d|restore_disk) lcmd_hex_file_to_disk "$@" ;e=$? ;;
 
 	# low level manual raw/debug commands
 			com_test) lcmd_com_test ;e=$? ;; # check if port open
@@ -1159,7 +1141,7 @@ lcmd_rm () {
 # fdc-mode commands to read and re-write the directory track
 # instead of doing load-delete-save
 #
-# rm before save is less safe, but it's so that it works when the disk is full
+# rm before save is less safe, but works when the disk is full
 lcmd_mv () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#==2)) || return 1
@@ -1194,7 +1176,7 @@ lcmd_read_physical () {
 }
 
 # read all physical sectors on the disk
-lcmd_dd () {
+lcmd_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i p m t=$PHYSICAL_SECTOR_COUNT ;local u=
 	[[ "$1" =~ ^[bh]:* ]] && {
@@ -1210,25 +1192,42 @@ lcmd_dd () {
 	((m)) && echo
 }
 
+
+#
+# TODO
+# Add the ID Section data to the dump & restore
+
 # read a hex dump file and write the contents back to a disk
 # lcmd_hex_file_to_disk filename
 lcmd_hex_file_to_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local d s ;local -i i t
+	local d s x ;local -i i t sz= v
 
-	echo "Restoring disk from $1"
-
+	# Read the dump file into d[]
 	exec 5<"$1" || return $?
 	mapfile -u 5 d || return $?
 	exec 5<&-
 
-	# TODO here, look at a sector length and format the disk accordingly
-
+	# Get the logical sector size, abort if not uniform.
 	t=${#d[*]}
 	for ((i=0;i<t;i++)) {
-		fcmd_write_logical ${d[i]} || return $?
 		s=(${d[i]})
-		progressbar $i $t "P:${s[0]} L:${s[1]}"
+		((sz)) || sz=$((10#${s[2]}))
+		((sz==$((10#${s[2]})))) || { err_msg+=('Mixed Logical Sector Sizes') ; return 1 ; }
+	}
+
+	# FDC-mode format the disk with the appropriate sector size.
+	for i in ${!fdc_format_sector_size[*]} 9999 ;do ((${fdc_format_sector_size[i]}==sz)) && break ;done
+	((i==9999)) && { err_msg+=('Unrecognized Logical Sector Size') ; return 1 ; }
+	fcmd_format $i
+
+	# Write the sectors, skip all-null sectors.
+	echo "Restoring Disk from $1"
+	for ((i=0;i<t;i++)) {
+		s=(${d[i]})
+		progressbar $((i+1)) $t "P:${s[0]}/$((PHYSICAL_SECTOR_COUNT-1)) L:${s[1]}/$((PHYSICAL_SECTOR_LENGTH/sz))"
+		x=${s[*]} ;x=${x:11} ;x=${x//[ 0]/} ;((${#x})) || continue
+		fcmd_write_logical ${d[i]} || return $?
 	}
 	echo
 }
