@@ -128,7 +128,7 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 ```$ ./pdd dd```
 
 **Hex dump entire disk to file mydisk.hex**  
-```$ ./pdd dd h:mydisk.hex```
+```$ ./pdd dump_disk h:mydisk.hex```
 
 <!-- **Binary dump entire disk to file mydisk.bin**  
 ```$ ./pdd dd b:mydisk.bin``` -->
