@@ -137,9 +137,14 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 ```$ ./pdd h2d mydisk.hex```
 
 # Status
-All the "operation mode" commands work.  
-Half way through the "FDC mode" commands  
-The dump & restore all sectors commands are working, but not the Sector ID data section yet, so a restored disk is not *fully* identical to the original.
+All the "operation mode" commands work. This client is usable for all normal file access functions: load, save, delete, copy, move, & list files, and format disk. 
+Half way through the "FDC mode" commands.  
+FDC format, reading and writing sectors, reading ID section are working. The dump & restore all sectors commands are working, but don't include the ID data yet, which has the next-sector pointers that chain sectors together to make a file, so a restored disk is not 99% there but not functional yet.  
+Current TODOs:  
+* Implement write_id()  
+* Add read_id() to read_physical()  
+* Add the ID data to the dump file (new dump file format, two record formats, physical sector header and logical sectors :/ , or copy the next-sector byte to every logical sector record, or really long records with entire physical sector... let's do that.).  
+* Update hex_file_to_disk() to read the new dump file format and add write_id()
 
 # References
 http://tandy.wiki/TPDD  
