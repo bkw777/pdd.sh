@@ -42,7 +42,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | [Read Sector ID Data](notes.md#sector-id-section)<br>default physical sector 0 |
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | | not yet implemented |
-| W&#160;\|&#160;wl&#160;\|&#160;write_logical | physical&#160;logical&#160;size&#160;hex-pairs... | Write one logical sector to disk |
+| W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex-pairs... | Write one logical sector to disk |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[h\|b:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
 | dd&#160;\|&#160;dump_disk | \[h\|b:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
 | h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file<br>*wip: just needs the ID data added* |
