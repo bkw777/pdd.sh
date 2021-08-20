@@ -41,10 +41,10 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen.<br>default physical 0 logical 1 |
 | A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | [Read Sector ID Data](notes.md#sector-id-section)<br>default physical sector 0 |
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
-| B&#160;\|&#160;wi&#160;\|&#160;write_id | | not yet implemented |
+| B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] \<ignored\> 13_hex_pairs... | Write the 13 byte Sector ID data. |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex-pairs... | Write one logical sector to disk |
-| rp&#160;\|&#160;read_physical | \[0-79\] \[h\|b:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
-| dd&#160;\|&#160;dump_disk | \[h\|b:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
+| rp&#160;\|&#160;read_physical | \[0-79\] \[h:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename** |
+| dd&#160;\|&#160;dump_disk | \[h:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
 | h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file<br>*wip: just needs the ID data added* |
 
 **general/other commands**  
@@ -130,24 +130,19 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 **Hex dump entire disk to file mydisk.hex**  
 ```$ ./pdd dd h:mydisk.hex```
 
-**Binary dump entire disk to file mydisk.bin**  
-```$ ./pdd dd b:mydisk.bin```
+<!-- **Binary dump entire disk to file mydisk.bin**  
+```$ ./pdd dd b:mydisk.bin``` -->
 
 **Restore entire disk from hex dump file**  
-```$ ./pdd h2d mydisk.hex```   <- missing next-sector pointers, so this isn't functional just yet
+```$ ./pdd restore_disk mydisk.hex```
 
 # Status
+# 
 All the "operation mode" commands work. This client is usable for all normal file access functions: load, save, delete, copy, move, & list files, and format disk. 
 
-Half way through the "FDC mode" commands.  
+Most of the FDC-mode functions work as well. Including full disk dump & restore including the ID data.
 
-FDC format, reading and writing sectors, reading ID section are working. The dump & restore all sectors commands are working, but don't include the ID data yet, which has the next-sector pointers that chain sectors together to make a file, so a restored disk is not 99% there but not functional yet.  
-
-Current TODOs:  
-* Implement write_id()  
-* Add read_id() to read_physical()  
-* Add the ID data to the dump file (new dump file format, two record formats, physical sector header and logical sectors :/ , or copy the next-sector byte to every logical sector record, or really long records with entire physical sector... let's do that.).  
-* Update hex_file_to_disk() to read the new dump file format and add write_id()
+Only the TPDD1 FDC-mode is supported yet, not TPDD2.
 
 # References
 http://tandy.wiki/TPDD  

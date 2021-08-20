@@ -20,6 +20,8 @@
 #   restore disk from dump file
 # * Investigate: can't save zero-byte files?
 # * Add ID Section data to dump & restore
+# * Investigate: Possibly handle .DO file size specially when saving & loading.
+#   Manual says the size in the directory does not include the EOF byte. grrr
 
 ###############################################################################
 # CONFIG
@@ -133,9 +135,6 @@ typeset -ra mode=(
 ###############################################################################
 # "Operation Mode" constants
 
-# If you try to save a file with more than this many bytes, the drive will
-# error with "Disk Full", even if the disk isn't full.
-typeset -ri TPDD_MAX_FILE_SIZE=65534
 
 # Operation Mode Request/Return Block Formats
 typeset -rA opr_fmt=(
@@ -277,7 +276,12 @@ typeset -ra fdc_format_sector_size=(
 ###############################################################################
 # general constants
 
-typeset -ri PHYSICAL_SECTOR_LENGTH=1280 PHYSICAL_SECTOR_COUNT=80
+typeset -ri \
+	PHYSICAL_SECTOR_LENGTH=1280 \
+	PHYSICAL_SECTOR_COUNT=80 \
+	PHYSICAL_SECTOR_ID_LEN=13 \
+	TPDD_MAX_FILE_SIZE=65534 \
+	TPDD_MAX_FILE_COUNT=40
 
 #
 # CONSTANTS
@@ -303,12 +307,12 @@ _sleep () {
 	read -t ${1:-1} -u 4 x
 }
 
-# Convert a plain text string to hex pairs stored in hex[]
-str_to_hex () {
+# Convert a plain text string to hex pairs stored in shex[]
+str_to_shex () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x="$*" ;local -i i l=${#x} ;hex=()
-	for ((i=0;i<l;i++)) { printf -v hex[i] '%02x' "'${x:i:1}" ; }
-	vecho 1 "$z: hex=(${hex[*]})"
+	local x="$*" ;local -i i l=${#x} ;shex=()
+	for ((i=0;i<l;i++)) { printf -v shex[i] '%02x' "'${x:i:1}" ; }
+	vecho 1 "$z: shex=(${shex[*]})"
 }
 
 # Read a local file into hex pairs stored in fhex[]
@@ -350,8 +354,8 @@ progressbar () {
 # backspaces the length of a frame, and prints the next frame.
 spin () {
 	((v)) && return
-	printf '%b\b%s ' "${anim[0]//?/\\b}" "${anim[y]}"
-	((++y>=${#anim[*]})) && y=0
+	printf '%b\b%s ' "${anim[0]//?/\\b}" "${anim[_y]}"
+	((++_y>=${#anim[*]})) && _y=0
 }
 
 ###############################################################################
@@ -359,77 +363,77 @@ spin () {
 
 do_cmd () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i e= ;local s="$@" a=() c ifs=$IFS IFS=';' ;a=($s) IFS=$ifs
-	for ((i=0;i<${#a[*]};i++)) {
-		set ${a[i]}
-		c=$1 ;shift
+	local -i _i _e= ;local _a="$@" _c ifs=$IFS IFS=';' ;_a=(${_a}) IFS=$ifs
+	for ((_i=0;_i<${#_a[*]};_i++)) {
+		set ${_a[_i]}
+		_c=$1 ;shift
 		err_msg=()
-		case $c in
+		case ${_c} in
 
 	# operation-mode commands
 	# All of the drive firmware "operation mode" functions.
 	# Most of these are low-level, not used directly by a user.
 	# Higher-level commands like ls, load, & save are built out of these.
-			dirent) ocmd_dirent ;e=$? ;;
-			open) ocmd_open $* ;e=$? ;;
-			close) ocmd_close ;e=$? ;;
-			read) ocmd_read $* ;e=$? ;;
-			write) ocmd_write $* ;e=$? ;;
-			delete) ocmd_delete ;e=$? ;;
-			format) ocmd_format ;e=$? ;; # Creates 64-byte logical sectors.
-			status) ocmd_status ;e=$? ;((e)) || echo "OK" ;;
-			fdc) ocmd_fdc ;e=$? ; exit=: ;;
+			dirent) ocmd_dirent ;_e=$? ;;
+			open) ocmd_open $* ;_e=$? ;;
+			close) ocmd_close ;_e=$? ;;
+			read) ocmd_read $* ;_e=$? ;;
+			write) ocmd_write $* ;_e=$? ;;
+			delete) ocmd_delete ;_e=$? ;;
+			format) ocmd_format ;_e=$? ;; # Creates 64-byte logical sectors.
+			status) ocmd_status ;_e=$? ;((_e)) || echo "OK" ;;
+			fdc) ocmd_fdc ;_e=$? ; exit=: ;;
 
 	# fdc-mode commands
 	# All of the drive firmware "FDC mode" functions.
-			${fdc_cmd[mode]}|mode) fcmd_mode $* ;e=$? ;exit=: ;; # select operation-mode or fdc-mode
-			${fdc_cmd[condition]}|condition) fcmd_condition $* ;e=$? ;; # get drive condition
-			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;e=$? ;; # format disk - selectable sector size
-			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;e=$? ;; # format disk no verify
-			${fdc_cmd[read_id]}|read_id|ri) fcmd_read_id $* ;e=$? ;; # read id
-			${fdc_cmd[read_sector]}|read_logical|rl) fcmd_read_logical $* ;e=$? ;; # read one logical sector
-			#${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;e=$? ;; # search id
-			#${fdc_cmd[write_id]}|write_id|wi) fcmd_write_id $* ;e=$? ;; # write id
-			#${fdc_cmd[write_id_nv]}|write_id_nv) fcmd_write_id_nv $* ;e=$? ;; # write id no verify
-			${fdc_cmd[write_sector]}|write_logical|wl) fcmd_write_logical $* ;e=$? ;; # write sector
-			#${fdc_cmd[write_sect_nv]}|write_sector_nv) fcmd_write_sector_nv $* ;e=$? ;; # write sector no verify
+			${fdc_cmd[mode]}|mode) fcmd_mode $* ;_e=$? ;exit=: ;; # select operation-mode or fdc-mode
+			${fdc_cmd[condition]}|condition) fcmd_condition $* ;_e=$? ;; # get drive condition
+			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;_e=$? ;; # format disk - selectable sector size
+			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;_e=$? ;; # format disk no verify
+			${fdc_cmd[read_id]}|read_id|ri) fcmd_read_id $* ;_e=$? ;; # read id
+			${fdc_cmd[read_sector]}|read_logical|rl) fcmd_read_logical $* ;_e=$? ;; # read one logical sector
+			#${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;_e=$? ;; # search id
+			${fdc_cmd[write_id]}|write_id|wi) fcmd_write_id $* ;_e=$? ;; # write id
+			#${fdc_cmd[write_id_nv]}|write_id_nv) fcmd_write_id_nv $* ;_e=$? ;; # write id no verify
+			${fdc_cmd[write_sector]}|write_logical|wl) fcmd_write_logical $* ;_e=$? ;; # write sector
+			#${fdc_cmd[write_sect_nv]}|write_sector_nv) fcmd_write_sector_nv $* ;_e=$? ;; # write sector no verify
 
 	# local/client commands
-			ls|dir) lcmd_ls "$@" ;e=$? ;;
-			rm|del) lcmd_rm "$@" ;e=$? ;;
-			load) lcmd_load "$@" ;e=$? ;;
-			save) lcmd_save "$@" ;e=$? ;;
-			mv|ren) lcmd_mv "$@" ;e=$? ;;
-			cp|copy) lcmd_cp "$@" ;e=$? ;;
+			ls|dir) lcmd_ls "$@" ;_e=$? ;;
+			rm|del) lcmd_rm "$@" ;_e=$? ;;
+			load) lcmd_load "$@" ;_e=$? ;;
+			save) lcmd_save "$@" ;_e=$? ;;
+			mv|ren) lcmd_mv "$@" ;_e=$? ;;
+			cp|copy) lcmd_cp "$@" ;_e=$? ;;
 			q|quit|bye|exit) exit ;;
-			rp|read_physical) lcmd_read_physical "$@" ;e=$? ;;
-			dd|dump_disk) lcmd_dump_disk "$@" ;e=$? ;;
-			h2d|restore_disk) lcmd_hex_file_to_disk "$@" ;e=$? ;;
+			rp|read_physical) lcmd_read_physical "$@" ;_e=$? ;;
+			dd|dump_disk) lcmd_dump_disk "$@" ;_e=$? ;;
+			h2d|restore_disk) lcmd_hex_file_to_disk "$@" ;_e=$? ;;
 
 	# low level manual raw/debug commands
-			com_test) lcmd_com_test ;e=$? ;; # check if port open
-			com_open) lcmd_com_open ;e=$? ;; # open the port
-			com_close) lcmd_com_close ;e=$? ;; # close the port
-			com_read) lcmd_com_read $* ;e=$? ;; # read $1 bytes
-			com_write) lcmd_com_write $* ;e=$? ;; # write $* (hex pairs)
-			com_ret) lcmd_com_ret ;e=$? ;; # read a return packet
-			com_req) lcmd_com_req $* ;e=$? ;; # write a request packet
-			sum) calc_cksum $* ;e=$? ;;
-			sync|drain) tpdd_iosync ;e=$? ;;
-			sleep) _sleep $* ;e=$? ;;
+			com_test) lcmd_com_test ;_e=$? ;; # check if port open
+			com_open) lcmd_com_open ;_e=$? ;; # open the port
+			com_close) lcmd_com_close ;_e=$? ;; # close the port
+			com_read) lcmd_com_read $* ;_e=$? ;; # read $1 bytes
+			com_write) lcmd_com_write $* ;_e=$? ;; # write $* (hex pairs)
+			com_ret) lcmd_com_ret ;_e=$? ;; # read a return packet
+			com_req) lcmd_com_req $* ;_e=$? ;; # write a request packet
+			sum) calc_cksum $* ;_e=$? ;;
+			sync|drain) tpdd_iosync ;_e=$? ;;
+			sleep) _sleep $* ;_e=$? ;;
 			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;;
 
 	# playground
 			# send the TPDD1 bootstrap S-records
-			tpdd1_boot) lcmd_tpdd1_boot ;e=$? ;;
-			anim|play) lcmd_play_anim $* ;e=$? ;;
+			tpdd1_boot) lcmd_tpdd1_boot ;_e=$? ;;
+			anim|play) lcmd_play_anim $* ;_e=$? ;;
 
 			'') : ;;
-			*) echo "Unknown command: \"$c\"" >&2 ;;
+			*) echo "Unknown command: \"${_c}\"" >&2 ;;
 		esac
-		((${#err_msg[*]})) && printf '\n%s: %s\n' "$c" "${err_msg[*]}" >&2
+		((${#err_msg[*]})) && printf '\n%s: %s\n' "${_c}" "${err_msg[*]}" >&2
 	}
-	return $e
+	return ${_e}
 }
 
 ###############################################################################
@@ -437,8 +441,8 @@ do_cmd () {
 
 lcmd_tpdd1_boot () {
 	local x=
-	str_to_hex "S10985157C00AD7EF08B3AS901FE"
-	tpdd_write ${hex[*]} 0d
+	str_to_shex "S10985157C00AD7EF08B3AS901FE"
+	tpdd_write ${shex[*]} 0d
 	while tpdd_read 1 ;do x+=" ${rhex[*]}" ;done
 	printf '%b' "\x${x// /\\x}"
 }
@@ -707,12 +711,12 @@ ocmd_dirent () {
 
 	# construct the request
 	mk_tpdd_file_name "$f"			# pad/truncate filename
-	str_to_hex "$tpdd_file_name"		# filename (hex[0-23])
-	printf -v hex[24] '%02x' "'${2:-F}"	# attribute - always "F"
-	printf -v hex[25] '%02x' $m		# search form (set_name, get_first, get_next)
+	str_to_shex "$tpdd_file_name"		# filename (shex[0-23])
+	printf -v shex[24] '%02x' "'${2:-F}"	# attribute - always "F"
+	printf -v shex[25] '%02x' $m		# search form (set_name, get_first, get_next)
 
 	# send the request
-	ocmd_send_req ${opr_fmt[req_dirent]} ${hex[*]} || return $?
+	ocmd_send_req ${opr_fmt[req_dirent]} ${shex[*]} || return $?
 
 	[[ "$m" == "${dirent_cmd[get_first]}" ]] && tpdd_wait ${LIST_WAIT_MS}
 
@@ -927,8 +931,8 @@ fcmd_read_result () {
 fcmd_mode () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#)) || return
-	str_to_hex "${fdc_cmd[mode]}$1"
-	tpdd_write ${hex[*]} 0d
+	str_to_shex "${fdc_cmd[mode]}$1"
+	tpdd_write ${shex[*]} 0d
 	operation_mode=$1
 	_sleep 0.1
 }
@@ -938,8 +942,8 @@ fcmd_condition () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	local x
-	str_to_hex "${fdc_cmd[condition]}"
-	tpdd_write ${hex[*]} 0d || return $?
+	str_to_shex "${fdc_cmd[condition]}"
+	tpdd_write ${shex[*]} 0d || return $?
 
 	fcmd_read_result || return $?
 	((fdc_err)) && return $fdc_err
@@ -963,9 +967,9 @@ fcmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	typeset -i s=${1:-6}
-	str_to_hex ${fdc_cmd[format]}$s
+	str_to_shex ${fdc_cmd[format]}$s
 	echo "Formatting Disk with ${fdc_format_sector_size[s]:-\"\"}-Byte Logical Sectors"
-	tpdd_write ${hex[*]} 0d || return $?
+	tpdd_write ${shex[*]} 0d || return $?
 	tpdd_wait $FORMAT_WAIT_MS 2 || return $?
 	echo
 	fcmd_read_result || return $?
@@ -973,63 +977,80 @@ fcmd_format () {
 	return $fdc_err
 }
 
+# See the software manual page 11
+# The drive firmware function returns 13 bytes, only the 1st byte is used.
+#
+# 00 - current sector is not used by a file
+# ** - sector number of next sector in current file
+# FF - current sector is the last sector in current file
+#
+# read sector id section
+# fcmd_read_id physical_sector [quiet]
+fcmd_read_id () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	((operation_mode)) && ocmd_fdc
+	str_to_shex "${fdc_cmd[read_id]}$1"
+	tpdd_write ${shex[*]} 0d || return $?
+	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
+	#vecho 2 "P:$1 LEN:${fdc_len} RES:${fdc_res}[${fdc_res_b[*]}]"
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
+	tpdd_write 0d || return $?
+	tpdd_read $PHYSICAL_SECTOR_ID_LEN || return $?
+	((${#rhex[*]}<PHYSICAL_SECTOR_ID_LEN)) && { err_msg+=("Got ${#rhex[*]} of $PHYSICAL_SECTOR_ID_LEN bytes") ; return 1 ; }
+	((${2:-1})) && printf "I %02u %04u %s\n" "$1" "$fdc_len" "${rhex[*]}"
+	:
+}
+
 # read a logical sector
-# fcmd_read_logical physical logical [filename]
+# fcmd_read_logical physical logical [quiet]
 # physical=0-79 logical=1-20
 fcmd_read_logical () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local x ;local -i ps=$1 ls=${2:-1}
-	str_to_hex "${fdc_cmd[read_sector]}$ps,$ls"
-	tpdd_write ${hex[*]} 0d || return $?
+	local -i ps=$1 ls=${2:-1} || return $?
+	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
+	tpdd_write ${shex[*]} 0d || return $?
 	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0d || return $?
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
-	case "$3" in
-		h:*) printf '%02u %02u %04u %s\n' "$fdc_res" "$ls" "$fdc_len" "${rhex[*]}" >>${3#*:} ;;
-		b:*) x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >>${3#*:} ;;
-		*) printf 'Physical %2u | Logical %2u | Length %4u\n%s\n' "$fdc_res" "$ls" "$fdc_len" "${rhex[*]}" ;;
-	esac
+	((${3:-1})) && printf "S %02u %02u %04u %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
+	:
 }
 
-# write a logical sector
-# fcmd_write_logical physical logical length sector_data(hex pairs)
-fcmd_write_logical () {
+# write a physical sector ID section
+# fcmd_write_id physical data(hex pairs)
+fcmd_write_id () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local x ;local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 3 # discarding $3-length for now
-	str_to_hex "${fdc_cmd[write_sector]}$ps,$ls"
-	tpdd_write ${hex[*]} 0d || return $?
+	local -i p=$((10#$1)) ;shift
+	str_to_shex "${fdc_cmd[write_id]}$p"
+	tpdd_write ${shex[*]} 0d || return $?
 	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	shift ; # discard the size field
 	tpdd_write $* || return $?
 	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	:
 }
 
-# This may not be right yet. The data doesn't make sense with the manual.
-# read sector id section
-# fcmd_read_id physical_sector [filename]
-fcmd_read_id () {
+# write a logical sector
+# fcmd_write_logical physical logical length data(hex pairs)
+fcmd_write_logical () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local x ;local -i psect=$1 l=13
-	str_to_hex "${fdc_cmd[read_id]}$psect"
-	tpdd_write ${hex[*]} 0d || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
-	tpdd_write 0d || return $?
-	tpdd_read $l || return $?
-	((${#rhex[*]}<l)) && { err_msg+=("Got ${#rhex[*]} of $l bytes") ; return 1 ; }
-	((${#2})) && {
-		x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >$2
-	} || {
-		printf "Physical Sector %2u | Length %2u | ID_Data %s\n" "$psect" "$fdc_len" "${rhex[*]}"
-	}
+	local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 2
+	str_to_shex "${fdc_cmd[write_sector]}$ps,$ls"
+	tpdd_write ${shex[*]} 0d || return $?
+	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	tpdd_write $* || return $?
+	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	:
 }
 
 ###############################################################################
@@ -1070,7 +1091,7 @@ lcmd_load () {
 	((m)) || >"$d"					# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
 		((m)) && {
-			fhex+=(${ret_dat[*]})		# add to hex[]
+			fhex+=(${ret_dat[*]})		# add to fhex[]
 		} || {
 			x="${ret_dat[*]}" ;printf '%b' "\x${x// /\\x}" >> "$d"	# add to file
 		}
@@ -1154,54 +1175,57 @@ lcmd_cp () {
 	lcmd_load "$1" '' && lcmd_save '' "$2"
 }
 
-# read all logical sectors in a physical sector
+# read ID and all logical sectors in a physical sector
+# lcmd_read_physical physical [quiet]
 lcmd_read_physical () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	[[ "$1" =~ ^[bh]:* ]] && set 0 $1
-	local -i p=$1 l t m= ;local u=
-	((${#3}==0)) && [[ "$2" =~ ^[bh]:* ]] && {
-		m=1 u='logical sectors'
-		echo "Dumping physical sector $p to ${2#*:}"
-		progressbar 0 1 "$u"
-		>${2#*:}
-	}
-	fcmd_read_logical $p 1 "$2"
+	local -i p=$1 l t || return $? ;local u= h=()
+
+	# read the logical sectors
+	fcmd_read_logical $p 1 $2 || return $?
+	h+=(${rhex[*]})
 	t=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
-	((m)) && progressbar 1 $t "$u"
 	for ((l=2;l<=t;l++)) {
-		((m)) && progressbar $l $t "$u"
-		fcmd_read_logical $p $l "$2"
+		fcmd_read_logical $p $l $2 || return $?
+		h+=(${rhex[*]})
 	}
-	((m)) && echo
+	rhex=(${h[*]})
 }
 
 # read all physical sectors on the disk
 lcmd_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i p m t=$PHYSICAL_SECTOR_COUNT ;local u=
+	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 ;local u= f=
 	[[ "$1" =~ ^[bh]:* ]] && {
-		m=1 u='physical sectors'
-		echo "Dumping disk to ${1#*:}"
+		f=${1#*:} u='physical sectors' m=0
+		echo "Dumping disk to $f"
 		progressbar 0 $t "$u"
-		>${1#*:}
+		>$f
 	}
+
 	for ((p=0;p<t;p++)) {
-		lcmd_read_physical $p "$1" 1
-		((m)) && progressbar $((p+1)) $t "$u"
+
+		# read the ID section
+		fcmd_read_id $p $m || return $?
+		((m)) || printf '%02u %04u %s ' "$p" "$fdc_len" "${rhex[*]}" >> $f
+
+		# read the physical sector
+		lcmd_read_physical $p $m || return $?
+		((m)) || {
+			printf '%s\n' "${rhex[*]}" >> $f
+			progressbar $((p+1)) $t "$u"
+		}
+
 	}
-	((m)) && echo
+
+	((m)) || echo
 }
-
-
-#
-# TODO
-# Add the ID Section data to the dump & restore
 
 # read a hex dump file and write the contents back to a disk
 # lcmd_hex_file_to_disk filename
 lcmd_hex_file_to_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local d s x ;local -i i t sz= v
+	local d r s x ;local -i i t sz= n
 
 	# Read the dump file into d[]
 	exec 5<"$1" || return $?
@@ -1211,23 +1235,34 @@ lcmd_hex_file_to_disk () {
 	# Get the logical sector size, abort if not uniform.
 	t=${#d[*]}
 	for ((i=0;i<t;i++)) {
-		s=(${d[i]})
-		((sz)) || sz=$((10#${s[2]}))
-		((sz==$((10#${s[2]})))) || { err_msg+=('Mixed Logical Sector Sizes') ; return 1 ; }
+		r=(${d[i]})
+		((sz)) || sz=$((10#${r[1]}))
+		((sz==$((10#${r[1]})))) || { err_msg+=('Mixed Logical Sector Sizes') ; return 1 ; }
 	}
 
 	# FDC-mode format the disk with the appropriate sector size.
 	for i in ${!fdc_format_sector_size[*]} 9999 ;do ((${fdc_format_sector_size[i]}==sz)) && break ;done
 	((i==9999)) && { err_msg+=('Unrecognized Logical Sector Size') ; return 1 ; }
+	n=$((PHYSICAL_SECTOR_LENGTH/sz))
 	fcmd_format $i
 
-	# Write the sectors, skip all-null sectors.
+	# Write the sectors, skip un-used sectors
 	echo "Restoring Disk from $1"
 	for ((i=0;i<t;i++)) {
-		s=(${d[i]})
-		progressbar $((i+1)) $t "P:${s[0]}/$((PHYSICAL_SECTOR_COUNT-1)) L:${s[1]}/$((PHYSICAL_SECTOR_LENGTH/sz))"
-		x=${s[*]} ;x=${x:11} ;x=${x//[ 0]/} ;((${#x})) || continue
-		fcmd_write_logical ${d[i]} || return $?
+		r=(${d[i]})
+		progressbar $((i+1)) $t "P:${r[0]} L:-/-"
+		x=${r[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
+
+		# write the ID section
+		fcmd_write_id ${r[@]:0:15} || return $?
+
+		# logical sectors count from 1
+		for ((l=1;l<=n;l++)) {
+			progressbar $((i+1)) $t "P:${r[0]} L:$l/$n"
+			s=(${r[@]:$((15+(sz*(l-1)))):sz})
+			x=${s[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
+			fcmd_write_logical ${r[0]} $l ${s[*]} || return $?
+		}
 	}
 	echo
 }
@@ -1276,13 +1311,13 @@ lcmd_play_anim () {
 
 ###############################################################################
 # Main
-typeset -a err_msg=() hex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
+typeset -a err_msg=() shex=() fhex=() rhex=() ihex=() ret_dat=() fdc_res_b=()
 typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
 x=$((1000000+TTY_READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
-typeset -ar anim=("${SPINNER_ANIMATION_FRAMES[@]}") ;typeset -i y=
+typeset -ar anim=("${SPINNER_ANIMATION_FRAMES[@]}") ;typeset -i _y=
 
 # for _sleep()
 readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
@@ -1302,4 +1337,4 @@ exit=exit
 (($#)) && { do_cmd "$@" ; $exit ; }
 
 # interactive mode
-while read -p"TPDD(${mode[operation_mode]})> " ic ;do do_cmd "$ic" ;done
+while read -p"TPDD(${mode[operation_mode]})> " __c ;do do_cmd "${__c}" ;done
