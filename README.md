@@ -44,8 +44,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] \<ignored\> 13_hex_pairs... | Write the 13 byte Sector ID data. |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex-pairs... | Write one logical sector to disk |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[h:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename** |
-| dd&#160;\|&#160;dump_disk | \[h:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
-| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file<br>*wip: just needs the ID data added* |
+| dd&#160;\|&#160;dump_disk | \[h:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<!-- <br>**b:filename** writes binary to **filename**--> |
+| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file |
 
 **general/other commands**  
 | command | arguments | Description |
