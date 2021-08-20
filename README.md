@@ -138,8 +138,11 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 
 # Status
 All the "operation mode" commands work. This client is usable for all normal file access functions: load, save, delete, copy, move, & list files, and format disk. 
+
 Half way through the "FDC mode" commands.  
+
 FDC format, reading and writing sectors, reading ID section are working. The dump & restore all sectors commands are working, but don't include the ID data yet, which has the next-sector pointers that chain sectors together to make a file, so a restored disk is not 99% there but not functional yet.  
+
 Current TODOs:  
 * Implement write_id()  
 * Add read_id() to read_physical()  
