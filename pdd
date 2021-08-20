@@ -90,7 +90,8 @@ SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
 # long (in ms) for a byte to appear before giving up.
-TTY_READ_TIMEOUT_MS=1000
+# SILENTLY CORRUPT DATA IF SET TOO LOW
+TTY_READ_TIMEOUT_MS=250
 
 # Default tpdd_wait() timout in ms
 # Wait this long (by default) for the drive to respond after issuing a command.
@@ -1184,6 +1185,7 @@ lcmd_read_physical () {
 	h+=(${rhex[*]})
 	t=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
 	for ((l=2;l<=t;l++)) {
+		progressbar $p $PHYSICAL_SECTOR_COUNT "P:$p L:$l"
 		fcmd_read_logical $p $l $2 || return $?
 		h+=(${rhex[*]})
 	}
@@ -1193,7 +1195,7 @@ lcmd_read_physical () {
 # read all physical sectors on the disk
 lcmd_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 ;local u= f=
+	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 n ;local u= f=
 	[[ "$1" =~ ^[bh]:* ]] && {
 		f=${1#*:} u='physical sectors' m=0
 		echo "Dumping disk to $f"
@@ -1205,17 +1207,16 @@ lcmd_dump_disk () {
 
 		# read the ID section
 		fcmd_read_id $p $m || return $?
+		n=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
 		((m)) || printf '%02u %04u %s ' "$p" "$fdc_len" "${rhex[*]}" >> $f
 
 		# read the physical sector
 		lcmd_read_physical $p $m || return $?
 		((m)) || {
 			printf '%s\n' "${rhex[*]}" >> $f
-			progressbar $((p+1)) $t "$u"
+			progressbar $((p+1)) $t "P:$p L:$n"
 		}
-
 	}
-
 	((m)) || echo
 }
 
