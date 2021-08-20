@@ -69,7 +69,7 @@ $
 read_id takes a physical sector number as the only argument, 0-79,  
 and returns 13 bytes.
 For "operation-mode" filesystem formatted disks, only the first byte is used.  
-Page 11 of the manual explains how to interpret that byte.  
+Page 11 of [the sofware manual](Tandy\ Portable\ Disk\ Drive\ Software\ Manual\ 26-3808S.pdf) explains how to interpret that byte.  
 00 = this sector is not used by a file  
 FF = this sector is the last sector in this file  
 ## = pointer to the next sector in this file  

@@ -143,6 +143,6 @@ The dump & restore all sectors commands are working, but not the Sector ID data 
 
 # References
 http://tandy.wiki/TPDD  
-https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/  
+https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/ ([Local copy](Tandy\ Portable\ Disk\ Drive\ Software\ Manual\ 26-3808S.pdf))  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd2-sector-0.html  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd-sector-access.html
