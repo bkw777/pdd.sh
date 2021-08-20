@@ -39,13 +39,13 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | D&#160;\|&#160;condition | | Report the drive/disk status |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector. (default 1280 if not specified) |
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen.<br>default physical 0 logical 1 |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | Read Sector ID Data [(may not be correct yet)](confusing_observations.md#sector-id-section)<br>default physical sector 0 |
+| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | [Read Sector ID Data](notes.md#sector-id-section)<br>default physical sector 0 |
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | | not yet implemented |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | physical&#160;logical&#160;size&#160;hex-pairs... | Write one logical sector to disk |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[h\|b:filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
 | dd&#160;\|&#160;dump_disk | \[h\|b:filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**h:filename** writes a hex dump to **filename**<br>**b:filename** writes binary to **filename** |
-| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file<br>*not fully working* |
+| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file<br>*wip: just needs the ID data added* |
 
 **general/other commands**  
 | command | arguments | Description |

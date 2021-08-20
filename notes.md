@@ -6,15 +6,13 @@ Disks may be formatted with one of 7 possible logical sector sizes.
 
 A physical sector is 1280 bytes, and the largest possible logical sector is 1280 bytes.
 
-There are 2 different format-disk commands, an operation-mode version and an FDC-mode version.
+There are 2 different format-disk commands, operation-mode and FDC-mode.
 
 ### operation-mode
-The operation-mode format is somehow special and different from FDC-mode format.
-```format``` (usually*) creates 64-byte logical sectors, but if you use the FDC-mode format command ```ff 0``` to format with 64-byte logical sectors, and then try save a file, ```ls``` will show the file's contents were written into the directory sector.
+The operation-mode format is somehow special and different from FDC-mode format.  
+```format``` usually(*) creates 64-byte logical sectors, but if you use the FDC-mode format command ```ff 0``` to format with 64-byte logical sectors, and then try save a file, ```ls``` will show the file's contents were written into the directory sector. Probably you have to write the FCB stuff in sector 0 to make it a viable filesystem.
 
-(*) I have also seen it create a strange format where physical sector 0 has 64-byte logical sectors, and the remaining physical sectors 1-79 all have 80-byte logical sectors. I can't reproduce this at-will, it's just happened at least once.
-
-... Maybe that strange format was from aboring a format mid-way?
+(*) Sometimes it creates a strange format where physical sector 0 has 64-byte logical sectors, and the rest of the disk has 80-byte logical sectors. I can't reproduce this at-will, it's just happens sometimes.
 
 ### FDC-mode
 The FDC-mode format command, ```ff``` or ```fdc_format```, creates a uniform format with the specified logical sector size applied the same on all physical sectors.
@@ -32,15 +30,15 @@ The drive firmware uses size 3 (256 bytes) by default if not specified, but we a
 | ```ff 6``` | 1280 |
 
 ### Disks seen in the wild
-The TPDD1 utility disk is actually formatted with 1280-byte logical sectors, yet still works with normal operation-mode filesystem commands.  
+The TPDD1 Utility Disk that comes with the drive (and all copies made with it's own included backup program) is actually formatted with 1280-byte logical sectors, yet still works with normal operation-mode filesystem commands.  
 *Perhaps* the way this works is, since 1280-bytes is the entire physical sector, maybe it's possible to treat the logical sector as raw space and construct the correct formatting within that space yourself?  
-This is why this util defaults to 1280-byte logical sectors when not specified instead of letting the drive firmware's default of 256 take effect.  
+This is why this util defaults to 1280-byte logical sectors when not specified instead of letting the drive firmware's default of 256 take effect. Either 64-byte or 1280-byte are useful but 256 would only be useful for some custom low level use of the drive as raw space.  
 
 The Disk Power KC-85 distribution disk appears to be a normal disk formatted with the operation-mode format, 64-byte logical sectors.
 
 ### Examining a disk
-The format of a given sector can be seen from the read_sector or read_id commands.  
-This is a disk with that strange format described above.  
+The format of a given sector can be seen from the read_logical or read_id commands.  
+This is a disk with that strange 64-80 format described above.  
 ```
 $ ./pdd "rl ;rl 0 13 ;rl 1 1 ;rl 1 13 ;rl 79 1"
 Physical  0 | Logical  1 | Length   64
@@ -68,32 +66,12 @@ $
 ```
 
 ## Sector ID Section
-This data is a mystery so far. The manual descibes a 19-byte block with these fields on the disk:  
-| length in bytes | data |
-| --- | --- |
-| 2 | Sector Length |
-| 2 | Sector Number |
-| 1 | Logical Sector Length Code |
-| 12 | ID Reserve |
-| 2 | ID CRC |
+read_id takes a physical sector number as the only argument, 0-79,  
+and returns 13 bytes.
+For "operation-mode" filesystem formatted disks, only the first byte is used.  
+Page 11 of the manual explains how to interpret that byte.  
+00 = this sector is not used by a file  
+FF = this sector is the last sector in this file  
+## = pointer to the next sector in this file  
 
-But the read_id command only returns 13 bytes, and so far that data doesn't appear to map to any combination of those fields.  
-It's always 13 bytes, and always the last 12 bytes are 0, only the first byte ever changes.  
-That obviously looks like the logical sector size code and the 12 byte reserved field. It's the only combination that adds up to 13, and it even appears to be in that order, since the first byte sometimes changes and the remaining 12 are always all 0's.  
-However, that byte doesn't match the size code except when it's 0, because the normal disk format happens to be 64-byte sectors and that happens to be size code 0. The rule breaks all other times.  
-The first byte is so far always one of 3 things:  
-* 0
-* 255
-* The physical sector number+1 (or, the physical sector number if counting from 1 instead of 0)
-
-Physical sector 0 always has 0
-
-A freshly formatted disk, has 0 on every physical sector.
-
-After saving some files, some sectors have 255, some have the maybe-sector-number, only for the irst few sectors up to the used space.
-
-For 64-byte logical sectors, no other value but 0 is the size code. 255 is not a valid size code at all.
-
-The drive reports a logical sector size correctly as part of this same command's response, regardless what this byte shows, which means the drive firmware is actually reading the size code byte itself from somewhere, and it contains the expected value, not this value.
-
-So whatever this byte is, it's not the logical sector size code.  
+Sector 0 always has 00
