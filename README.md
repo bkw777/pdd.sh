@@ -134,7 +134,7 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 ```$ ./pdd dd b:mydisk.bin```
 
 **Restore entire disk from hex dump file**  
-```$ ./pdd h2d mydisk.hex```
+```$ ./pdd h2d mydisk.hex```   <- missing next-sector pointers, so this isn't functional just yet
 
 # Status
 All the "operation mode" commands work. This client is usable for all normal file access functions: load, save, delete, copy, move, & list files, and format disk. 
