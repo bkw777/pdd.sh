@@ -137,10 +137,12 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 ```$ ./pdd restore_disk mydisk.hex```
 
 # Status
-# 
+
+Working but extremely slow. TTY_READ_TIMEOUT_MS is currently set to 1000ms, which seems to be required to avoid corrupt data. :/ For ordinary small files it's tolerable but a full disk image takes forever.
+
 All the "operation mode" commands work. This client is usable for all normal file access functions: load, save, delete, copy, move, & list files, and format disk. 
 
-Most of the FDC-mode functions work as well. Including full disk dump & restore including the ID data.
+Most of the FDC-mode functions work as well. Including full disk dump & restore is working. It is now possible to create a TPDD1 Utility Disk from a download.
 
 Only the TPDD1 FDC-mode is supported yet, not TPDD2.
 

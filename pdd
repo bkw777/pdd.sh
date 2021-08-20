@@ -90,9 +90,7 @@ SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
 # long (in ms) for a byte to appear before giving up.
-# Smaller numbers make some operations like "ls" go faster, but make other
-# operations like "save" fail. 100 is marginal. 120 is safe.
-TTY_READ_TIMEOUT_MS=120
+TTY_READ_TIMEOUT_MS=1000
 
 # Default tpdd_wait() timout in ms
 # Wait this long (by default) for the drive to respond after issuing a command.
