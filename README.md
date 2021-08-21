@@ -27,8 +27,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | status | | Report the drive/disk status |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
 | rm&#160;\|&#160;del | filename | Delete a file |
-| cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file on-disk to another file on-disk |
-| mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file on-disk |
+| cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
+| mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file |
 | load | src_filename(disk)&#160;\[dest_filename(local)\] | Copy a file from the disk |
 | save | src_filename(local)&#160;\[dest_filename(disk)\] | Copy a file to the disk |
 | format | | Format the disk with "operation-mode" filesystem format |
@@ -121,8 +121,10 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 **Hex dump a physical sector to file**
 ```$ ./pdd rp 3 h:mydisk_p3.hex```
 
+<!--
 **Binary dump a physical sector to file**
 ```$ ./pdd rp 0 b:mydisk_p0.bin```
+-->
 
 **Dump entire disk**  
 ```$ ./pdd dd```
@@ -144,7 +146,7 @@ All the "operation mode" commands work. This client is usable for all normal fil
 
 Most of the FDC-mode functions work as well (sector access). Full disk dump & restore is working. It is now possible to create a TPDD1 Utility Disk from a download without exotic hardware. Just the TPDD drive itself and serial connection.
 
-Only the TPDD1 FDC-mode is supported yet, not TPDD2.
+Only the TPDD1 sector access is supported yet, not TPDD2. No TPDD2 bank 1: for normal file access either.
 
 Pretty slow for large operations. TTY_READ_TIMEOUT_MS is currently set to 250ms, which seems to be required to avoid corrupt data. :/ For ordinary small files it's tolerable but a full disk image takes forever. Still mapping out the exact behavior with a lot of tests. Performance may improve as testing continues.  
 Full disk restore isn't too bad because we skip any sectors that are all 00's.
