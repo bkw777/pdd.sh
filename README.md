@@ -27,8 +27,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | status | | Report the drive/disk status |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
 | rm&#160;\|&#160;del | filename | Delete a file |
-| cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file on-disk to another file on-disk |
-| mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file on-disk |
+| cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
+| mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file |
 | load | src_filename(disk)&#160;\[dest_filename(local)\] | Copy a file from the disk |
 | save | src_filename(local)&#160;\[dest_filename(disk)\] | Copy a file to the disk |
 | format | | Format the disk with "operation-mode" filesystem format |
@@ -121,8 +121,10 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 **Hex dump a physical sector to file**
 ```$ ./pdd rp 3 h:mydisk_p3.hex```
 
+<!--
 **Binary dump a physical sector to file**
 ```$ ./pdd rp 0 b:mydisk_p0.bin```
+-->
 
 **Dump entire disk**  
 ```$ ./pdd dd```
