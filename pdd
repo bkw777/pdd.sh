@@ -10,18 +10,10 @@
 # * TPDD2
 # * Refactor the global variable names to have a consistent scheme
 # * Help
-# * Shorter tty read timeout where possible
 # * Give lcmd_save() an option to append just for completeness
 # * Re-implement lcmd_mv based on fdc commands to edit the directory
-# * Write whole disk in FDC mode
 # * Confirmation prompts
-#   overwrite disk or local file
-#   format disk
-#   restore disk from dump file
 # * Investigate: can't save zero-byte files?
-# * Add ID Section data to dump & restore
-# * Investigate: Possibly handle .DO file size specially when saving & loading.
-#   Manual says the size in the directory does not include the EOF byte. grrr
 
 ###############################################################################
 # CONFIG
