@@ -90,14 +90,16 @@ SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
 # long (in ms) for a byte to appear before giving up.
-# SILENTLY CORRUPT DATA IF SET TOO LOW
-TTY_READ_TIMEOUT_MS=250
+TTY_READ_TIMEOUT_MS=50
 
 # Default tpdd_wait() timout in ms
 # Wait this long (by default) for the drive to respond after issuing a command.
 # Some commands like dirent(get_first) and close can take 2 seconds to respond.
 # Some commands like format take 100 seconds.
 TPDD_WAIT_TIMEOUT_MS=5000
+TPDD_WAIT_PERIOD_MS=50
+TPDD_WAIT_END_DELAY_MS=100 	#600	# CORRUPT DATA IF SET TOO LOW
+DYNAMIC_EXTRA_WAIT=0		# add a lot of time only when read_logical() reads a large sector
 
 # How long to wait for format to complete
 # Usually takes just under 100 seconds.
@@ -304,6 +306,7 @@ vecho () {
 _sleep () {
 	local x
 	read -t ${1:-1} -u 4 x
+	:
 }
 
 # Convert a plain text string to hex pairs stored in shex[]
@@ -522,17 +525,18 @@ tpdd_check () {
 # tpdd_wait timeout_ms busy_indication
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
-	local d=(: spin progressbar)
-	local -i i=-1 n t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
-	((t<TTY_READ_TIMEOUT_MS)) && t=$TTY_READ_TIMEOUT_MS
-	n=$((t/TTY_READ_TIMEOUT_MS))
+	local d=(: spin progressbar) s
+	local -i i=-1 n p=$TPDD_WAIT_PERIOD_MS t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
+	s=$((1000000+p)) ;s="${s:1:-3}.${s: -3}"
+	((t<p)) && t=p ;n=$(((t+50)/p))
 	((b==1)) && printf '%s ' "${anim[0]//?/ }"
 	until ((++i>n)) ;do
 		tpdd_check && break
 		${d[b]} $i $n
-		_sleep $read_timeout
+		_sleep $s
 	done
-	((i>n)) && { err_msg+=('TIMED OUT') ;return 1 ; }
+	((i>n)) && { err_msg+=("$z: TIMED OUT") ;return 1 ; }
+	((TPDD_WAIT_END_DELAY_MS+DYNAMIC_EXTRA_WAIT)) && { s=$((1000000+TPDD_WAIT_END_DELAY_MS+DYNAMIC_EXTRA_WAIT)) ;s="${s:1:-3}.${s: -3}" ;_sleep $s ; }
 	${d[b]} 1 1
 	((b==1)) && printf '%b\b%s %b\b' "${anim[0]//?/\\b}" "${anim[0]//?/ }" "${anim[0]//?/\\b}"
 	vecho 1 "$i"
@@ -607,6 +611,7 @@ ocmd_check_err () {
 	((e)) && {
 		x='UNKNOWN ERROR'
 		((${#opr_msg[${ret_dat[0]}]})) && x="${opr_msg[${ret_dat[0]}]}"
+		ret_err=${ret_dat[0]}
 		err_msg+=("$x")
 	}
 	vecho 1 "$x"
@@ -996,8 +1001,7 @@ fcmd_read_id () {
 	tpdd_write 0d || return $?
 	tpdd_read $PHYSICAL_SECTOR_ID_LEN || return $?
 	((${#rhex[*]}<PHYSICAL_SECTOR_ID_LEN)) && { err_msg+=("Got ${#rhex[*]} of $PHYSICAL_SECTOR_ID_LEN bytes") ; return 1 ; }
-	((${2:-1})) && printf "I %02u %04u %s\n" "$1" "$fdc_len" "${rhex[*]}"
-	:
+	((${#2})) || printf "I %02u %04u %s\n" "$1" "$fdc_len" "${rhex[*]}"
 }
 
 # read a logical sector
@@ -1013,10 +1017,11 @@ fcmd_read_logical () {
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0d || return $?
+	DYNAMIC_EXTRA_WAIT=$((fdc_len/2))
 	tpdd_read $fdc_len || return $?
+	DYNAMIC_EXTRA_WAIT=0
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
-	((${3:-1})) && printf "S %02u %02u %04u %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
-	:
+	((${#3})) || printf "S %02u %02u %04u %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
 }
 
 # write a physical sector ID section
@@ -1076,27 +1081,28 @@ lcmd_ls () {
 # If $2 is set but empty, read into global fhex[] instead of writing a file
 lcmd_load () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x s d ;local -i p= m= l= ;fhex=()
-	[[ "$1" ]] || return 1
-	s=$1 d=${2:-$s}
-	(($#>1)) && ((${#2}==0)) && m=1 		# read into memory instead of file
+	local x s=$1 d=${2:-$1} ;local -i p= l= ;fhex=()
+	(($#)) || return 2
+	(($#==2)) && ((${#2}==0)) && d=			# read into memory instead of file
 	echo -n "Loading TPDD:$s"
 	ocmd_dirent "$s" '' ${dirent_cmd[set_name]} || return $?	# set the source filename
 	((${#file_name})) || { err_msg+=('No Such File') ; return 1 ; }
 	l=$file_len					# file size provided by dirent()
-	((m)) && echo || echo " to $d"
+	((${#d})) && echo " to $d" || echo
 	progressbar 0 $l "bytes"
 	ocmd_open ${open_mode[read]} || return $?	# open the source file for reading
-	((m)) || >"$d"					# start the destination file
+	((${#d})) && > "$d"				# start the destination file
 	while ocmd_read ;do				# read a block of data from tpdd
-		((m)) && {
-			fhex+=(${ret_dat[*]})		# add to fhex[]
-		} || {
+		((${#d})) && {
 			x="${ret_dat[*]}" ;printf '%b' "\x${x// /\\x}" >> "$d"	# add to file
+		} || {
+			fhex+=(${ret_dat[*]})		# add to fhex[]
 		}
 		((p+=${#ret_dat[*]})) ;progressbar $p $l "bytes"
-		((${#ret_dat[*]}<128)) && break		# stop when we get less than 128 bytes
+		((${#ret_dat[*]}<128)) && break		# stop if we get less than 128 bytes
+		((p>=l)) && break			# stop if we reach the expected total
 	done
+	((ret_err==30)) && ((p%128==0)) && unset ret_err  err_msg # annoying special case
 	ocmd_close || return $?				# close the source file
 	((p==l)) || { err_msg+=('Error') ; return 1 ; }
 	echo
@@ -1107,12 +1113,14 @@ lcmd_load () {
 # If $1 is set but empty, get data from global fhex[] instead of reading a file
 lcmd_save () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i n e p= l= b= ;local s d w h x
+	local -i i n e p= l= b= ;local s=$1 d=${2:-$1} w h x
 	(($#)) || return 2
-	s=$1 d=${2:-$1}
-	[[ -r "$1" ]] || { err_msg+=("\"$1\" not found") ;return 1 ; }
+	(($#==2)) && ((${#1}==0)) && s=		# read from memory instead of file
 	((${#d})) || return 3
-	((${#1})) && { file_to_fhex "$s" || return 4 ; }
+	((${#s})) && {
+		[[ -r "$s" ]] || { err_msg+=("\"$s\" not found") ;return 1 ; }
+		file_to_fhex "$s" || return 4
+	}
 	h=(${fhex[*]})
 	l=${#h[*]}				# file size
 	echo "Saving TPDD:$d"
@@ -1195,29 +1203,27 @@ lcmd_read_physical () {
 # read all physical sectors on the disk
 lcmd_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 n ;local u= f=
-	[[ "$1" =~ ^[bh]:* ]] && {
-		f=${1#*:} u='physical sectors' m=0
+	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 n ;local f=$1
+	((${#f})) && {
 		echo "Dumping disk to $f"
-		progressbar 0 $t "$u"
+		progressbar 0 $t "P:- L:-"
 		>$f
 	}
 
 	for ((p=0;p<t;p++)) {
-
 		# read the ID section
-		fcmd_read_id $p $m || return $?
+		fcmd_read_id $p $f || return $?
 		n=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
-		((m)) || printf '%02u %04u %s ' "$p" "$fdc_len" "${rhex[*]}" >> $f
+		((${#f})) && printf '%02u %04u %s ' "$p" "$fdc_len" "${rhex[*]}" >> $f
 
 		# read the physical sector
 		lcmd_read_physical $p $m || return $?
-		((m)) || {
+		((${#f})) && {
 			printf '%s\n' "${rhex[*]}" >> $f
 			progressbar $((p+1)) $t "P:$p L:$n"
 		}
 	}
-	((m)) || echo
+	((${#f})) && echo
 }
 
 # read a hex dump file and write the contents back to a disk
@@ -1312,7 +1318,7 @@ lcmd_play_anim () {
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ihex=() ret_dat=() fdc_res_b=()
 typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
-cksum=00 ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
+cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
 x=$((1000000+TTY_READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
