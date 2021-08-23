@@ -43,9 +43,9 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] \<ignored\> 13_hex_pairs... | Write the 13-byte Sector ID data. |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex_pairs... | Write one logical sector to disk |
-| rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**filename** writes a hex dump to **filename** |
-| dd&#160;\|&#160;dump_disk | \[filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**filename** writes a hex dump to **filename** |
-| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file |
+| rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>write to filename else display on screen |
+| dd&#160;\|&#160;dump_disk | \[filename\] | Read all logical sectors in all physical sectors<br>write to filename else display on screen |
+| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from filename |
 
 **general/other commands**  
 | command | arguments | Description |
