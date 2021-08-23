@@ -50,7 +50,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 **general/other commands**  
 | command | arguments | Description |
 | --- | --- | -- |
-| q&#160;\|&#160;quit \| bye \| exit | | Order Pizza |
+| q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | debug | \[0-3\] | Debug/verbose level - Toggle on/off each time it's called, or set the specified debug level if given<br>0 - debug mode off<br>1 - debug mode on<br>3 - debug mode on, plus every call to either tpdd_read() or tpdd_write() creates a log file with a copy of the data |
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
