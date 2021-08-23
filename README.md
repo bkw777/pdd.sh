@@ -29,8 +29,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | rm&#160;\|&#160;del | filename | Delete a file |
 | cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
 | mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file |
-| load | src_filename(disk)&#160;\[dest_filename(local)\] | Copy a file from the disk |
-| save | src_filename(local)&#160;\[dest_filename(disk)\] | Copy a file to the disk |
+| load | src_filename(disk)&#160;\[dest_filename(local)\] | Read a file from the disk |
+| save | src_filename(local)&#160;\[dest_filename(disk)\] | Write a file to the disk |
 | format | | Format the disk with "operation-mode" filesystem format |
 
 **"FDC mode" commands**
