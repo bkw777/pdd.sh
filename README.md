@@ -29,8 +29,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | rm&#160;\|&#160;del | filename | Delete a file |
 | cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
 | mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file |
-| load | src_filename(disk)&#160;\[dest_filename(local)\] | Copy a file from the disk |
-| save | src_filename(local)&#160;\[dest_filename(disk)\] | Copy a file to the disk |
+| load | src_filename(disk)&#160;\[dest_filename(local)\] | Read a file from the disk |
+| save | src_filename(local)&#160;\[dest_filename(disk)\] | Write a file to the disk |
 | format | | Format the disk with "operation-mode" filesystem format |
 
 **"FDC mode" commands**
@@ -42,15 +42,15 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[local_filename\] | [Read Sector ID Data](notes.md#sector-id-section)<br>default physical sector 0 |
 <!-- | S&#160;\|&#160;si&#160;\|&#160;search_id | | not yet implemented | -->
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] \<ignored\> 13_hex_pairs... | Write the 13-byte Sector ID data. |
-| W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex-pairs... | Write one logical sector to disk |
-| rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>default display on screen<br>**filename** writes a hex dump to **filename** |
-| dd&#160;\|&#160;dump_disk | \[filename\] | Read all logical sectors in all physical sectors<br>default display on screen<br>**filename** writes a hex dump to **filename** |
-| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from a hex dump file |
+| W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex_pairs... | Write one logical sector to disk |
+| rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>write to filename else display on screen |
+| dd&#160;\|&#160;dump_disk | \[filename\] | Read all logical sectors in all physical sectors<br>write to filename else display on screen |
+| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from filename |
 
 **general/other commands**  
 | command | arguments | Description |
 | --- | --- | -- |
-| q&#160;\|&#160;quit \| bye \| exit | | Order Pizza |
+| q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | debug | \[0-3\] | Debug/verbose level - Toggle on/off each time it's called, or set the specified debug level if given<br>0 - debug mode off<br>1 - debug mode on<br>3 - debug mode on, plus every call to either tpdd_read() or tpdd_write() creates a log file with a copy of the data |
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
