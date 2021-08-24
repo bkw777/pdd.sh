@@ -115,26 +115,26 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 ```$ ./pdd ri``` or ```$ ./pdd rl```
 
 **Read the Sector ID Data for all 80 physical sectors**  
-(using bash shell expansion to brute-force something the program doesn't provide itself)  
+(using bash shell expansion to do something the program doesn't provide itself)  
 ```$ ./pdd ri\ {0..79}\;```
 
 **Hex dump a physical sector to file**
 ```$ ./pdd rp 3 mydisk_p3.hex```
 
-**Dump entire disk**  
+**Dump entire disk to screen**  
 ```$ ./pdd dd```
 
-**Hex dump entire disk to file mydisk.hex**  
+**Dump entire disk to file mydisk.hex**  
 ```$ ./pdd dump_disk mydisk.hex```
 
-**Restore entire disk from hex dump file**  
+**Restore entire disk from mydisk.hex**  
 ```$ ./pdd restore_disk mydisk.hex```
 
 # Status
 All the "operation mode" commands work. Usable for all normal file access functions: load, save, delete, copy, move, & list files, format disk.
 
 Most of the FDC-mode functions work as well (sector access). Full disk dump & restore is working.  
-This means it is now possible to create a TPDD1 Utility Disk from a download without exotic hardware like Kryoflux. Just the TPDD drive itself and serial connection.
+This means it is now possible to create a TPDD1 Utility Disk or DiskPower KC-85 distribution disk from a download without exotic hardware like Kryoflux. Just the TPDD drive itself and serial connection.
 
 Only the TPDD1 sector access is supported yet, not TPDD2. No TPDD2 bank 1: for normal file access either.
 
