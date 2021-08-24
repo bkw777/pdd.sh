@@ -3,17 +3,15 @@
 # Brian K. White b.kenyon.w@gmail.com
 # https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
 
-# TODOS: Many ;)
-# * ls after every command?
+# TODOS:
+# * ls() after every command?
 # * 2 or 3-column ls format? (so a full disk still fits on screen)
-# * FDC commands (half done)
 # * TPDD2
-# * Refactor the global variable names to have a consistent scheme
+# * Refactor for more consistent names, idioms, interfaces
 # * Help
-# * Give lcmd_save() an option to append just for completeness
-# * Re-implement lcmd_mv based on fdc commands to edit the directory
-# * Confirmation prompts
-# * Investigate: can't save zero-byte files?
+# * mv() based on fdc commands to edit the directory instead of cp()+rm()
+# * Confirmation prompts before wiping files or disks
+# * Investigate: really can't save a zero-byte file?
 
 ###############################################################################
 # CONFIG
@@ -79,6 +77,12 @@ SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!
 ###############################################################################
 # tunables
 
+# Minimum delay in tpdd_read()
+# tpdd_read() has a dynamic delay of size_of_read/2
+# This sets minimum value of that delay.
+# CORRUPT DATA IF SET TOO LOW
+MIN_EXTRA_WAIT_MS=50
+
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
 # long (in ms) for a byte to appear before giving up.
@@ -90,8 +94,6 @@ TTY_READ_TIMEOUT_MS=50
 # Some commands like format take 100 seconds.
 TPDD_WAIT_TIMEOUT_MS=5000
 TPDD_WAIT_PERIOD_MS=50
-TPDD_WAIT_END_DELAY_MS=100 	#600	# CORRUPT DATA IF SET TOO LOW
-DYNAMIC_EXTRA_WAIT=0		# add a lot of time only when read_logical() reads a large sector
 
 # How long to wait for format to complete
 # Usually takes just under 100 seconds.
@@ -338,7 +340,7 @@ progressbar () {
 	((v)) && return
 	local -i i c p=$1 w=$2 p_len w_len=40 ;local b= s= u=$3
 	((w)) && c=$((p*100/w)) p_len=$((p*w_len/w)) || c=100 p_len=$w_len
-	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='=' ; }
+	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='.' ; }
 	printf '\r%79s\r[%s] %d%%%s' '' "$b" "$c" "${u:+ ($p/$w $u)} "
 }
 
@@ -493,7 +495,7 @@ tpdd_write () {
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i l=$1 ;local x ;rhex=() read_err=0
-	tpdd_wait || return $?
+	tpdd_wait '' '' $((l/2)) || return $?
 	vecho 1 -n "$z: l=$l "
 	for ((i=0;i<l;i++)) {
 		vecho 1 -n " $i:"
@@ -518,7 +520,7 @@ tpdd_check () {
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
 	local d=(: spin progressbar) s
-	local -i i=-1 n p=$TPDD_WAIT_PERIOD_MS t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
+	local -i i=-1 n p=$TPDD_WAIT_PERIOD_MS t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2 ew=$3
 	s=$((1000000+p)) ;s="${s:1:-3}.${s: -3}"
 	((t<p)) && t=p ;n=$(((t+50)/p))
 	((b==1)) && printf '%s ' "${anim[0]//?/ }"
@@ -528,7 +530,8 @@ tpdd_wait () {
 		_sleep $s
 	done
 	((i>n)) && { err_msg+=("$z: TIMED OUT") ;return 1 ; }
-	((TPDD_WAIT_END_DELAY_MS+DYNAMIC_EXTRA_WAIT)) && { s=$((1000000+TPDD_WAIT_END_DELAY_MS+DYNAMIC_EXTRA_WAIT)) ;s="${s:1:-3}.${s: -3}" ;_sleep $s ; }
+	((ew<MIN_EXTRA_WAIT_MS)) && ew=$MIN_EXTRA_WAIT_MS
+	s=$((1000000+ew)) ;s="${s:1:-3}.${s: -3}" ;_sleep $s
 	${d[b]} 1 1
 	((b==1)) && printf '%b\b%s %b\b' "${anim[0]//?/\\b}" "${anim[0]//?/ }" "${anim[0]//?/\\b}"
 	vecho 1 "$i"
@@ -1009,9 +1012,7 @@ fcmd_read_logical () {
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0d || return $?
-	DYNAMIC_EXTRA_WAIT=$((fdc_len/2))
 	tpdd_read $fdc_len || return $?
-	DYNAMIC_EXTRA_WAIT=0
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
 	((${#3})) || printf "S %02u %02u %04u %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
 }
