@@ -7,10 +7,8 @@
 # * ls() after every command?
 # * 2 or 3-column ls format? (so a full disk still fits on screen)
 # * TPDD2
-# * Refactor for more consistent names, idioms, interfaces
 # * Help
 # * mv() based on fdc commands to edit the directory instead of cp()+rm()
-# * Confirmation prompts before wiping files or disks
 # * Investigate: really can't save a zero-byte file?
 
 ###############################################################################
@@ -484,8 +482,23 @@ tpdd_write () {
 
 # read $1 bytes from com port
 # store each byte as a hex pair in global rhex[]
-# deep brute force magic here to actually read null bytes
-# (we're not actually reading or storing nulls, but we are *detecting* them and recording where they were)
+#
+# We need to read binary data from the drive. The special problem with handling
+# binary data in shell is that it's not possible to store or retrieve null/0x00
+# bytes in a shell variable. All other values can be handled with a little care.
+#
+# But we can *detect* null bytes and we can store the knowledge of them instead.
+#
+# LANG=C IFS= read -r -d $'\0' gets us all bytes except 0x00.
+#
+# To get the 0x00's what we do here is tell read() to treat null as the
+# delimiter, then read one byte at a time for the expected number of bytes (in
+# the case of TPDD, we always know the expected number of bytes, but we could
+# also read until end of data). For each read, the variable holding the data
+# will be empty if we read a 0x00 byte, or if there was no data. For each byte
+# that comes back empty, look at the return value from read() to tell whether
+# the drive sent a 0x00 byte, or if the drive didn't send anything.
+#
 # Thanks to Andrew Ayers in the M100 group on Facebook for help finding the key trick.
 #
 # return value from "read" is crucial to distiguish a timeout from a null byte
@@ -516,7 +529,9 @@ tpdd_check () {
 }
 
 # wait for data
-# tpdd_wait timeout_ms busy_indication
+# tpdd_wait timeout_ms busy_indication delay_return_ms
+# sleep() but periodically check the drive
+# return once the drive starts sending data
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
 	local d=(: spin progressbar) s
@@ -537,8 +552,7 @@ tpdd_wait () {
 	vecho 1 "$i"
 }
 
-# Drain any pending output from the drive.
-# Read and discard bytes one at a time until hitting a read timeout.
+# Drain output from the drive to get in sync with it's input vs output.
 tpdd_iosync () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	while tpdd_check ;do tpdd_read 1 ;done
@@ -891,18 +905,25 @@ ocmd_write () {
 fcmd_read_result () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local -i i ;local x b ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
+	local -i i ;local x ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
 
 	# read 8 bytes
 	tpdd_read 8 || return $?
 
-	# tpdd_read() encodes every byte as a hex pair, re-constitute the 8 hex
-	# pairs back to the original 8 ascii characters sent by the drive
+	# This may look a little confusing because we end up un-hexing the same data
+	# twice. tpdd_read() returns all data encoded as hex pairs, because that's
+	# how we have to deal with binary data in shell variables. In this case the
+	# original 8 bytes from the drive are themselves ascii hex pairs.
+
+	# re-constitute rhex[] from tpdd_read() back to the actual bytes sent
+	# by the drive
 	x="${rhex[*]}" ;printf -v x '%b' "\x${x// /\\x}"
 	vecho 1 "$z:$x"
 
-	# The 8 characters sent by the drive are themselves hex pairs,
-	# representing two 8-bit and one 16-bit integer values.
+	# Decode the 8 bytes as
+	# 2 bytes = hex pair representing an 8-bit integer error code
+	# 2 bytes = hex pair representing an 8-bit integer result data
+	# 4 bytes = 2 hex pairs representing a 16-bit integer length value
 	fdc_err=$((16#${x:0:2})) # first 2 = status
 	fdc_res=$((16#${x:2:2})) # next 2  = result
 	fdc_len=$((16#${x:4:4})) # last 4  = length
@@ -916,8 +937,7 @@ fcmd_read_result () {
 	fdc_res_b=()
 	for ((i=7;i>=0;i--)) { fdc_res_b+=(${D2B[fdc_res]:i:1}) ; }
 
-	b="${fdc_res_b[*]}" ;b="${b// /}"
-	vecho 1 "$z: err:$fdc_err:\"${fdc_msg[fdc_err]}\" res:$fdc_res($b) len:$fdc_len"
+	vecho 1 "$z: err:$fdc_err:\"${fdc_msg[fdc_err]}\" res:$fdc_res(${D2B[fdc_res]}) len:$fdc_len"
 }
 
 ###############################################################################
@@ -1076,26 +1096,31 @@ lcmd_load () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x s=$1 d=${2:-$1} ;local -i p= l= ;fhex=()
 	(($#)) || return 2
-	(($#==2)) && ((${#2}==0)) && d=			# read into memory instead of file
+	(($#==2)) && ((${#2}==0)) && d=		# read into memory instead of file
 	echo -n "Loading TPDD:$s"
 	ocmd_dirent "$s" '' ${dirent_cmd[set_name]} || return $?	# set the source filename
 	((${#file_name})) || { err_msg+=('No Such File') ; return 1 ; }
-	l=$file_len					# file size provided by dirent()
-	((${#d})) && echo " to $d" || echo
+	l=$file_len							# file size provided by dirent()
+	((${#d})) && {
+		echo " to $d"
+		[[ -e "$d" ]] && { err_msg+=('File Exists') ;return 1 ; }
+		> $d
+	} || {
+		echo
+	}
 	progressbar 0 $l "bytes"
 	ocmd_open ${open_mode[read]} || return $?	# open the source file for reading
-	((${#d})) && > "$d"				# start the destination file
-	while ocmd_read ;do				# read a block of data from tpdd
+	while ocmd_read ;do					# read a block of data from tpdd
 		((${#d})) && {
 			x="${ret_dat[*]}" ;printf '%b' "\x${x// /\\x}" >> "$d"	# add to file
 		} || {
 			fhex+=(${ret_dat[*]})		# add to fhex[]
 		}
 		((p+=${#ret_dat[*]})) ;progressbar $p $l "bytes"
-		((${#ret_dat[*]}<128)) && break		# stop if we get less than 128 bytes
-		((p>=l)) && break			# stop if we reach the expected total
+		((${#ret_dat[*]}<128)) && break	# stop if we get less than 128 bytes
+		((p>=l)) && break				# stop if we reach the expected total
 	done
-	((ret_err==30)) && ((p%128==0)) && unset ret_err  err_msg # annoying special case
+	((ret_err==30)) && ((p%128==0)) && unset ret_err err_msg # special case
 	ocmd_close || return $?				# close the source file
 	((p==l)) || { err_msg+=('Error') ; return 1 ; }
 	echo
@@ -1115,13 +1140,13 @@ lcmd_save () {
 		file_to_fhex "$s" || return 4
 	}
 	h=(${fhex[*]})
-	l=${#h[*]}				# file size
+	l=${#h[*]}							# file size
 	echo "Saving TPDD:$d"
 	progressbar 0 $l "bytes"
 
 	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
 	((${#file_name})) && { err_msg+=('File Exists') ; return 1 ; }
-	ocmd_open ${open_mode[write_new]} || return $?			# open the set file for writing
+	ocmd_open ${open_mode[write_new]} || return $?	# open the set file for writing
 	while ((${#h[*]})) ;do
 		vecho 1 "$z: packet:$((++p)) start #h[]=${#h[*]}"
 
@@ -1130,7 +1155,7 @@ lcmd_save () {
 		for ((i=0;i<n;i++)) { w+=(${h[i]}) h[i]= ; } ;h=(${h[*]})
 		vecho 1 "$z: packet:$p end #h[]=${#h[*]}"
 
-		ocmd_write ${w[*]} || return $?		# write w[] to the set file
+		ocmd_write ${w[*]} || return $?	# write w[] to the set file
 
 		tpdd_wait				# read the response from write
 		ocmd_read_ret || return $?
@@ -1138,7 +1163,7 @@ lcmd_save () {
 
 		progressbar $((b+=n)) $l "bytes"
 	done
-	ocmd_close || return $?			# close the set file
+	ocmd_close || return $?				# close the set file
 	echo
 }
 
@@ -1157,12 +1182,10 @@ lcmd_rm () {
 	done
 }
 
-# for now, mv and cp are almost the same and mostly redundant,
-# but eventually mv may be totally different, based on
-# fdc-mode commands to read and re-write the directory track
-# instead of doing load-delete-save
+# currently, mv and cp are mostly redundant, but later mv may be based on
+# fdc-mode commands to edit sector 0 instead of load-delete-save
 #
-# rm before save is less safe, but works when the disk is full
+# load-rm-save is less safe than load-save-rm, but works when the disk is full
 lcmd_mv () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	(($#==2)) || return 1
@@ -1186,7 +1209,7 @@ lcmd_read_physical () {
 	h+=(${rhex[*]})
 	t=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
 	for ((l=2;l<=t;l++)) {
-		progressbar $p $PHYSICAL_SECTOR_COUNT "P:$p L:$l"
+		((${#2})) && progressbar $p $PHYSICAL_SECTOR_COUNT "P:$p L:$l"
 		fcmd_read_logical $p $l $2 || return $?
 		h+=(${rhex[*]})
 	}
@@ -1199,6 +1222,7 @@ lcmd_dump_disk () {
 	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 n ;local f=$1
 	((${#f})) && {
 		echo "Dumping disk to $f"
+		[[ -e "$f" ]] && { err_msg+=('file Exists') ;return 1 ; }
 		progressbar 0 $t "P:- L:-"
 		>$f
 	}
@@ -1309,7 +1333,7 @@ lcmd_play_anim () {
 
 ###############################################################################
 # Main
-typeset -a err_msg=() shex=() fhex=() rhex=() ihex=() ret_dat=() fdc_res_b=()
+typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
 typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
