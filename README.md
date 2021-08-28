@@ -8,6 +8,9 @@ It's pure bash except for the following:
 
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
+## Installation
+```sudo make install```
+
 ## Usage
 ```pdd [tty_device] [command [args...]] [;commands...]```
 
@@ -65,69 +68,68 @@ Additionally some behavior may be modified by setting environment variables.
 ## Examples
 The same commands can be given either on the command line, or at the interactive prompt.  
 Example, to list the directory, where the command is: ```ls```, can be used either of these ways:  
-```$ ./pdd ls``` or ```TPDD(opr)> ls```
+```pdd ls``` or ```TPDD(opr)> ls```
 
 **Copy a file from the disk**  
-```$ ./pdd load DOSNEC.CO```
+```pdd load DOSNEC.CO```
 
 **Copy a file from the disk and save to a different local name**  
-```$ ./pdd load DOSNEC.CO ts-dos_4.1_nec.co```
+```pdd load DOSNEC.CO ts-dos_4.1_nec.co```
 
 **Copy a file to the disk**  
-```$ ./pdd save ts-dos_4.1_nec.co DOSNEC.CO```
+```pdd save ts-dos_4.1_nec.co DOSNEC.CO```
 
 **Stacked Commands: Delete File, then Directory List**  
 In interactive mode:  
 ```TPDD(opr)> rm DOSNEC.CO ;ls```  
 In non-interactive mode, quote the list because of the ";"  
-```$ ./pdd "rm DOSNEC.CO ;ls"```  
-...or you could use backslash to escape it:  
-```$ ./pdd rm DOSNEC.CO \;ls```
+```pdd "rm DOSNEC.CO ;ls"```  
 
 **FDC-mode drive condition**  
 Interactive:  
 ```
-$ ./pdd
+$ pdd
 TPDD(opr)> fdc
 TPDD(fdc)> condition
 Disk Inserted, Writable
-TPDD(fdc)>
+TPDD(fdc)> q
+$
 ```
 Non-interactive:  
 ```
-$ ./pdd D
+$ pdd D
 Disk Inserted, Writable
 $ 
 ```
 
 **Verbose/debug mode**  
-```$ DEBUG=1 ./pdd ...``` or ```TPDD(opr)> debug 1```
+```DEBUG=1 pdd ...``` or ```TPDD(opr)> debug 1```
 
 Log raw serial port traffic:  
 Make every call to tpdd_read() or tpdd_write() also create a local file with a copy of whatever was actually read from or written to the serial port.  
-```$ DEBUG=3 ./pdd ...``` or ```TPDD(opr)> debug 3```
+```DEBUG=3 pdd ...``` or ```TPDD(opr)> debug 3```
 
 **Find out a disk's logical sector size**  
 Most disks are formatted with 20 64-byte logical sectors per physical sector, since that's what the operation-mode format function in the firmware does, but there are exceptions. The TPDD1 Utility Disk seems like a normal disk, but it's actually formatted with 1 1280-byte logical sector per physical sector. You need to know this to use some FDC-Mode commands.  
 The logical sector size that a disk is formatted with can be seen by running the read_physical, read_logical, or read_id commands on any sector.  
 The quickest is to run either ```ri``` or ```rl``` with no arguments:  
-```$ ./pdd ri``` or ```$ ./pdd rl```
+```pdd ri``` or ```pdd rl```
 
 **Read the Sector ID Data for all 80 physical sectors**  
 (using bash shell expansion to do something the program doesn't provide itself)  
-```$ ./pdd ri\ {0..79}\;```
+```pdd ri\ {0..79}\;```
 
 **Hex dump a physical sector to file**
-```$ ./pdd rp 3 mydisk_p3.hex```
+```pdd rp 3 mydisk_p3.hex```
 
 **Dump entire disk to screen**  
-```$ ./pdd dd```
+```pdd dd```
 
 **Dump entire disk to file mydisk.hex**  
-```$ ./pdd dump_disk mydisk.hex```
+```pdd dump_disk mydisk.hex```
 
 **Restore entire disk from mydisk.hex**  
-```$ ./pdd restore_disk mydisk.hex```
+```pdd restore_disk mydisk.hex```
 
 # Status
 All the "operation mode" commands work. Usable for all normal file access functions: load, save, delete, copy, move, & list files, format disk.

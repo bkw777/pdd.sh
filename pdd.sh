@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
 # pdd.sh - TPDD1 client in pure bash
 # Brian K. White b.kenyon.w@gmail.com
-# https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
-
-# TODOS:
-# * ls() after every command?
-# * 2 or 3-column ls format? (so a full disk still fits on screen)
-# * TPDD2
-# * Help
-# * mv() based on fdc commands to edit the directory instead of cp()+rm()
-# * Investigate: really can't save a zero-byte file?
+# github.com/bkw777/pdd.sh
+# archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/
 
 ###############################################################################
 # CONFIG
@@ -48,7 +41,7 @@ esac
 # For 9600-only drives like FB-100 or FDD19, change 19200 to 9600
 # (FB-100/FDD19 can run at 19200 by removing the solder blob from dip switch 1)
 # To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
-STTY_FLAGS="19200 crtscts raw pass8 -echo clocal cread flusho -drain"
+STTY_FLAGS='19200 crtscts clocal cread raw pass8 flusho -echo'
 
 # This is silly but fun. Define your own animation for the busy-indicator.
 # Use "anim" to test. "$ ./pdd anim 100" plays the animation for 100 frames.
@@ -91,7 +84,7 @@ TTY_READ_TIMEOUT_MS=50
 # Some commands like dirent(get_first) and close can take 2 seconds to respond.
 # Some commands like format take 100 seconds.
 TPDD_WAIT_TIMEOUT_MS=5000
-TPDD_WAIT_PERIOD_MS=50
+TPDD_WAIT_PERIOD_MS=100
 
 # How long to wait for format to complete
 # Usually takes just under 100 seconds.
@@ -317,7 +310,7 @@ file_to_fhex () {
 	[[ -r "$1" ]] || { err_msg+=("\"$1\" not found") ;return 1 ; }
 
 	exec 5<"$1" || return $?
-	while IFS= read -r -d $'\0' -n 1 -u 5 x ;do
+	while IFS= read -d '' -r -n 1 -u 5 x ;do
 		printf -v x '%02x' "'$x"
 		fhex+=($x)
 		((${#fhex[*]}>TPDD_MAX_FILE_SIZE)) && { err_msg+=("\"$1\" exceeds ${TPDD_MAX_FILE_SIZE} bytes") ; break ; }
@@ -513,8 +506,8 @@ tpdd_read () {
 	for ((i=0;i<l;i++)) {
 		vecho 1 -n " $i:"
 		x= rhex[i]='00'
-		((read_err)) && { vecho 1 -n "XX" ; continue ; }
-		IFS= read -t $read_timeout -r -d $'\0' -n 1 -u 3 x ;read_err=$?
+		((read_err)) && { vecho 1 -n "--" ; continue ; }
+		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
 		((read_err>1)) || read_err=0
 		printf -v rhex[i] '%02x' "'$x"
 		vecho 1 -n "${rhex[i]}"
@@ -553,10 +546,8 @@ tpdd_wait () {
 }
 
 # Drain output from the drive to get in sync with it's input vs output.
-tpdd_iosync () {
-	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+tpdd_drain () {
 	while tpdd_check ;do tpdd_read 1 ;done
-	rhex=()
 }
 
 ###############################################################################
