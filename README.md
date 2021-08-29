@@ -51,7 +51,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 
 **general/other commands**  
 | command | arguments | Description |
-| --- | --- | -- |
+| --- | --- | --- |
+| send_loader | <filename> | Send a BASIC program to a "Model T".<br>Use to install a TPDD client.<br>See https://github.com/bkw777/dlplus/tree/master/clients |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | debug | \[0-3\] | Debug/verbose level - Toggle on/off each time it's called, or set the specified debug level if given<br>0 - debug mode off<br>1 - debug mode on<br>3 - debug mode on, plus every call to either tpdd_read() or tpdd_write() creates a log file with a copy of the data |
 
@@ -119,7 +120,7 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 (using bash shell expansion to do something the program doesn't provide itself)  
 ```pdd ri\ {0..79}\;```
 
-**Hex dump a physical sector to file**
+**Hex dump a physical sector to file**  
 ```pdd rp 3 mydisk_p3.hex```
 
 **Dump entire disk to screen**  
@@ -131,13 +132,11 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 **Restore entire disk from mydisk.hex**  
 ```pdd restore_disk mydisk.hex```
 
-# Status
-All the "operation mode" commands work. Usable for all normal file access functions: load, save, delete, copy, move, & list files, format disk.
-
-Most of the FDC-mode functions work as well (sector access). Full disk dump & restore is working.  
-This means it is now possible to create a TPDD1 Utility Disk or DiskPower KC-85 distribution disk from a download without exotic hardware like Kryoflux. Just the TPDD drive itself and serial connection.
-
-Only the TPDD1 sector access is supported yet, not TPDD2. No TPDD2 bank 1: for normal file access either.
+## Other Functions  
+**Send a BASIC loader program to a "Model T"**  
+This function is not used with a TPDD drive but with a "Model T" computer like a TRS-80 Model 100, usually to install a TPDD client like TS-DOS, TEENY, or DSKMGR.  
+```pdd send_loader TS-DOS.100```  
+You can find a collection of TPDD client loaders at https://github.com/bkw777/dlplus/tree/master/clients
 
 # References
 http://tandy.wiki/TPDD  

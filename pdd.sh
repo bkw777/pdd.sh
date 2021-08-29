@@ -103,6 +103,9 @@ CLOSE_WAIT_MS=20000
 # The initial dirent(get_first) for a directory listing
 LIST_WAIT_MS=10000
 
+# Per-byte delay in send_loader()
+LOADER_PER_CHAR_MS=6
+
 #
 # CONFIG
 ###############################################################################
@@ -120,7 +123,6 @@ typeset -ra mode=(
 
 ###############################################################################
 # "Operation Mode" constants
-
 
 # Operation Mode Request/Return Block Formats
 typeset -rA opr_fmt=(
@@ -258,7 +260,6 @@ typeset -ra fdc_format_sector_size=(
 	[6]=1280
 )
 
-
 ###############################################################################
 # general constants
 
@@ -269,10 +270,11 @@ typeset -ri \
 	TPDD_MAX_FILE_SIZE=65534 \
 	TPDD_MAX_FILE_COUNT=40
 
+typeset -r BASIC_EOF='1A'
+
 #
 # CONSTANTS
 ###############################################################################
-
 
 ###############################################################################
 # generic/util functions
@@ -396,6 +398,7 @@ do_cmd () {
 			rp|read_physical) lcmd_read_physical "$@" ;_e=$? ;;
 			dd|dump_disk) lcmd_dump_disk "$@" ;_e=$? ;;
 			h2d|restore_disk) lcmd_hex_file_to_disk "$@" ;_e=$? ;;
+			send_loader) lcmd_send_loader "$@" ;;
 
 	# low level manual raw/debug commands
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
@@ -428,7 +431,7 @@ do_cmd () {
 
 lcmd_tpdd1_boot () {
 	local x=
-	str_to_shex "S10985157C00AD7EF08B3AS901FE"
+	str_to_shex 'S10985157C00AD7EF08B3AS901FE'
 	tpdd_write ${shex[*]} 0d
 	while tpdd_read 1 ;do x+=" ${rhex[*]}" ;done
 	printf '%b' "\x${x// /\\x}"
@@ -570,8 +573,6 @@ tpdd_drain () {
 #   length    1 byte        length of data in bytes
 #   data      0-128 bytes   data
 #   checksum  1 byte        1's comp of LSByte of sum of format through data
-
-
 
 ###############################################################################
 # "Operation Mode" support functions
@@ -787,6 +788,7 @@ ocmd_fdc () {
 	ocmd_send_req ${opr_fmt[req_fdc]} || return $?
 	operation_mode=0
 	_sleep 0.1
+	tpdd_drain
 }
 
 # Open File
@@ -945,6 +947,7 @@ fcmd_mode () {
 	tpdd_write ${shex[*]} 0d
 	operation_mode=$1
 	_sleep 0.1
+	tpdd_drain
 }
 
 # report drive condition
@@ -1070,13 +1073,13 @@ lcmd_ls () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i m=${dirent_cmd[get_first]}
 
-	echo "------ Directory Listing ------"
+	echo '------ Directory Listing ------'
 	while ocmd_dirent '' '' $m ;do
 		un_tpdd_file_name "$file_name"
 		printf '%-24.24b %6u\n' "$file_name" "$file_len"
 		((m==${dirent_cmd[get_first]})) && m=${dirent_cmd[get_next]}
 	done
-	echo "-------------------------------"
+	echo '-------------------------------'
 	echo "$((free_sectors*PHYSICAL_SECTOR_LENGTH)) bytes free"
 }
 
@@ -1099,7 +1102,7 @@ lcmd_load () {
 	} || {
 		echo
 	}
-	progressbar 0 $l "bytes"
+	progressbar 0 $l 'bytes'
 	ocmd_open ${open_mode[read]} || return $?	# open the source file for reading
 	while ocmd_read ;do					# read a block of data from tpdd
 		((${#d})) && {
@@ -1107,7 +1110,7 @@ lcmd_load () {
 		} || {
 			fhex+=(${ret_dat[*]})		# add to fhex[]
 		}
-		((p+=${#ret_dat[*]})) ;progressbar $p $l "bytes"
+		((p+=${#ret_dat[*]})) ;progressbar $p $l 'bytes'
 		((${#ret_dat[*]}<128)) && break	# stop if we get less than 128 bytes
 		((p>=l)) && break				# stop if we reach the expected total
 	done
@@ -1133,7 +1136,7 @@ lcmd_save () {
 	h=(${fhex[*]})
 	l=${#h[*]}							# file size
 	echo "Saving TPDD:$d"
-	progressbar 0 $l "bytes"
+	progressbar 0 $l 'bytes'
 
 	ocmd_dirent "$d" '' ${dirent_cmd[set_name]} || return $?	# set the destination filename
 	((${#file_name})) && { err_msg+=('File Exists') ; return 1 ; }
@@ -1152,7 +1155,7 @@ lcmd_save () {
 		ocmd_read_ret || return $?
 		ocmd_check_err || return $?
 
-		progressbar $((b+=n)) $l "bytes"
+		progressbar $((b+=n)) $l 'bytes'
 	done
 	ocmd_close || return $?				# close the set file
 	echo
@@ -1280,11 +1283,35 @@ lcmd_hex_file_to_disk () {
 	echo
 }
 
+# write $* to com port with per-character delay
+# followed by the BASIC EOF character
+lcmd_send_loader () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local -i i l ;local s REPLY
+	s=$((1000000+LOADER_PER_CHAR_MS)) ;s="${s:1:-3}.${s: -3}"
+	file_to_fhex $1
+	fhex+=('0D' $BASIC_EOF)
+
+	echo "Installing $1"
+	echo 'Prepare the portable to receive. Hints:'
+	echo -e "\tRUN \"COM:98N1ENN\"\t(for TANDY, Kyotronic, Olivetti)"
+	echo -e "\tRUN \"COM:9N81XN\"\t(for NEC)\n"
+	read -p 'Press [Enter] when ready...'
+
+	l=${#fhex[*]}
+	for ((i=0;i<l;i++)) {
+		printf '%b' "\x${fhex[i]}" >&3
+		progressbar $((i+1)) $l 'bytes'
+		_sleep $s
+	}
+	echo
+}
+
 ###############################################################################
 # manual/raw debug commands
 
 lcmd_com_test () {
-	test_com && echo "com is open" || echo "com is closed"
+	test_com && echo 'com is open' || echo 'com is closed'
 }
 
 lcmd_com_open () {
@@ -1343,8 +1370,12 @@ for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
 vecho 1 "Using port \"$PORT\""
 open_com || exit $?
 
+# unsafe assumption now that we have send_loader()
+#
+# ensure we always leave the drive in operation mode
+#trap 'fcmd_mode 1' EXIT
 # ensure we always start in operation mode
-fcmd_mode 1
+#fcmd_mode 1
 
 # non-interactive mode
 exit=exit
