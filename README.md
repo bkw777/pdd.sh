@@ -51,8 +51,8 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | command | arguments | Description |
 | --- | --- | --- |
 | bank | \<0-1\> | Select bank# - affects ls/load/save/rm |
-| load_sector | \<track# 0-79\> \<sector# 0-1\> | Load a physical sector into the drive's sector cache |
-| read_fragment | \<length 0-252\> \<offset*length 0-252\> | Read \<length\> bytes at \<length\> x \<offset\> from the sector cache<br>Although it's possible to specify as much as 252 bytes to read,<br>the only useful values are even divisions of a full sector size, 1280.<br>This means multiples of 2 up to 128.<br>The \"dump_disk\" command in pdd2 mode uses 128 internally. |
+| load_sector | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\> | Load a physical sector into the drive's sector cache |
+| read_fragment | \<length&#160;0-252\>&#160;\<offset*length&#160;0-252\> | Read \<length\> bytes at \<length\> x \<offset\> from the sector cache<br>Although it's possible to specify as much as 252 bytes to read,<br>the only useful values are even divisions of a full sector size, 1280.<br>This means multiples of 2 up to 128.<br>The \"dump_disk\" command in pdd2 mode uses 128 internally. |
 
 **general/other commands**  
 | command | arguments | Description |
