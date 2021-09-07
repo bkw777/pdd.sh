@@ -52,7 +52,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | --- | --- | --- |
 | bank | \<0-1\> | Select bank# - affects ls/load/save/rm |
 | load_sector | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\> | Load a physical sector into the drive's sector cache |
-| read_fragment | \<length&#160;0-252\>&#160;\<offset*length&#160;0-252\> | Read \<length\> bytes at \<length\> x \<offset\> from the sector cache<br>Although it's possible to specify as much as 252 bytes to read,<br>the only useful values are even divisions of a full sector size, 1280.<br>This means multiples of 2 up to 128.<br>The \"dump_disk\" command in pdd2 mode uses 128 internally. |
+| read_fragment | \<length&#160;0-252\>&#160;\<offset&#160;0-252\> | Read \<length\> bytes at \<length\> x \<offset\> from the sector cache.<br>The only *useful* values are divisions of 1280. This means: multiples of 2, up to 128. ```dump_disk``` in pdd2-mode uses 128. |
 
 **general/other commands**  
 | command | arguments | Description |
@@ -146,6 +146,12 @@ The quickest is to run either ```ri``` or ```rl``` with no arguments:
 
 **Restore entire disk from mydisk.hex**  
 ```pdd restore_disk mydisk.hex```
+
+**Read a fragment of a sector from a TPDD2 drive**  
+Read the first 64-bytes of sector 0 track 2:  
+```pdd2 'load_sector 2 0 ;read_fragment 64 0'```  
+Read the last 64-bytes of sector 0 track 2:  
+```pdd2 'load_sector 2 0 ;read_fragment 64 19'```  
 
 ## Other Functions  
 **Send a BASIC loader program to a "Model T"**  
