@@ -36,7 +36,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | save | src_filename(local)&#160;\[dest_filename(disk)\] | Write a file to the disk |
 | format | | Format the disk with "operation-mode" filesystem format |
 
-**"FDC mode" commands**
+**TPDD1 "FDC mode" commands**
 | command | arguments | Description |
 | --- | --- | -- |
 | D&#160;\|&#160;condition | | Report the drive/disk status |
@@ -46,12 +46,19 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] \<ignored\> 13_hex_pairs... | Write the 13-byte Sector ID data. |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex_pairs... | Write one logical sector to disk |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>write to filename else display on screen |
-| dd&#160;\|&#160;dump_disk | \[filename\] | Read all logical sectors in all physical sectors<br>write to filename else display on screen |
-| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from filename |
+
+**TPDD2 commands**
+| bank | \<0-1\> | Select bank# - affects ls/load/save/rm |
+| load_sector | \<track# 0-79\> \<sector# 0-1\> | Load a physical sector into the drive's sector cache |
+| read_fragment | \<length 0-252\> \<offset*length 0-252\> | Read \<length\> bytes at \<length\> x \<offset\> from the sector cache<br>Although it's possible to specify as much as 252 bytes to read,<br>the only useful values are even divisions of a full sector size, 1280.<br>This means multiples of 2 up to 128.<br>The \"dump_disk\" command in pdd2 mode uses 128 internally. |
 
 **general/other commands**  
 | command | arguments | Description |
 | --- | --- | --- |
+| 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
+| 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
+| dd&#160;\|&#160;dump_disk | \[filename\] | Read all logical sectors in all physical sectors<br>write to filename else display on screen |
+| h2d&#160;\|&#160;restore_disk | filename | Restore a disk from filename<br>TPDD1 only at this time |
 | send_loader | <filename> | Send a BASIC program to a "Model T".<br>Use to install a TPDD client.<br>See https://github.com/bkw777/dlplus/tree/master/clients |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | debug | \[0-3\] | Debug/verbose level - Toggle on/off each time it's called, or set the specified debug level if given<br>0 - debug mode off<br>1 - debug mode on<br>3 - debug mode on, plus every call to either tpdd_read() or tpdd_write() creates a log file with a copy of the data |
@@ -60,11 +67,17 @@ There are also a bunch of low level raw/debugging commands not shown here. See d
 
 Multiple commands may be given at once, seperated by ';' to form a pre-loaded sequence.  
 
-Additionally some behavior may be modified by setting environment variables.
+Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
 | DEBUG | # | same as debug command above |
-| FLOPPY_COMPAT | true\|false | (default is true) automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
+| FLOPPY_COMPAT | true\|false | (default is true) Automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
+| DEFAULT_TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 whne no explicit pdd1 or pdd2 command given |
+
+Finally, the name that the script is another way to select between TPDD1 and TPDD2 modes.  
+```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
+Running ```pdd1 some_command``` is equivalent to running ```pdd "1;some_command"```  
+And running ```pdd2 some_command``` is equivalent to running ```pdd "2;some_command"```  
 
 ## Examples
 The same commands can be given either on the command line, or at the interactive prompt.  
