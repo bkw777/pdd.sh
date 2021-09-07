@@ -36,9 +36,9 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | save | src_filename(local)&#160;\[dest_filename(disk)\] | Write a file to the disk |
 | format | | Format the disk with "operation-mode" filesystem format |
 
-**TPDD1 "FDC mode" commands**
+**TPDD1 "FDC mode" commands**  
 | command | arguments | Description |
-| --- | --- | -- |
+| --- | --- | --- |
 | D&#160;\|&#160;condition | | Report the drive/disk status |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector. (default 1280 if not specified) |
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[local_filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to local_filename if given, else display on screen.<br>default physical 0 logical 1 |
@@ -47,7 +47,9 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;\<size\>&#160;hex_pairs... | Write one logical sector to disk |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>write to filename else display on screen |
 
-**TPDD2 commands**
+**TPDD2 commands**  
+| command | arguments | Description |
+| --- | --- | --- |
 | bank | \<0-1\> | Select bank# - affects ls/load/save/rm |
 | load_sector | \<track# 0-79\> \<sector# 0-1\> | Load a physical sector into the drive's sector cache |
 | read_fragment | \<length 0-252\> \<offset*length 0-252\> | Read \<length\> bytes at \<length\> x \<offset\> from the sector cache<br>Although it's possible to specify as much as 252 bytes to read,<br>the only useful values are even divisions of a full sector size, 1280.<br>This means multiples of 2 up to 128.<br>The \"dump_disk\" command in pdd2 mode uses 128 internally. |
