@@ -74,7 +74,7 @@ Additionally, some behavior may be modified by setting environment variables.
 | --- | --- | --- |
 | DEBUG | # | same as debug command above |
 | FLOPPY_COMPAT | true\|false | (default is true) Automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
-| DEFAULT_TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 whne no explicit pdd1 or pdd2 command given |
+| DEFAULT_TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 when no explicit pdd1 or pdd2 command given |
 
 Finally, the name that the script is another way to select between TPDD1 and TPDD2 modes.  
 ```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
@@ -166,4 +166,6 @@ http://www.bitchin100.com/wiki/index.php?title=Base_Protocol
 http://www.bitchin100.com/wiki/index.php?title=Desklink/TS-DOS_Directory_Access  
 http://www.bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd2-sector-0.html  
-https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd-sector-access.html
+https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd-sector-access.html  
+https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt  
+

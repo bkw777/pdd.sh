@@ -450,14 +450,15 @@ do_cmd () {
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
 			com_open) lcmd_com_open ;_e=$? ;; # open the port
 			com_close) lcmd_com_close ;_e=$? ;; # close the port
-			com_read) lcmd_com_read $* ;_e=$? ;; # read $1 bytes
-			com_write) lcmd_com_write $* ;_e=$? ;; # write $* (hex pairs)
-			com_ret) lcmd_com_ret ;_e=$? ;; # read a return packet
-			com_req) lcmd_com_req $* ;_e=$? ;; # write a request packet
+			tpdd_read) tpdd_read $* ;_e=$? ;; # read $1 bytes
+			tpdd_write) tpdd_write $* ;_e=$? ;; # write $* (hex pairs)
 			sum) calc_cksum $* ;_e=$? ;;
 			sync|drain) tpdd_drain ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
 			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;;
+			ocmd_send_req) ocmd_send_req $* ;_e=$? ;;
+			ocmd_read_ret) ocmd_read_ret $* ;_e=$? ;;
+			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 
 	# playground
 			# send the TPDD1 bootstrap S-records
@@ -643,7 +644,7 @@ verify_checksum () {
 	calc_cksum ${h[*]}
 	vecho 1 "$z: received: \"$x\""
 	vecho 1 "$z: computed: \"$cksum\""
-	[[ "$x" == "$cksum" ]]
+	((16#$x==16#$cksum))
 }
 
 # check if a ret_std format response was ok (00) or error
@@ -1393,24 +1394,6 @@ lcmd_com_close () {
 	lcmd_com_test
 }
 
-lcmd_com_read () {
-	tpdd_read $1
-	printf '%s\n' "${rhex[@]}"
-}
-
-lcmd_com_write () {
-	tpdd_write $*
-}
-
-lcmd_com_ret () {
-	ocmd_read_ret
-	printf '%s\n' "${ret_dat[@]}"
-}
-
-lcmd_com_req () {
-	ocmd_send_req $*
-}
-
 lcmd_play_anim () {
 	local -i i
 	echo
@@ -1459,33 +1442,31 @@ pdd2_condition () {
 }
 
 # TPDD2 read sector fragment
-# ocmd_read_fragment fragment_size fragment_number
-# ocmd_read_fragment 64 0-19
+# ocmd_read_fragment meta offset length [filename]
 pdd2_read_fragment () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((pdd2)) || abrt "$z requires TPDD2"
-	local -i o ;local x ;rhex=()
+	local x
 
 	# 4-byte data
-	# 00         reserved/unknown
+	# 00         meta
 	# 0000-04C0  offset
-	# 00-FF      length
-	((o=$1*$2))
-	printf -v x '00 %02X %02X %02X' $((o/256)) $((o%256)) $1
+	# 00-FC      length
+	printf -v x '%02X %02X %02X %02X' $1 $(($2/256)) $(($2%256)) $3
 
 	ocmd_send_req ${opr_fmt[req_fragment]} $x || return $?
 	ocmd_read_ret || return $?
 
 	# returned data:
-	# [0]     reserved/unknown
+	# [0]     meta
 	# [1][2]  offset
 	# [3]+    data
 	#((16#${ret_dat[0]})) && echo "!!! $z - Returned Reserved Field not 00 - Please notify b.kenyon.w@gmail.com !!!
 	printf -v x '%s' "${ret_dat[*]:3}"
-	((${#3})) && {
-		printf '%02u %u %04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x" >>$3
+	((${#4})) && {
+		printf '%02u %u %u %04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[0]}))" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x" >>$4
 	} || {
-		printf 'T:%02u S:%u O:%04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x"
+		printf 'T:%02u S:%u m:%u O:%04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[0]}))" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x"
 		#printf '%b\n' "\x${x// /\\x}"
 	}
 }
@@ -1499,7 +1480,8 @@ pdd2_load_sector () {
 	local x ;track_num=$1 sector_num=$2
 
 	# 5-byte data
-	# 0000  unknown
+	# 00|02 mode     0=load cache from disk  2=write cache to disk
+	# 00    unknown
 	# 00-4F track#
 	# 00    unknown
 	# 00-01 sector
@@ -1527,8 +1509,9 @@ pdd2_dump_disk () {
 	for ((t=0;t<PHYSICAL_SECTOR_COUNT;t++)) {
 		for ((s=0;s<2;s++)) {
 			pdd2_load_sector $t $s || return $?
+			pdd2_read_fragment 1 32772 4 $1|| return $? # mystery metadata
 			for ((f=0;f<fq;f++)) {
-				pdd2_read_fragment $l $f $1 || return $?
+				pdd2_read_fragment 0 $((l*f)) $l $1 || return $?
 				progressbar $((b+=l)) $tb bytes
 			}
 		}
