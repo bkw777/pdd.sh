@@ -43,28 +43,6 @@ esac
 # To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
 STTY_FLAGS='19200 crtscts clocal cread raw pass8 flusho -echo'
 
-# This is silly but fun. Define your own animation for the busy-indicator.
-# Use "anim" to test. "$ ./pdd anim 100" plays the animation for 100 frames.
-#SPINNER_ANIMATION_FRAMES=('*' ' ') # minimalist example
-#SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/') # traditional spinner
-#SPINNER_ANIMATION_FRAMES=('    ' '.   ' '.   ' '..  ' '..  ' '... ' '... ' '....' '....') # working...
-#SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast disk activity light
-#SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow disk activity light
-#SPINNER_ANIMATION_FRAMES=('----' '----' '----' '---^' '--^-' '-^--' '^---') # pulse
-#SPINNER_ANIMATION_FRAMES=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
-SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!!.!!" "..'!!''" "!..!'!.") # fire, kinda
-#SPINNER_ANIMATION_FRAMES=("|'|" '|:|' '|.|' '| |') # road
-#SPINNER_ANIMATION_FRAMES=("|'| |" '|:| |' '|.| |' '| |.|' "|'|:|" "|:|'|" '|.| |' '| | |') # 2 way traffic
-#SPINNER_ANIMATION_FRAMES=('(  ' ' _ ' '  )' ' " ') # roll ccw
-#SPINNER_ANIMATION_FRAMES=('(  ' ' " ' '  )' ' _ ') # roll cw
-#SPINNER_ANIMATION_FRAMES=('(    ' ' "   ' '  "  ' '   " ' '    )' '   _ ' '  _  ' ' _   ') # oval cw
-#SPINNER_ANIMATION_FRAMES=(' ' '.' 'o' 'O' "'") # bloop
-#SPINNER_ANIMATION_FRAMES=('"     ' ' o    ' '  _   ' '   o  ' '    O ' '     "' '    o ' '   _  ' '  o   ' ' O    ') # bounce
-#SPINNER_ANIMATION_FRAMES=("'__./" "_'._/" "_.'_/" ".__'/") # treadmill
-#SPINNER_ANIMATION_FRAMES=("'  ." " '. " " .' " ".  '") # juggle
-#SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
-#SPINNER_ANIMATION_FRAMES=('         ' '|        ' ' |       ' ' W|      ' ' WA|     ' ' WAX|    ' ' WAX |   ' ' WAX O|  ' ' WAX ON| ' ' WAX ON |' ' WAX ON  ' ' WAX ON  ' ' WAX ON  ' ' WAX ON |' ' WAX ON| ' ' WAX O|  ' ' WAX |   ' ' WAX|    ' ' WA|     ' ' W|      ' ' |       ' '|        ' '         ' '        |' '       | ' '      |F ' '     |FF ' '    |OFF ' '   | OFF ' '  |X OFF ' ' |AX OFF ' '|WAX OFF ' ' WAX OFF ' ' WAX OFF ' ' WAX OFF ' '|WAX OFF ' ' |AX OFF ' '  |X OFF ' '   | OFF ' '    |OFF ' '     |FF ' '      |F ' '       | ' '        |' '         ' '         ' '         ')
-
 ###############################################################################
 # tunables
 
@@ -326,9 +304,9 @@ file_to_fhex () {
 # progress indicator
 # progressbar part whole [units]
 #   progressbar 14 120
-#   [####====================================] 11%
+#   [####....................................] 11%
 #   progressbar 14 120 seconds
-#   [####====================================] 11% (14/120 seconds)
+#   [####....................................] 11% (14/120 seconds)
 progressbar () {
 	((v)) && return
 	local -i i c p=$1 w=$2 p_len w_len=40 ;local b= s= u=$3
@@ -337,14 +315,18 @@ progressbar () {
 	printf '\r%79s\r[%s] %d%%%s' '' "$b" "$c" "${u:+ ($p/$w $u)} "
 }
 
-# busy indicator
-# Looping animation for when you don't know how long something will take.
-# The animation "frames" are defined in the array anim[]. When called, it just
-# backspaces the length of a frame, and prints the next frame.
+# looping busy indicator for when you don't know how long something will take
+typeset -ra ANI=('-' '\' '|' '/')
 spin () {
 	((v)) && return
-	printf '%b\b%s ' "${anim[0]//?/\\b}" "${anim[_y]}"
-	((++_y>=${#anim[*]})) && _y=0
+	printf '\b\b%s ' "${ANI[ani]}"
+	((++ani>3)) && ani=0
+}
+
+# milliseconds to seconds, fake floating point
+ms_to_s () {
+	((_s=1000000+$1))
+	_s="${_s:1:-3}.${_s: -3}"
 }
 
 ###############################################################################
@@ -532,9 +514,9 @@ tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
 	local d=(: spin progressbar) s
 	local -i i=-1 n p=$TPDD_WAIT_PERIOD_MS t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2 ew=$3
-	s=$((1000000+p)) ;s="${s:1:-3}.${s: -3}"
-	((t<p)) && t=p ;n=$(((t+50)/p))
-	((b==1)) && printf '%s ' "${anim[0]//?/ }"
+	ms_to_s $p ;s=$_s
+	((t<p)) && t=p ;((n=(t+50)/p))
+	((b==1)) && printf '  '
 	until ((++i>n)) ;do
 		tpdd_check && break
 		${d[b]} $i $n
@@ -542,9 +524,9 @@ tpdd_wait () {
 	done
 	((i>n)) && { err_msg+=("$z: TIMED OUT") ;return 1 ; }
 	((ew<MIN_EXTRA_WAIT_MS)) && ew=$MIN_EXTRA_WAIT_MS
-	s=$((1000000+ew)) ;s="${s:1:-3}.${s: -3}" ;_sleep $s
+	ms_to_s $ew ;_sleep $_s
 	${d[b]} 1 1
-	((b==1)) && printf '%b\b%s %b\b' "${anim[0]//?/\\b}" "${anim[0]//?/ }" "${anim[0]//?/\\b}"
+	((b==1)) && printf '\b\b  \b\b'
 	vecho 1 "$i"
 }
 
@@ -607,7 +589,7 @@ ocmd_check_err () {
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 	((${#ret_dat[*]}==1)) || { err_msg+=('Corrupt Response') ; ret_dat=() ;return 1 ; }
 	vecho 1 -n "$z: ${ret_dat[0]}:"
-	e=$((16#${ret_dat[0]}))
+	((e=16#${ret_dat[0]}))
 	x='OK'
 	((e)) && {
 		x='UNKNOWN ERROR'
@@ -649,7 +631,7 @@ ocmd_read_ret () {
 		*) { err_msg+=('INVALID RESPONSE') ;rhex=() ;return 1 ; } ;;
 	esac
 
-	l=$((16#${ret_len:-00}))
+	((l=16#${ret_len:-00}))
 	vecho 1 "$z: reading 0x$ret_len($l) bytes (data)"
 	tpdd_read $l || return $?
 	((${#rhex[*]}==l)) || return 3
@@ -723,7 +705,7 @@ ocmd_dirent () {
 	# send the request
 	ocmd_send_req ${opr_fmt[req_dirent]} ${shex[*]} || return $?
 
-	[[ "$m" == "${dirent_cmd[get_first]}" ]] && tpdd_wait ${LIST_WAIT_MS}
+	((m==dirent_cmd[get_first])) && tpdd_wait $LIST_WAIT_MS
 
 	# read the response
 	ocmd_read_ret || return $?
@@ -745,10 +727,10 @@ ocmd_dirent () {
 
 	# If doing set_name, and we got this far, then return success. Only the
 	# caller knows if they expected file_name & file_attr to be null or not.
-	[[ "$m" == "${dirent_cmd[set_name]}" ]] && return 0
+	((m==dirent_cmd[set_name])) && return 0
 
 	# If doing get_first or get_next, filename[0]=00 means no more files.
-	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
+	((16#${ret_dat[0]}))
 }
 
 # Get Drive Status
@@ -1077,7 +1059,7 @@ lcmd_ls () {
 	while ocmd_dirent '' '' $m ;do
 		un_tpdd_file_name "$file_name"
 		printf '%-24.24b %6u\n' "$file_name" "$file_len"
-		((m==${dirent_cmd[get_first]})) && m=${dirent_cmd[get_next]}
+		((m==dirent_cmd[get_first])) && m=${dirent_cmd[get_next]}
 	done
 	echo '-------------------------------'
 	echo "$((free_sectors*PHYSICAL_SECTOR_LENGTH)) bytes free"
@@ -1201,7 +1183,7 @@ lcmd_read_physical () {
 	# read the logical sectors
 	fcmd_read_logical $p 1 $2 || return $?
 	h+=(${rhex[*]})
-	t=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
+	((t=PHYSICAL_SECTOR_LENGTH/fdc_len))
 	for ((l=2;l<=t;l++)) {
 		((${#2})) && progressbar $p $PHYSICAL_SECTOR_COUNT "P:$p L:$l"
 		fcmd_read_logical $p $l $2 || return $?
@@ -1224,7 +1206,7 @@ lcmd_dump_disk () {
 	for ((p=0;p<t;p++)) {
 		# read the ID section
 		fcmd_read_id $p $f || return $?
-		n=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
+		((n=PHYSICAL_SECTOR_LENGTH/fdc_len))
 		((${#f})) && printf '%02u %04u %s ' "$p" "$fdc_len" "${rhex[*]}" >> $f
 
 		# read the physical sector
@@ -1252,14 +1234,14 @@ lcmd_hex_file_to_disk () {
 	t=${#d[*]}
 	for ((i=0;i<t;i++)) {
 		r=(${d[i]})
-		((sz)) || sz=$((10#${r[1]}))
-		((sz==$((10#${r[1]})))) || { err_msg+=('Mixed Logical Sector Sizes') ; return 1 ; }
+		((sz)) || ((sz=10#${r[1]}))
+		((sz==10#${r[1]})) || { err_msg+=('Mixed Logical Sector Sizes') ; return 1 ; }
 	}
 
 	# FDC-mode format the disk with the appropriate sector size.
-	for i in ${!fdc_format_sector_size[*]} 9999 ;do ((${fdc_format_sector_size[i]}==sz)) && break ;done
+	for i in ${!fdc_format_sector_size[*]} 9999 ;do ((fdc_format_sector_size[i]==sz)) && break ;done
 	((i==9999)) && { err_msg+=('Unrecognized Logical Sector Size') ; return 1 ; }
-	n=$((PHYSICAL_SECTOR_LENGTH/sz))
+	((n=PHYSICAL_SECTOR_LENGTH/sz))
 	fcmd_format $i
 
 	# Write the sectors, skip un-used sectors
@@ -1288,7 +1270,7 @@ lcmd_hex_file_to_disk () {
 lcmd_send_loader () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i l ;local s REPLY
-	s=$((1000000+LOADER_PER_CHAR_MS)) ;s="${s:1:-3}.${s: -3}"
+	ms_to_s $LOADER_PER_CHAR_MS ;s=$_s
 	file_to_fhex $1
 	fhex+=('0D' $BASIC_EOF)
 
@@ -1352,12 +1334,11 @@ lcmd_play_anim () {
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
-typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
-cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
+typeset -i ani operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
+cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= _s=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
-x=$((1000000+TTY_READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
-typeset -ar anim=("${SPINNER_ANIMATION_FRAMES[@]}") ;typeset -i _y=
+ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=$_s
 
 # for _sleep()
 readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
@@ -1369,13 +1350,6 @@ for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
 [[ "$PORT" ]] && shift || get_tpdd_port
 vecho 1 "Using port \"$PORT\""
 open_com || exit $?
-
-# unsafe assumption now that we have send_loader()
-#
-# ensure we always leave the drive in operation mode
-#trap 'fcmd_mode 1' EXIT
-# ensure we always start in operation mode
-#fcmd_mode 1
 
 # non-interactive mode
 exit=exit
