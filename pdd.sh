@@ -266,7 +266,7 @@ typeset -ra fdc_format_sector_size=(
 typeset -ri \
 	PHYSICAL_SECTOR_LENGTH=1280 \
 	PHYSICAL_SECTOR_COUNT=80 \
-	PHYSICAL_SECTOR_ID_LEN=13 \
+	PHYSICAL_SECTOR_ID_LEN=12 \
 	TPDD_MAX_FILE_SIZE=65534 \
 	TPDD_MAX_FILE_COUNT=40
 
@@ -300,7 +300,7 @@ _sleep () {
 str_to_shex () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x="$*" ;local -i i l=${#x} ;shex=()
-	for ((i=0;i<l;i++)) { printf -v shex[i] '%02x' "'${x:i:1}" ; }
+	for ((i=0;i<l;i++)) { printf -v shex[i] '%02X' "'${x:i:1}" ; }
 	vecho 1 "$z: shex=(${shex[*]})"
 }
 
@@ -313,7 +313,7 @@ file_to_fhex () {
 
 	exec 5<"$1" || return $?
 	while IFS= read -d '' -r -n 1 -u 5 x ;do
-		printf -v x '%02x' "'$x"
+		printf -v x '%02X' "'$x"
 		fhex+=($x)
 		((${#fhex[*]}>TPDD_MAX_FILE_SIZE)) && { err_msg+=("\"$1\" exceeds ${TPDD_MAX_FILE_SIZE} bytes") ; break ; }
 	done
@@ -512,7 +512,7 @@ tpdd_read () {
 		((read_err)) && { vecho 1 -n "--" ; continue ; }
 		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
 		((read_err>1)) || read_err=0
-		printf -v rhex[i] '%02x' "'$x"
+		printf -v rhex[i] '%02X' "'$x"
 		vecho 1 -n "${rhex[i]}"
 	}
 	((v>2)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
@@ -584,7 +584,7 @@ calc_cksum () {
 	local -i s=0
 	while (($#)) ;do ((s+=16#$1)) ;shift ;done
 	s=$(((s&255)^255))
-	printf -v cksum '%02x' $s
+	printf -v cksum '%02X' $s
 	vecho 1 "$cksum"
 }
 
@@ -626,7 +626,7 @@ ocmd_send_req () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	local fmt=$1 len ;shift
-	printf -v len '%02x' $#
+	printf -v len '%02X' $#
 	calc_cksum $fmt $len $*
 	vecho 1 "$z: fmt=\"$fmt\" len=\"$len\" dat=\"$*\" sum=\"$cksum\""
 	tpdd_write 5a 5a $fmt $len $* $cksum
@@ -717,8 +717,8 @@ ocmd_dirent () {
 	# construct the request
 	mk_tpdd_file_name "$f"			# pad/truncate filename
 	str_to_shex "$tpdd_file_name"		# filename (shex[0-23])
-	printf -v shex[24] '%02x' "'${2:-F}"	# attribute - always "F"
-	printf -v shex[25] '%02x' $m		# search form (set_name, get_first, get_next)
+	printf -v shex[24] '%02X' "'${2:-F}"	# attribute - always "F"
+	printf -v shex[25] '%02X' $m		# search form (set_name, get_first, get_next)
 
 	# send the request
 	ocmd_send_req ${opr_fmt[req_dirent]} ${shex[*]} || return $?
@@ -798,7 +798,7 @@ ocmd_fdc () {
 ocmd_open () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local m ;printf -v m '%02x' $1
+	local m ;printf -v m '%02X' $1
 	ocmd_send_req ${opr_fmt[req_open]} $m || return $?	# open the file
 	ocmd_read_ret || return $?
 	ocmd_check_err
@@ -1270,12 +1270,12 @@ lcmd_hex_file_to_disk () {
 		x=${r[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
 
 		# write the ID section
-		fcmd_write_id ${r[@]:0:15} || return $?
+		fcmd_write_id ${r[@]:0:$((2+PHYSICAL_SECTOR_ID_LEN))} || return $?
 
 		# logical sectors count from 1
 		for ((l=1;l<=n;l++)) {
 			progressbar $((i+1)) $t "P:${r[0]} L:$l/$n"
-			s=(${r[@]:$((15+(sz*(l-1)))):sz})
+			s=(${r[@]:$((2+PHYSICAL_SECTOR_ID_LEN+(sz*(l-1)))):sz})
 			x=${s[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
 			fcmd_write_logical ${r[0]} $l ${s[*]} || return $?
 		}
