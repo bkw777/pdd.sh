@@ -11,9 +11,6 @@
 ###############################################################################
 # behavior
 
-# 1 or 2 for TPDD1 or TPDD2
-: ${DEFAULT_TPDD_MODEL:=1}
-
 # verbose/debug
 # 0/unset=normal, 1=verbose, >1=more verbose, 3=log all tty traffic to files
 # DEBUG=1 ./pdd ...
@@ -48,25 +45,25 @@ STTY_FLAGS='19200 crtscts clocal cread raw pass8 flusho -echo'
 
 # This is silly but fun. Define your own animation for the busy-indicator.
 # Use "anim" to test. "$ ./pdd anim 100" plays the animation for 100 frames.
-#ANI=('*' ' ') # minimalist example
-#ANI=('-' '\' '|' '/') # traditional spinner
-#ANI=('    ' '.   ' '.   ' '..  ' '..  ' '... ' '... ' '....' '....') # working...
-#ANI=('[o]' '[ ]') # fast disk activity light
-#ANI=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow disk activity light
-#ANI=('----' '----' '----' '---^' '--^-' '-^--' '^---') # pulse
-#ANI=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
-ANI=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!!.!!" "..'!!''" "!..!'!.") # fire, kinda
-#ANI=("|'|" '|:|' '|.|' '| |') # road
-#ANI=("|'| |" '|:| |' '|.| |' '| |.|' "|'|:|" "|:|'|" '|.| |' '| | |') # 2 way traffic
-#ANI=('(  ' ' " ' '  )' ' _ ') # circle cw
-#ANI=('(  ' ' _ ' '  )' ' " ') # circle ccw
-#ANI=('(    ' ' "   ' '  "  ' '   " ' '    )' '   _ ' '  _  ' ' _   ') # oval cw
-#ANI=(' ' '.' 'o' 'O' "'") # bloop
-#ANI=('"     ' ' o    ' '  _   ' '   o  ' '    O ' '     "' '    o ' '   _  ' '  o   ' ' O    ') # bounce
-#ANI=("'__./" "_'._/" "_.'_/" ".__'/") # treadmill
-#ANI=("'  ." " '. " " .' " ".  '") # juggle
-#ANI=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
-#ANI=('         ' '|        ' ' |       ' ' W|      ' ' WA|     ' ' WAX|    ' ' WAX |   ' ' WAX O|  ' ' WAX ON| ' ' WAX ON |' ' WAX ON  ' ' WAX ON  ' ' WAX ON  ' ' WAX ON |' ' WAX ON| ' ' WAX O|  ' ' WAX |   ' ' WAX|    ' ' WA|     ' ' W|      ' ' |       ' '|        ' '         ' '        |' '       | ' '      |F ' '     |FF ' '    |OFF ' '   | OFF ' '  |X OFF ' ' |AX OFF ' '|WAX OFF ' ' WAX OFF ' ' WAX OFF ' ' WAX OFF ' '|WAX OFF ' ' |AX OFF ' '  |X OFF ' '   | OFF ' '    |OFF ' '     |FF ' '      |F ' '       | ' '        |' '         ' '         ' '         ')
+#SPINNER_ANIMATION_FRAMES=('*' ' ') # minimalist example
+#SPINNER_ANIMATION_FRAMES=('-' '\' '|' '/') # traditional spinner
+#SPINNER_ANIMATION_FRAMES=('    ' '.   ' '.   ' '..  ' '..  ' '... ' '... ' '....' '....') # working...
+#SPINNER_ANIMATION_FRAMES=('[o]' '[ ]') # fast disk activity light
+#SPINNER_ANIMATION_FRAMES=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow disk activity light
+#SPINNER_ANIMATION_FRAMES=('----' '----' '----' '---^' '--^-' '-^--' '^---') # pulse
+#SPINNER_ANIMATION_FRAMES=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
+SPINNER_ANIMATION_FRAMES=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!!.!!" "..'!!''" "!..!'!.") # fire, kinda
+#SPINNER_ANIMATION_FRAMES=("|'|" '|:|' '|.|' '| |') # road
+#SPINNER_ANIMATION_FRAMES=("|'| |" '|:| |' '|.| |' '| |.|' "|'|:|" "|:|'|" '|.| |' '| | |') # 2 way traffic
+#SPINNER_ANIMATION_FRAMES=('(  ' ' _ ' '  )' ' " ') # roll ccw
+#SPINNER_ANIMATION_FRAMES=('(  ' ' " ' '  )' ' _ ') # roll cw
+#SPINNER_ANIMATION_FRAMES=('(    ' ' "   ' '  "  ' '   " ' '    )' '   _ ' '  _  ' ' _   ') # oval cw
+#SPINNER_ANIMATION_FRAMES=(' ' '.' 'o' 'O' "'") # bloop
+#SPINNER_ANIMATION_FRAMES=('"     ' ' o    ' '  _   ' '   o  ' '    O ' '     "' '    o ' '   _  ' '  o   ' ' O    ') # bounce
+#SPINNER_ANIMATION_FRAMES=("'__./" "_'._/" "_.'_/" ".__'/") # treadmill
+#SPINNER_ANIMATION_FRAMES=("'  ." " '. " " .' " ".  '") # juggle
+#SPINNER_ANIMATION_FRAMES=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
+#SPINNER_ANIMATION_FRAMES=('         ' '|        ' ' |       ' ' W|      ' ' WA|     ' ' WAX|    ' ' WAX |   ' ' WAX O|  ' ' WAX ON| ' ' WAX ON |' ' WAX ON  ' ' WAX ON  ' ' WAX ON  ' ' WAX ON |' ' WAX ON| ' ' WAX O|  ' ' WAX |   ' ' WAX|    ' ' WA|     ' ' W|      ' ' |       ' '|        ' '         ' '        |' '       | ' '      |F ' '     |FF ' '    |OFF ' '   | OFF ' '  |X OFF ' ' |AX OFF ' '|WAX OFF ' ' WAX OFF ' ' WAX OFF ' ' WAX OFF ' '|WAX OFF ' ' |AX OFF ' '  |X OFF ' '   | OFF ' '    |OFF ' '     |FF ' '      |F ' '       | ' '        |' '         ' '         ' '         ')
 
 ###############################################################################
 # tunables
@@ -94,7 +91,6 @@ TPDD_WAIT_PERIOD_MS=100
 # If you ever get a timeout while formatting, increase this by 1000 until
 # you no longer get timeouts.
 FORMAT_WAIT_MS=105000
-FORMAT_TPDD2_EXTRA_WAIT_MS=10000
 
 # How long to wait for delete to complete
 # Delete takes from 3 to 20 seconds. Larger files take longer.
@@ -119,13 +115,10 @@ LOADER_PER_CHAR_MS=6
 #
 
 ###############################################################################
-# operating modes
+# drive operating modes
 typeset -ra mode=(
-	[0]=fdc		# operate a TPDD1 drive in "FDC mode"
-	[1]=opr		# operate a TPDD1 drive "operation mode"
-	[2]=pdd2	# operate a TPDD2 drive ("operation mode" with more commands)
-	[3]=loader	# send an ascii BASIC file and BASIC_EOF out the serial port
-	[4]=server	# vaporware ;)
+	[0]=fdc		# "FDC mode"
+	[1]=opr		# "operation mode"
 )
 
 ###############################################################################
@@ -143,52 +136,37 @@ typeset -rA opr_fmt=(
 	[req_format]='06'
 	[req_status]='07'
 	[req_fdc]='08'
-	[req_condition]='0C'	# TPDD2
-	[req_sector]='30'	# TPDD2
-	[req_fragment]='32'	# TPDD2
 	# returns
 	[ret_read]='10'
 	[ret_dirent]='11'
 	[ret_std]='12'	# error open close delete status write
-	[ret_condition]='15'	# TPDD2
-	[ret_sector]='38'	# TPDD2
-	[ret_fragment]='39'	# TPDD2
 )
 
 # Operation Mode Error Codes
 typeset -rA opr_msg=(
 	[00]='Operation Complete'
 	[10]='File Not Found'
-	[11]='File Exists'
 	[30]='Command Parameter or Sequence Error'
-	[31]='Directory Search Error'
-	[35]='Bank Error'
-	[36]='Parameter Error'
-	[37]='Open Format Mismatch'
-	[3F]='End of File'
-	[40]='No Start Mark'
-	[41]='ID CRC Check Error'
-	[42]='Sector Length Error'
+	[40]='Read Error 0'
+	[41]='Read Error 1'
+	[42]='Read Error 2'
 	[43]='Read Error 3'
-	[44]='Format Verify Error'
-	[45]='Disk Not Formatted'
-	[46]='Format Interruption'
-	[47]='Erase Offset Error'
+	[44]='Read Error 4'
+	[45]='Disk Not Formatted' # 'Read Error 5'
+	[46]='Read Error 6'
+	[47]='Read Error 7'
 	[48]='Read Error 8'
-	[49]='DATA CRC Check Error'
-	[4A]='Sector Number Error'
-	[4B]='Read Data Timeout'
+	[49]='Read Error 9'
+	[4A]='Read Error A'
+	[4B]='Read Error B'
 	[4C]='Read Error C'
-	[4D]='Sector Number Error'
+	[4D]='Read Error D'
 	[4E]='Read Error E'
 	[4F]='Read Error F'
 	[50]='Write-Protected Disk'
-	[5E]='Disk Not Formatted'
-	[60]='Disk Full or Max File Size Exceeded or Directory Full' # TPDD2 'Directory Full'
-	[61]='Disk Full'
-	[6E]='File Too Long'
-	[70]='No Disk'
-	[71]='Disk Not Inserted or Disk Change Error' # TPDD2 'Disk Change Error'
+	[60]='Disk Full or Max File Size Exceeded' # 'Disk Full'
+	[70]='Disk Insertion Error 0'
+	[71]='Disk Not Inserted' # 'Disk Insertion Error 1'
 	[72]='Disk Insertion Error 2'
 	[73]='Disk Insertion Error 3'
 	[74]='Disk Insertion Error 4'
@@ -206,7 +184,7 @@ typeset -rA opr_msg=(
 	[80]='Hardware Fault 0'
 	[81]='Hardware Fault 1'
 	[82]='Hardware Fault 2'
-	[83]='Defective Disk (power-cycle to clear error)'
+	[83]='Defective Disk (power-cycle to clear error)' # 'Hardware Fault 3'
 	[84]='Hardware Fault 4'
 	[85]='Hardware Fault 5'
 	[86]='Hardware Fault 6'
@@ -361,26 +339,12 @@ progressbar () {
 
 # busy indicator
 # Looping animation for when you don't know how long something will take.
-# The animation "frames" are defined in the array ANI[]. When called, it just
+# The animation "frames" are defined in the array anim[]. When called, it just
 # backspaces the length of a frame, and prints the next frame.
 spin () {
 	((v)) && return
-	printf '%b\b%s ' "${ANI[0]//?/\\b}" "${anim[_y]}"
+	printf '%b\b%s ' "${anim[0]//?/\\b}" "${anim[_y]}"
 	((++_y>=${#anim[*]})) && _y=0
-}
-
-_init () {
-	case "${mode[operation_mode]}" in
-		fdc|opr)
-			# ensure we always leave the drive in operation mode
-			trap 'fcmd_mode 1' EXIT
-			# ensure we always start in operation mode
-			fcmd_mode 1
-			;;
-		*)
-			trap '' EXIT
-			;;
-	esac
 }
 
 ###############################################################################
@@ -393,29 +357,26 @@ do_cmd () {
 		set ${_a[_i]}
 		_c=$1 ;shift
 		err_msg=()
-
-		_init
-
 		case ${_c} in
 
 	# operation-mode commands
 	# All of the drive firmware "operation mode" functions.
 	# Most of these are low-level, not used directly by a user.
 	# Higher-level commands like ls, load, & save are built out of these.
-			dirent) ocmd_dirent "$@" ;_e=$? ;;
+			dirent) ocmd_dirent ;_e=$? ;;
 			open) ocmd_open $* ;_e=$? ;;
 			close) ocmd_close ;_e=$? ;;
 			read) ocmd_read $* ;_e=$? ;;
 			write) ocmd_write $* ;_e=$? ;;
 			delete) ocmd_delete ;_e=$? ;;
-			format) ocmd_format ;_e=$? ;;
+			format) ocmd_format ;_e=$? ;; # Creates 64-byte logical sectors.
 			status) ocmd_status ;_e=$? ;((_e)) || echo "OK" ;;
 			fdc) ocmd_fdc ;_e=$? ; exit=: ;;
 
 	# fdc-mode commands
 	# All of the drive firmware "FDC mode" functions.
 			${fdc_cmd[mode]}|mode) fcmd_mode $* ;_e=$? ;exit=: ;; # select operation-mode or fdc-mode
-			${fdc_cmd[condition]}|condition) ((pdd2)) && { pdd2_condition $* ;_e=$? ; } || { fcmd_condition $* ;_e=$? ; } ;; # get drive condition
+			${fdc_cmd[condition]}|condition) fcmd_condition $* ;_e=$? ;; # get drive condition
 			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;_e=$? ;; # format disk - selectable sector size
 			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;_e=$? ;; # format disk no verify
 			${fdc_cmd[read_id]}|read_id|ri) fcmd_read_id $* ;_e=$? ;; # read id
@@ -426,14 +387,7 @@ do_cmd () {
 			${fdc_cmd[write_sector]}|write_logical|wl) fcmd_write_logical $* ;_e=$? ;; # write sector
 			#${fdc_cmd[write_sect_nv]}|write_sector_nv) fcmd_write_sector_nv $* ;_e=$? ;; # write sector no verify
 
-	# TPDD2
-			bank) pdd2_bank $* ;_e=$? ;;	# select TPDD2 bank 0 or bank 1
-			read_fragment) pdd2_read_fragment $* ;_e=$? ;;
-			load_sector) pdd2_load_sector $* ;_e=$? ;;
-
 	# local/client commands
-			1|pdd1|tpdd1) pdd2=0 operation_mode=1 ;_init ;;
-			2|pdd2|tpdd2) pdd2=1 operation_mode=2 ;_init ;;
 			ls|dir) lcmd_ls "$@" ;_e=$? ;;
 			rm|del) lcmd_rm "$@" ;_e=$? ;;
 			load) lcmd_load "$@" ;_e=$? ;;
@@ -442,7 +396,7 @@ do_cmd () {
 			cp|copy) lcmd_cp "$@" ;_e=$? ;;
 			q|quit|bye|exit) exit ;;
 			rp|read_physical) lcmd_read_physical "$@" ;_e=$? ;;
-			dd|dump_disk) ((pdd2)) && { pdd2_dump_disk "$@" ;_e=$? ; } || { lcmd_dump_disk "$@" ;_e=$? ; } ;;
+			dd|dump_disk) lcmd_dump_disk "$@" ;_e=$? ;;
 			h2d|restore_disk) lcmd_hex_file_to_disk "$@" ;_e=$? ;;
 			send_loader) lcmd_send_loader "$@" ;;
 
@@ -450,15 +404,14 @@ do_cmd () {
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
 			com_open) lcmd_com_open ;_e=$? ;; # open the port
 			com_close) lcmd_com_close ;_e=$? ;; # close the port
-			tpdd_read) tpdd_read $* ;_e=$? ;; # read $1 bytes
-			tpdd_write) tpdd_write $* ;_e=$? ;; # write $* (hex pairs)
+			com_read) lcmd_com_read $* ;_e=$? ;; # read $1 bytes
+			com_write) lcmd_com_write $* ;_e=$? ;; # write $* (hex pairs)
+			com_ret) lcmd_com_ret ;_e=$? ;; # read a return packet
+			com_req) lcmd_com_req $* ;_e=$? ;; # write a request packet
 			sum) calc_cksum $* ;_e=$? ;;
-			sync|drain) tpdd_drain ;_e=$? ;;
+			sync|drain) tpdd_iosync ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
 			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;;
-			ocmd_send_req) ocmd_send_req $* ;_e=$? ;;
-			ocmd_read_ret) ocmd_read_ret $* ;_e=$? ;;
-			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 
 	# playground
 			# send the TPDD1 bootstrap S-records
@@ -644,7 +597,7 @@ verify_checksum () {
 	calc_cksum ${h[*]}
 	vecho 1 "$z: received: \"$x\""
 	vecho 1 "$z: computed: \"$cksum\""
-	((16#$x==16#$cksum))
+	[[ "$x" == "$cksum" ]]
 }
 
 # check if a ret_std format response was ok (00) or error
@@ -692,7 +645,7 @@ ocmd_read_ret () {
 	vecho 1 "$z: (${rhex[*]})"
 	((${#rhex[*]}==2)) || return 1
 	case "${rhex[0]}" in
-		${opr_fmt[ret_read]}|${opr_fmt[ret_dirent]}|${opr_fmt[ret_std]}|${opr_fmt[ret_condition]}|${opr_fmt[ret_sector]}|${opr_fmt[ret_fragment]}) ret_fmt=${rhex[0]} ret_len=${rhex[1]} ;;
+		10|11|12) ret_fmt=${rhex[0]} ret_len=${rhex[1]} ;;
 		*) { err_msg+=('INVALID RESPONSE') ;rhex=() ;return 1 ; } ;;
 	esac
 
@@ -757,12 +710,9 @@ un_tpdd_file_name () {
 # search form = 00=set_name | 01=get_first | 02=get_next
 ocmd_dirent () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i e ;local r=${opr_fmt[req_dirent]} x f="$1" m=${3:-${dirent_cmd[get_first]}}
+	local -i e ;local x f="$1" m=${3:-${dirent_cmd[get_first]}}
 	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
-
-	# if tpdd2 bank 1, add 0x40 to opr_fmt[req]
-	((bank)) && printf -v r '%02x' $((16#$r+16#40))
 
 	# construct the request
 	mk_tpdd_file_name "$f"			# pad/truncate filename
@@ -771,7 +721,7 @@ ocmd_dirent () {
 	printf -v shex[25] '%02x' $m		# search form (set_name, get_first, get_next)
 
 	# send the request
-	ocmd_send_req $r ${shex[*]} || return $?
+	ocmd_send_req ${opr_fmt[req_dirent]} ${shex[*]} || return $?
 
 	[[ "$m" == "${dirent_cmd[get_first]}" ]] && tpdd_wait ${LIST_WAIT_MS}
 
@@ -822,15 +772,10 @@ ocmd_status () {
 ocmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local -i w=$FORMAT_WAIT_MS
-	((pdd2)) && {
-		((w+=FORMAT_TPDD2_EXTRA_WAIT_MS))
-		echo "Formatting Disk, TPDD2 mode"
-	} || {
-		echo "Formatting Disk, TPDD1 \"operation\" mode"
-	}
+
+	echo "Formatting Disk with \"operation mode\" format"
 	ocmd_send_req ${opr_fmt[req_format]} || return $?
-	tpdd_wait $w 2 || return $?
+	tpdd_wait $FORMAT_WAIT_MS 2 || return $?
 	echo
 
 	ocmd_read_ret || return $?
@@ -840,7 +785,6 @@ ocmd_format () {
 # switch to FDC mode
 ocmd_fdc () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) && abrt "$z requires TPDD1"
 	ocmd_send_req ${opr_fmt[req_fdc]} || return $?
 	operation_mode=0
 	_sleep 0.1
@@ -854,9 +798,8 @@ ocmd_fdc () {
 ocmd_open () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local r=${opr_fmt[req_open]} m ;printf -v m '%02x' $1
-	((bank)) && printf -v r '%02x' $((16#$r+16#40))
-	ocmd_send_req $r $m || return $?	# open the file
+	local m ;printf -v m '%02x' $1
+	ocmd_send_req ${opr_fmt[req_open]} $m || return $?	# open the file
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
@@ -867,9 +810,7 @@ ocmd_open () {
 ocmd_close () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local r=${opr_fmt[req_close]}
-	((bank)) && printf -v r '%02x' $((16#$r+16#40))
-	ocmd_send_req $r
+	ocmd_send_req ${opr_fmt[req_close]} || return $?
 	tpdd_wait ${CLOSE_WAIT_MS}
 	ocmd_read_ret || return $?
 	ocmd_check_err
@@ -881,9 +822,7 @@ ocmd_close () {
 ocmd_delete () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local r=${opr_fmt[req_delete]}
-	((bank)) && printf -v r '%02x' $((16#$r+16#40))
-	ocmd_send_req $r || return $?
+	ocmd_send_req ${opr_fmt[req_delete]} || return $?
 	tpdd_wait $DELETE_WAIT_MS 1 || return $?
 	ocmd_read_ret || return $?
 	ocmd_check_err
@@ -895,9 +834,7 @@ ocmd_delete () {
 ocmd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
-	local r=${opr_fmt[req_read]}
-	((bank)) && printf -v r '%02x' $((16#$r+16#40))
-	ocmd_send_req $r || return $?
+	ocmd_send_req ${opr_fmt[req_read]} || return $?
 	ocmd_read_ret || return $?
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
@@ -920,9 +857,7 @@ ocmd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	(($#)) || return 128
-	local r=${opr_fmt[req_write]}
-	((bank)) && printf -v r '%02x' $((16#$r+16#40))
-	ocmd_send_req $r $* || return $?
+	ocmd_send_req ${opr_fmt[req_write]} $* || return $?
 	tpdd_check || return 0		# no return block sent unless error
 	ocmd_read_ret || return $?
 	ocmd_check_err
@@ -1007,7 +942,6 @@ fcmd_read_result () {
 # 0=fdc 1=operation
 fcmd_mode () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) && abrt "$z requires TPDD1"
 	(($#)) || return
 	str_to_shex "${fdc_cmd[mode]}$1"
 	tpdd_write ${shex[*]} 0d
@@ -1139,11 +1073,7 @@ lcmd_ls () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i m=${dirent_cmd[get_first]}
 
-	((pdd2)) && {
-		echo "--- Directory Listing   [$bank] ---"
-	} || {
-		echo '------ Directory Listing ------'
-	}
+	echo '------ Directory Listing ------'
 	while ocmd_dirent '' '' $m ;do
 		un_tpdd_file_name "$file_name"
 		printf '%-24.24b %6u\n' "$file_name" "$file_len"
@@ -1285,8 +1215,8 @@ lcmd_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 n ;local f=$1
 	((${#f})) && {
-		echo "Dumping Disk to $f"
-		[[ -e "$f" ]] && { err_msg+=('File Exists') ;return 1 ; }
+		echo "Dumping disk to $f"
+		[[ -e "$f" ]] && { err_msg+=('file Exists') ;return 1 ; }
 		progressbar 0 $t "P:- L:-"
 		>$f
 	}
@@ -1394,6 +1324,24 @@ lcmd_com_close () {
 	lcmd_com_test
 }
 
+lcmd_com_read () {
+	tpdd_read $1
+	printf '%s\n' "${rhex[@]}"
+}
+
+lcmd_com_write () {
+	tpdd_write $*
+}
+
+lcmd_com_ret () {
+	ocmd_read_ret
+	printf '%s\n' "${ret_dat[@]}"
+}
+
+lcmd_com_req () {
+	ocmd_send_req $*
+}
+
 lcmd_play_anim () {
 	local -i i
 	echo
@@ -1402,133 +1350,14 @@ lcmd_play_anim () {
 }
 
 ###############################################################################
-# TPDD2
-
-# select bank 0 or bank 1
-pdd2_bank () {
-	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) || abrt "$z requires TPDD2"
-	bank=$1
-}
-
-# TPDD2 Get Drive Status
-# request: 5a 5a 0C 00 ##
-# return : 15 01 ?? ##
-pdd2_condition () {
-	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) || abrt "$z requires TPDD2"
-	local -i i ;local x
-	ocmd_send_req ${opr_fmt[req_condition]} || return $?
-	ocmd_read_ret || return $?
-
-	# response data is a single byte wih 4 bit-flags
-	ocmd_cond_b=()
-	for ((i=7;i>=0;i--)) { ocmd_cond_b+=(${D2B[16#${ret_dat[0]}]:i:1}) ; }
-
-	# bit 2 - disk inserted
-	x= ;((ocmd_cond_b[2])) && {
-			x='Not Inserted'
-	} || {
-		# bit 3 - disk changed
-		x= ;((ocmd_cond_b[3])) && x='Changed ,'
-
-		# bit 1 - disk write-protected
-		((ocmd_cond_b[1])) && x+='Write-protected' || x+='Writable'
-	}
-	echo "Disk $x"
-	# result bit 0 - power
-	x='Normal' ;((ocmd_cond_b[0])) && x='Low'
-	echo "Power $x"
-}
-
-# TPDD2 read sector fragment
-# ocmd_read_fragment meta offset length [filename]
-pdd2_read_fragment () {
-	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) || abrt "$z requires TPDD2"
-	local x
-
-	# 4-byte data
-	# 00         meta
-	# 0000-04C0  offset
-	# 00-FC      length
-	printf -v x '%02X %02X %02X %02X' $1 $(($2/256)) $(($2%256)) $3
-
-	ocmd_send_req ${opr_fmt[req_fragment]} $x || return $?
-	ocmd_read_ret || return $?
-
-	# returned data:
-	# [0]     meta
-	# [1][2]  offset
-	# [3]+    data
-	#((16#${ret_dat[0]})) && echo "!!! $z - Returned Reserved Field not 00 - Please notify b.kenyon.w@gmail.com !!!
-	printf -v x '%s' "${ret_dat[*]:3}"
-	((${#4})) && {
-		printf '%02u %u %u %04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[0]}))" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x" >>$4
-	} || {
-		printf 'T:%02u S:%u m:%u O:%04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[0]}))" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x"
-		#printf '%b\n' "\x${x// /\\x}"
-	}
-}
-
-# TPDD2 load sector into drive cache
-# pdd2_load_sector track# sector#
-# pdd2_load_sector 0-79 0-1
-pdd2_load_sector () {
-	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) || abrt "$z requires TPDD2"
-	local x ;track_num=$1 sector_num=$2
-
-	# 5-byte data
-	# 00|02 mode     0=load cache from disk  2=write cache to disk
-	# 00    unknown
-	# 00-4F track#
-	# 00    unknown
-	# 00-01 sector
-	printf -v x '00 00 %02X 00 %02X' $track_num $sector_num
-
-	ocmd_send_req ${opr_fmt[req_sector]} $x || return $?
-	ocmd_read_ret || return $?
-	ocmd_check_err
-}
-
-# TPDD2 dump disk
-# pdd2_dump_disk [filename]
-pdd2_dump_disk () {
-	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) || abrt "$z requires TPDD2"
-	local -i t s f l=128 fq tb b=
-	((fq=PHYSICAL_SECTOR_LENGTH/l))
-	((tb=fq*PHYSICAL_SECTOR_COUNT*2*l))
-	((${#1})) && {
-		printf 'Dumping Disk to file: \"%s\"\n' "$1"
-		progressbar 0 $tb bytes
-		>$1
-	}
-
-	for ((t=0;t<PHYSICAL_SECTOR_COUNT;t++)) {
-		for ((s=0;s<2;s++)) {
-			pdd2_load_sector $t $s || return $?
-			pdd2_read_fragment 1 32772 4 $1|| return $? # mystery metadata
-			for ((f=0;f<fq;f++)) {
-				pdd2_read_fragment 0 $((l*f)) $l $1 || return $?
-				progressbar $((b+=l)) $tb bytes
-			}
-		}
-	}
-
-	((${#1})) && echo
-}
-
-###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
-typeset -i _y= pdd2=$((DEFAULT_TPDD_MODEL-1)) bank= operation_mode=1 read_err= fdc_err= fdc_res= fdc_len= track_num= sector_num=
+typeset -i operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v>2)) && typeset -i seq=0
 x=$((1000000+TTY_READ_TIMEOUT_MS)) ;readonly read_timeout="${x:1:-3}.${x: -3}" ;unset x
-[[ "$0" =~ .*pdd2(\.sh)?$ ]] && pdd2=1 operation_mode=2
+typeset -ar anim=("${SPINNER_ANIMATION_FRAMES[@]}") ;typeset -i _y=
 
 # for _sleep()
 readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
@@ -1541,9 +1370,16 @@ for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
 vecho 1 "Using port \"$PORT\""
 open_com || exit $?
 
+# unsafe assumption now that we have send_loader()
+#
+# ensure we always leave the drive in operation mode
+#trap 'fcmd_mode 1' EXIT
+# ensure we always start in operation mode
+#fcmd_mode 1
+
 # non-interactive mode
 exit=exit
-(($#)) && { do_cmd "$@" ;$exit ; }
+(($#)) && { do_cmd "$@" ; $exit ; }
 
 # interactive mode
 while read -p"TPDD(${mode[operation_mode]})> " __c ;do do_cmd "${__c}" ;done
