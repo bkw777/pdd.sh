@@ -63,7 +63,7 @@ There are two groups of commands, "operation mode" and "FDC mode".
 | h2d&#160;\|&#160;restore_disk | filename | Restore a disk from filename<br>TPDD1 only at this time |
 | send_loader | filename | Send a BASIC program to a "Model T".<br>Use to install a TPDD client.<br>See https://github.com/bkw777/dlplus/tree/master/clients |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
-| debug | \[0-3\] | Debug/verbose level - Toggle on/off each time it's called, or set the specified debug level if given<br>0 - debug mode off<br>1 - debug mode on<br>3 - debug mode on, plus every call to either tpdd_read() or tpdd_write() creates a log file with a copy of the data |
+| debug | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose<br>9 = every tpdd_read() or tpdd_write() creates a log file with a copy of the data |
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
@@ -74,12 +74,12 @@ Additionally, some behavior may be modified by setting environment variables.
 | --- | --- | --- |
 | DEBUG | # | same as debug command above |
 | FLOPPY_COMPAT | true\|false | (default is true) Automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
-| DEFAULT_TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 when no explicit pdd1 or pdd2 command given |
+| TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
 
-Finally, the name that the script is another way to select between TPDD1 and TPDD2 modes.  
+Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility.  
 ```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
 Running ```pdd1 some_command``` is equivalent to running ```pdd "1;some_command"```  
-And running ```pdd2 some_command``` is equivalent to running ```pdd "2;some_command"```  
+Running ```pdd2 some_command``` is equivalent to running ```pdd "2;some_command"```  
 
 ## Examples
 The same commands can be given either on the command line, or at the interactive prompt.  
