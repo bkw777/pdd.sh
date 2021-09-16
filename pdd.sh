@@ -646,7 +646,7 @@ calc_cksum () {
 	local z=${FUNCNAME[0]} ;vecho 1 -n "$z($@):"
 	local -i s=0
 	while (($#)) ;do ((s+=16#$1)) ;shift ;done
-	s=$(((s&255)^255))
+	((s=(s&255)^255))
 	printf -v cksum '%02X' $s
 	vecho 1 "$cksum"
 }
@@ -669,7 +669,7 @@ ocmd_check_err () {
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 	((${#ret_dat[*]}==1)) || { err_msg+=('Corrupt Response') ; ret_dat=() ;return 1 ; }
 	vecho 1 -n "$z: ${ret_dat[0]}:"
-	e=$((16#${ret_dat[0]}))
+	((e=16#${ret_dat[0]}))
 	x='OK'
 	((e)) && {
 		x='UNKNOWN ERROR'
@@ -710,7 +710,7 @@ ocmd_read_ret () {
 	[[ "$ret_list" =~ \|${rhex[0]}\| ]] || abrt 'INVALID RESPONSE'
 	ret_fmt=${rhex[0]} ret_len=${rhex[1]}
 
-	l=$((16#${ret_len:-00}))
+	((l=16#${ret_len:-00}))
 	vecho 1 "$z: reading 0x$ret_len($l) bytes (data)"
 	tpdd_read $l || return $?
 	((${#rhex[*]}==l)) || return 3
@@ -801,18 +801,19 @@ ocmd_dirent () {
 	((${#ret_dat[*]}==28)) || abrt "$z: Got ${#ret_dat[*]} bytes, expected 28"
 
 	# parse a dirent return format
-	free_sectors=$((16#${ret_dat[27]})) ;ret_dat[27]=
-	file_len=$(( 16#${ret_dat[25]}*256 + 16#${ret_dat[26]} )) ;ret_dat[26]= ret_dat[25]=
+	((free_sectors=16#${ret_dat[27]})) ;ret_dat[27]=
+	((file_len=16#${ret_dat[25]}*256+16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
 	printf -v file_attr '%b' "\x${ret_dat[24]}" ;ret_dat[24]=
 	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
 	vecho 1 "$z: mode=$m filename=\"$file_name\" attr=\"$file_attr\" len=$file_len free=$free_sectors"
 
 	# If doing set_name, and we got this far, then return success. Only the
 	# caller knows if they expected file_name & file_attr to be null or not.
-	[[ "$m" == "${dirent_cmd[set_name]}" ]] && return 0
+	((m==16#${dirent_cmd[set_name]})) && return 0
 
 	# If doing get_first or get_next, filename[0]=00 means no more files.
-	[[ ${ret_dat[0]} == '00' ]] && return 1 || return 0
+	# 
+	((16#${ret_dat[0]}))
 }
 
 # Get Drive Status
@@ -991,9 +992,9 @@ fcmd_read_result () {
 	# 2 bytes = hex pair representing an 8-bit integer error code
 	# 2 bytes = hex pair representing an 8-bit integer result data
 	# 4 bytes = 2 hex pairs representing a 16-bit integer length value
-	fdc_err=$((16#${x:0:2})) # first 2 = status
-	fdc_res=$((16#${x:2:2})) # next 2  = result
-	fdc_len=$((16#${x:4:4})) # last 4  = length
+	((fdc_err=16#${x:0:2})) # first 2 = status
+	((fdc_res=16#${x:2:2})) # next 2  = result
+	((fdc_len=16#${x:4:4})) # last 4  = length
 
 	# look up the status/error message for fdc_err
 	x= ;[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
@@ -1019,7 +1020,7 @@ fcmd_mode () {
 	((pdd2)) && abrt "$z requires TPDD1"
 	(($#)) || return
 	str_to_shex "${fdc_cmd[mode]}$1"
-	tpdd_write ${shex[*]} 0d
+	tpdd_write ${shex[*]} 0D
 	operation_mode=$1
 	_sleep 0.1
 	tpdd_drain
@@ -1031,7 +1032,7 @@ fcmd_condition () {
 	((operation_mode)) && ocmd_fdc
 	local x
 	str_to_shex "${fdc_cmd[condition]}"
-	tpdd_write ${shex[*]} 0d || return $?
+	tpdd_write ${shex[*]} 0D || return $?
 
 	fcmd_read_result || return $?
 	((fdc_err)) && return $fdc_err
@@ -1057,7 +1058,7 @@ fcmd_format () {
 	typeset -i s=${1:-6}
 	str_to_shex ${fdc_cmd[format]}$s
 	echo "Formatting Disk with ${fdc_format_sector_size[s]:-\"\"}-Byte Logical Sectors"
-	tpdd_write ${shex[*]} 0d || return $?
+	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_result $FORMAT_WAIT_MS 2 || return $?
 	((fdc_err)) && err_msg+=(", Sector:$fdc_res")
 	return $fdc_err
@@ -1076,11 +1077,11 @@ fcmd_read_id () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	str_to_shex "${fdc_cmd[read_id]}$1"
-	tpdd_write ${shex[*]} 0d || return $?
+	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
 	#vecho 2 "P:$1 LEN:${fdc_len} RES:${fdc_res}[${fdc_res_b[*]}]"
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
-	tpdd_write 0d || return $?
+	tpdd_write 0D || return $?
 	tpdd_read $PDD1_SECTOR_ID_LENGTH || return $?
 	((${#rhex[*]}<PDD1_SECTOR_ID_LENGTH)) && { err_msg+=("Got ${#rhex[*]} of $PDD1_SECTOR_ID_LENGTH bytes") ; return 1 ; }
 	((${#2})) || printf "I %02u %04u %s\n" "$1" "$fdc_len" "${rhex[*]}"
@@ -1094,11 +1095,11 @@ fcmd_read_logical () {
 	((operation_mode)) && ocmd_fdc
 	local -i ps=$1 ls=${2:-1} || return $? ;local x
 	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
-	tpdd_write ${shex[*]} 0d || return $?
+	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
-	tpdd_write 0d || return $?
+	tpdd_write 0D || return $?
 	# The drive will appear ready with data right away, but if you read too soon
 	# the data will be corrupt or incomplete.
 	# Take 2/3 of the number of bytes we expect to read, and sleep that many MS.
@@ -1115,7 +1116,7 @@ fcmd_write_id () {
 	((operation_mode)) && ocmd_fdc
 	local -i p=$((10#$1)) ;shift
 	str_to_shex "${fdc_cmd[write_id]}$p"
-	tpdd_write ${shex[*]} 0d || return $?
+	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	shift ; # discard the size field
@@ -1132,7 +1133,7 @@ fcmd_write_logical () {
 	((operation_mode)) && ocmd_fdc
 	local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 2
 	str_to_shex "${fdc_cmd[write_sector]}$ps,$ls"
-	tpdd_write ${shex[*]} 0d || return $?
+	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	tpdd_write $* || return $?
@@ -1273,7 +1274,7 @@ pdd1_read_physical () {
 	# read the logical sectors
 	fcmd_read_logical $p 1 $2 || return $?
 	h+=(${rhex[*]})
-	t=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
+	((t=PHYSICAL_SECTOR_LENGTH/fdc_len))
 	for ((l=2;l<=t;l++)) {
 		((${#2})) && pbar $p $PHYSICAL_SECTOR_COUNT "P:$p L:$l"
 		fcmd_read_logical $p $l $2 || return $?
@@ -1296,7 +1297,7 @@ pdd1_dump_disk () {
 	for ((p=0;p<t;p++)) {
 		# read the ID section
 		fcmd_read_id $p $f || return $?
-		n=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
+		((n=PHYSICAL_SECTOR_LENGTH/fdc_len))
 		((${#f})) && printf '%02u %04u %s ' "$p" "$fdc_len" "${rhex[*]}" >> $f
 
 		# read the physical sector
@@ -1331,7 +1332,7 @@ pdd1_restore_disk () {
 	# FDC-mode format the disk with the appropriate sector size.
 	for i in ${!fdc_format_sector_size[*]} 9999 ;do ((${fdc_format_sector_size[i]}==sz)) && break ;done
 	((i==9999)) && { err_msg+=('Unrecognized Logical Sector Size') ; return 1 ; }
-	n=$((PHYSICAL_SECTOR_LENGTH/sz))
+	((n=PHYSICAL_SECTOR_LENGTH/sz))
 	fcmd_format $i
 
 	# Write the sectors, skip un-used sectors
