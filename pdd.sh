@@ -48,37 +48,8 @@ esac
 # To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
 STTY_FLAGS='19200 crtscts clocal cread raw pass8 flusho -echo'
 
-# This is silly but fun. Define your own animation for the busy-indicator.
-# Use "anim" to test. "$ ./pdd anim 100" plays the animation for 100 frames.
-#ANI=('*' ' ') # minimalist example
-#ANI=('-' '\' '|' '/') # traditional spinner
-#ANI=('    ' '.   ' '.   ' '..  ' '..  ' '... ' '... ' '....' '....') # working...
-#ANI=('[o]' '[ ]') # fast disk activity light
-#ANI=('[o]' '[o]' '[o]' '[ ]' '[ ]') # slow disk activity light
-#ANI=('----' '----' '----' '---^' '--^-' '-^--' '^---') # pulse
-#ANI=('       ' '   .   ' '   o   ' '  ( )  ' ' (   ) ' '(     )') # warp
-#ANI=("!.!'.!!" "!.'.!'!" "'!.!!.'" ".!.'!!." ".!!..!." ".'!!.!!" "..'!!''" "!..!'!.") # fire, kinda
-#ANI=("|'|" '|:|' '|.|' '| |') # road
-#ANI=("|'| |" '|:| |' '|.| |' '| |.|' "|'|:|" "|:|'|" '|.| |' '| | |') # 2 way traffic
-#ANI=('(  ' ' " ' '  )' ' _ ') # circle cw
-#ANI=('(  ' ' _ ' '  )' ' " ') # circle ccw
-ANI=('(    ' ' "   ' '  \  ' '   _ ' '    )' '   " ' '  /  ' ' _   ') # figure 8
-#ANI=('(    ' ' "   ' '  "  ' '   " ' '    )' '   _ ' '  _  ' ' _   ') # oval cw
-#ANI=(' ' '.' 'o' 'O' "'") # bloop
-#ANI=('"     ' ' o    ' '  _   ' '   o  ' '    O ' '     "' '    o ' '   _  ' '  o   ' ' O    ') # bounce
-#ANI=("'__./" "_'._/" "_.'_/" ".__'/") # treadmill
-#ANI=("'  ." " '. " " .' " ".  '") # juggle
-#ANI=('>o    ' ' >o   ' '  >o  ' '   >o ' '    >o' '     o' '    o<' '   o< ' '  o<  ' ' o<   ' 'o<    ' 'o     ') # fishie
-#ANI=('         ' '|        ' ' |       ' ' W|      ' ' WA|     ' ' WAX|    ' ' WAX |   ' ' WAX O|  ' ' WAX ON| ' ' WAX ON |' ' WAX ON  ' ' WAX ON  ' ' WAX ON  ' ' WAX ON |' ' WAX ON| ' ' WAX O|  ' ' WAX |   ' ' WAX|    ' ' WA|     ' ' W|      ' ' |       ' '|        ' '         ' '        |' '       | ' '      |F ' '     |FF ' '    |OFF ' '   | OFF ' '  |X OFF ' ' |AX OFF ' '|WAX OFF ' ' WAX OFF ' ' WAX OFF ' ' WAX OFF ' '|WAX OFF ' ' |AX OFF ' '  |X OFF ' '   | OFF ' '    |OFF ' '     |FF ' '      |F ' '       | ' '        |' '         ' '         ' '         ')
-
 ###############################################################################
 # tunables
-
-# Minimum delay in tpdd_read()
-# tpdd_read() has a dynamic delay of size_of_read/2
-# This sets minimum value of that delay.
-# CORRUPT DATA IF SET TOO LOW
-MIN_EXTRA_WAIT_MS=50
 
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port, wait this
@@ -128,7 +99,7 @@ typeset -ra mode=(
 	[1]=opr		# operate a TPDD1 drive "operation mode"
 	[2]=pdd2	# operate a TPDD2 drive ("operation mode" with more commands)
 	[3]=loader	# send an ascii BASIC file and BASIC_EOF out the serial port
-	[4]=server	# vaporware ;)
+	[4]=server	# vaporware
 )
 
 ###############################################################################
@@ -155,8 +126,8 @@ typeset -rA opr_fmt=(
 	[ret_dirent]='11'
 	[ret_std]='12'	# error open close delete status write
 	[ret_condition]='15'		# TPDD2
-	[ret_pdd2_sector_std]='38'	# TPDD2
-	[ret_read_cache]='39'	# TPDD2
+	[ret_pdd2_sector_std]='38'	# TPDD2 sector_cache write_cache
+	[ret_read_cache]='39'		# TPDD2
 )
 
 # Operation Mode Error Codes
@@ -292,9 +263,12 @@ typeset -ra fdc_format_sector_size=(
 typeset -ri \
 	PHYSICAL_SECTOR_LENGTH=1280 \
 	PHYSICAL_SECTOR_COUNT=80 \
-	PHYSICAL_SECTOR_ID_LEN=12 \
-	TPDD_MAX_FILE_SIZE=65534 \
-	TPDD_MAX_FILE_COUNT=40
+	PDD1_SECTOR_ID_LENGTH=12 \
+	TPDD_MAX_FILE_LENGTH=65534 \
+	TPDD_MAX_FILE_COUNT=40 \
+	PDD2_SECTOR_CHUNK_LENGTH=64 \
+	SMT_OFFSET=1240 \
+	SMT_LENGTH=20
 
 typeset -r BASIC_EOF='1A'
 
@@ -322,8 +296,10 @@ _sleep () {
 	:
 }
 
+# Milliseconds to seconds, up to 999999ms
 ms_to_s () {
-	local -i x=$((1000000+$1)) ;ms_seconds="${x:1:-3}.${x: -3}"
+	((_s=1000000+$1))
+	_s="${_s:1:-3}.${_s: -3}"
 }
 
 # Convert a plain text string to hex pairs stored in shex[]
@@ -345,7 +321,7 @@ file_to_fhex () {
 	while IFS= read -d '' -r -n 1 -u 5 x ;do
 		printf -v x '%02X' "'$x"
 		fhex+=($x)
-		((${#fhex[*]}>TPDD_MAX_FILE_SIZE)) && { err_msg+=("\"$1\" exceeds ${TPDD_MAX_FILE_SIZE} bytes") ; break ; }
+		((${#fhex[*]}>TPDD_MAX_FILE_LENGTH)) && { err_msg+=("\"$1\" exceeds ${TPDD_MAX_FILE_LENGTH} bytes") ; break ; }
 	done
 	exec 5<&-
 
@@ -353,31 +329,30 @@ file_to_fhex () {
 	vecho 1 "$z: bytes read: ${#fhex[*]}"
 }
 
-# progress indicator
-# progressbar part whole [units]
-#   progressbar 14 120
+# Progress indicator
+# pbar part whole [units]
+#   pbar 14 120
 #   [####====================================] 11%
-#   progressbar 14 120 seconds
+#   pbar 14 120 seconds
 #   [####====================================] 11% (14/120 seconds)
-progressbar () {
+pbar () {
 	((v)) && return
 	local -i i c p=$1 w=$2 p_len w_len=40 ;local b= s= u=$3
 	((w)) && c=$((p*100/w)) p_len=$((p*w_len/w)) || c=100 p_len=$w_len
 	for ((i=0;i<w_len;i++)) { ((i<p_len)) && b+='#' || b+='.' ; }
-	printf '\r%79s\r[%s] %d%%%s' '' "$b" "$c" "${u:+ ($p/$w $u)} "
+	printf '\r%79s\r[%s] %d%%%s ' '' "$b" "$c" "${u:+ ($p/$w $u)}"
 }
 
-# busy indicator
-# Looping animation for when you don't know how long something will take.
-# The animation "frames" are defined in the array ANI[]. When called, it just
-# backspaces the length of a frame, and prints the next frame.
+# Busy-indicator
+typeset -ra _Y=('-' '\' '|' '/')
 spin () {
 	((v)) && return
-	[[ "$1" == '+' ]] && { printf '%s ' "${ANI[0]//?/ }" ;return ; }
-	printf '%b\b' "${ANI[0]//?/\\b}"
-	[[ "$1" == '-' ]] && { printf '%s %b\b' "${ANI[0]//?/ }" "${ANI[0]//?/\\b}" ;return ; }
-	printf '%s ' "${ANI[_y]}"
-	((++_y>=${#ANI[*]})) && _y=0
+	case "$1" in
+		'+') printf '  ' ;;
+		'-') printf '\b\b  \b\b' ;;
+		*) printf '\b\b%s ' "${_Y[_y]}" ;;
+	esac
+	((++_y>3)) && _y=0
 }
 
 _init () {
@@ -414,7 +389,7 @@ do_cmd () {
 		case "${_c}" in
 			1|pdd1|tpdd1) pdd2=0 operation_mode=1 exit=: _e=$? ;;
 			2|pdd2|tpdd2) pdd2=1 operation_mode=2 exit=: _e=$? ;;
-			bank) ((pdd2)) && bank=$1 exit=: _e=$? || abrt "${_c} requires TPDD2" ;;
+			b|bank) ((pdd2)) && bank=$1 exit=: _e=$? || abrt "${_c} requires TPDD2" ;;
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
 			com_open) lcmd_com_open ;_e=$? ;; # open the port
 			com_close) lcmd_com_close ;_e=$? ;; # close the port
@@ -422,8 +397,7 @@ do_cmd () {
 			sum) calc_cksum $* ;_e=$? ;;
 			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 			send_loader) srv_send_loader "$@" ;_e=$? ;;
-			collect_loader) collect_loader "$@" ;_e=$? ;;
-			anim|play) lcmd_play_anim $* ;_e=$? ;;
+			collect_loader) collect_loader "$@" ;_e=$? ;;	# experiment, not working
 			sleep) _sleep $* ;_e=$? ;;
 			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;exit=: _e=$? ;;
 			q|quit|bye|exit) exit ;;
@@ -474,8 +448,8 @@ do_cmd () {
 
 	# TPDD2 sector access
 			read_cache) pdd2_read_cache $* ;_e=$? ;;		# read from cache
-			write_cache) pdd2_write_cache $* ;_e=$? ;;		# write to cache
-			sector_cache) pdd2_sector_cache $* ;_e=$? ;;	# copy sector from 
+			write_cache) lcmd2_write_cache $* ;_e=$? ;;		# write to cache
+			sector_cache) pdd2_sector_cache $* ;_e=$? ;;	# copy sector between disk & cache
 
 	# TPDD1 & TPDD2 local/client commands
 			ls|dir) lcmd_ls "$@" ;_e=$? ;;
@@ -497,7 +471,7 @@ do_cmd () {
 
 	# playground
 			# send the TPDD1 bootstrap S-records
-			tpdd1_boot) lcmd_tpdd1_boot ;_e=$? ;;
+			tpdd1_boot) lcmd_tpdd1_boot ;_e=$? ;;	# experiment, not working
 
 			*) echo "Unknown command: \"${_c}\"" >&2 ;;
 		esac
@@ -586,19 +560,14 @@ tpdd_write () {
 # >128 = we timed out, $x is empty because there was no data, not even a null
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local -i i l=$1 t ;local x ;rhex=() read_err=0
-	#((l)) && { tpdd_wait '' '' $((l/2)) || return $? ; }
+	local -i i l=$1 ;local x ;rhex=() read_err=0
 	[[ "$2" ]] && tpdd_wait $2 $3
 	vecho 2 -n "$z: l=$l "
-	l=${1:-${TPDD_MAX_FILE_SIZE}}
+	l=${1:-${TPDD_MAX_FILE_LENGTH}}
 	for ((i=0;i<l;i++)) {
-		for ((t=3;t>0;t--)) {
-			tpdd_wait
-			x=
-			IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
-			((read_err<2)) && break
-			vecho 2 -n '.'
-		}
+		tpdd_wait
+		x=
+		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
 		((read_err==1)) && rhex[i]='00' read_err=0
 		((read_err)) && break
 		printf -v rhex[i] '%02X' "'$x"
@@ -620,9 +589,9 @@ tpdd_check () {
 # return once the drive starts sending data
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local d=(: spin progressbar) s
+	local d=(: spin pbar) s
 	local -i i=-1 n p=$TPDD_WAIT_PERIOD_MS t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
-	ms_to_s $p ;s=${ms_seconds}
+	ms_to_s $p ;s=$_s
 	((t<p)) && t=p ;n=$(((t+50)/p))
 	((b==1)) && spin +
 	until ((++i>n)) ;do
@@ -729,6 +698,7 @@ ocmd_send_req () {
 # parse it into the parts: format, length, data, checksum
 # verify the checksum
 # return the globals ret_fmt, ret_len, ret_dat[], ret_sum
+# $* is appended to the first tpdd_read() args (timeout_ms busy_indicator)
 ocmd_read_ret () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i t ;local l x ;ret_fmt= ret_len= ret_dat=() ret_sum=
@@ -963,7 +933,6 @@ ocmd_write () {
 	((bank)) && printf -v r '%02X' $((16#$r+16#40))
 	ocmd_send_req $r $* || return $?
 	tpdd_check || return 0
-	_sleep 0.1
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
@@ -1112,8 +1081,8 @@ fcmd_read_id () {
 	#vecho 2 "P:$1 LEN:${fdc_len} RES:${fdc_res}[${fdc_res_b[*]}]"
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
 	tpdd_write 0d || return $?
-	tpdd_read $PHYSICAL_SECTOR_ID_LEN || return $?
-	((${#rhex[*]}<PHYSICAL_SECTOR_ID_LEN)) && { err_msg+=("Got ${#rhex[*]} of $PHYSICAL_SECTOR_ID_LEN bytes") ; return 1 ; }
+	tpdd_read $PDD1_SECTOR_ID_LENGTH || return $?
+	((${#rhex[*]}<PDD1_SECTOR_ID_LENGTH)) && { err_msg+=("Got ${#rhex[*]} of $PDD1_SECTOR_ID_LENGTH bytes") ; return 1 ; }
 	((${#2})) || printf "I %02u %04u %s\n" "$1" "$fdc_len" "${rhex[*]}"
 }
 
@@ -1130,12 +1099,10 @@ fcmd_read_logical () {
 	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0d || return $?
-	# The drive will appear ready and have data right away,
-	# but if you read too soon the data will be corrupt or incomplete.
-	# So we can't rely on the tpdd_wait() in tpdd_read() which proceeds as soon
-	# as any data is available. Take 2/3 of the number of bytes we expect
-	# to read, and sleep that many MS before trying to read.
-	ms_to_s $(((fdc_len/3)*2)) ;_sleep $ms_seconds
+	# The drive will appear ready with data right away, but if you read too soon
+	# the data will be corrupt or incomplete.
+	# Take 2/3 of the number of bytes we expect to read, and sleep that many MS.
+	ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
 	((${#3})) || printf "S %02u %02u %04u %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
@@ -1217,7 +1184,7 @@ lcmd_load () {
 	} || {
 		echo
 	}
-	progressbar 0 $l 'bytes'
+	pbar 0 $l 'bytes'
 	ocmd_open ${open_mode[read]} || return $?	# open the source file for reading
 	while ocmd_read ;do					# read a block of data from tpdd
 		((${#d})) && {
@@ -1225,7 +1192,7 @@ lcmd_load () {
 		} || {
 			fhex+=(${ret_dat[*]})		# add to fhex[]
 		}
-		((p+=${#ret_dat[*]})) ;progressbar $p $l 'bytes'
+		((p+=${#ret_dat[*]})) ;pbar $p $l 'bytes'
 		((${#ret_dat[*]}<128)) && break	# stop if we get less than 128 bytes
 		((p>=l)) && break				# stop if we reach the expected total
 	done
@@ -1255,10 +1222,13 @@ lcmd_save () {
 	((${#file_name})) && { err_msg+=('File Exists') ; return 1 ; }
 	ocmd_open ${open_mode[write_new]} || return $?
 	for ((p=0;p<l;p+=128)) {
-		progressbar $p $l 'bytes'
+		pbar $p $l 'bytes'
 		ocmd_write ${fhex[*]:p:128} || return $?
+		tpdd_wait
+		ocmd_read_ret || return $?
+		ocmd_check_err || return $?
 	}
-	progressbar $l $l 'bytes'
+	pbar $l $l 'bytes'
 	echo
 	ocmd_close || return $?
 }
@@ -1305,7 +1275,7 @@ pdd1_read_physical () {
 	h+=(${rhex[*]})
 	t=$((PHYSICAL_SECTOR_LENGTH/fdc_len))
 	for ((l=2;l<=t;l++)) {
-		((${#2})) && progressbar $p $PHYSICAL_SECTOR_COUNT "P:$p L:$l"
+		((${#2})) && pbar $p $PHYSICAL_SECTOR_COUNT "P:$p L:$l"
 		fcmd_read_logical $p $l $2 || return $?
 		h+=(${rhex[*]})
 	}
@@ -1319,7 +1289,7 @@ pdd1_dump_disk () {
 	((${#f})) && {
 		echo "Dumping Disk to File: \"$f\""
 		[[ -e "$f" ]] && { err_msg+=('File Exists') ;return 1 ; }
-		progressbar 0 $t "P:- L:-"
+		pbar 0 $t "P:- L:-"
 		>$f
 	}
 
@@ -1333,7 +1303,7 @@ pdd1_dump_disk () {
 		pdd1_read_physical $p $m || return $?
 		((${#f})) && {
 			printf '%s\n' "${rhex[*]}" >> $f
-			progressbar $((p+1)) $t "P:$p L:$n"
+			pbar $((p+1)) $t "P:$p L:$n"
 		}
 	}
 	((${#f})) && echo
@@ -1368,16 +1338,16 @@ pdd1_restore_disk () {
 	echo "Restoring Disk from $1"
 	for ((i=0;i<t;i++)) {
 		r=(${d[i]})
-		progressbar $((i+1)) $t "P:${r[0]} L:-/-"
+		pbar $((i+1)) $t "P:${r[0]} L:-/-"
 		x=${r[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
 
 		# write the ID section
-		fcmd_write_id ${r[@]:0:$((2+PHYSICAL_SECTOR_ID_LEN))} || return $?
+		fcmd_write_id ${r[@]:0:$((2+PDD1_SECTOR_ID_LENGTH))} || return $?
 
 		# logical sectors count from 1
 		for ((l=1;l<=n;l++)) {
-			progressbar $((i+1)) $t "P:${r[0]} L:$l/$n"
-			s=(${r[@]:$((2+PHYSICAL_SECTOR_ID_LEN+(sz*(l-1)))):sz})
+			pbar $((i+1)) $t "P:${r[0]} L:$l/$n"
+			s=(${r[@]:$((2+PDD1_SECTOR_ID_LENGTH+(sz*(l-1)))):sz})
 			x=${s[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
 			fcmd_write_logical ${r[0]} $l ${s[*]} || return $?
 		}
@@ -1435,22 +1405,19 @@ lcmd_com_close () {
 	lcmd_com_test
 }
 
-lcmd_play_anim () {
-	local -i i
-	for ((i=0;i<$1;i++)) { spin ;_sleep 0.1 ; }
-	spin -
-	echo
-}
-
 # read the Space Managment Table
 # track 0 sector 0, bytes 1240-1260
 read_smt () {
 	((pdd2)) && {
-		pdd2_cache_sector 0 0 0 || return $?
-		pdd2_read_cache 0 1240 21 >/dev/null || return $?
+		pdd2_sector_cache 0 0 0 || return $?
+		pdd2_read_cache 0 $SMT_OFFSET $SMT_LENGTH >/dev/null || return $?
+		echo "SMT 0: ${ret_dat[*]:3}"
+		pdd2_sector_cache 0 1 0 || return $?
+		pdd2_read_cache 0 $SMT_OFFSET $SMT_LENGTH >/dev/null || return $?
+		echo "SMT 1: ${ret_dat[*]:3}"
 	} || {
 		pdd1_read_physical 0 >/dev/null || return $?
-		echo "${rhex[*]:1240:21}"
+		echo "SMT: ${rhex[*]:$SMT_OFFSET:$SMT_LENGTH}"
 	}
 }
 
@@ -1507,19 +1474,27 @@ pdd2_read_cache () {
 	# [0]     mode
 	# [1][2]  offset
 	# [3]+    data
-	#((16#${ret_dat[0]})) && echo "!!! $z - Returned Reserved Field not 00 - Please notify b.kenyon.w@gmail.com !!!
-	printf -v x '%s' "${ret_dat[*]:3}"
 	((${#4})) && {
-		printf '%02u %u %u %04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[0]}))" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x" >>$4
+		printf '%02X %02X %s\n' "$track_num" "$sector_num" "${ret_dat[*]}" >>$4
 	} || {
-		printf 'T:%02u S:%u m:%u O:%04u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[0]}))" "$((16#${ret_dat[1]}${ret_dat[2]}))" "$x"
-		#printf '%b\n' "\x${x// /\\x}"
+		printf 'T:%02u S:%u m:%u O:%05u %s\n' "$track_num" "$sector_num" "$((16#${ret_dat[0]}))" "$((16#${ret_dat[1]}${ret_dat[2]}))" "${ret_dat[*]:3}"
+		#printf -v x '%s' "${ret_dat[*]:3}" ;printf '%b\n' "\x${x// /\\x}"
 	}
 }
 
 # TPDD2 write to cache
-# pdd2_write_cache mode offset data...
+# pdd2_write_cache mode offset_msb offset_lsb data...
 pdd2_write_cache () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	((pdd2)) || abrt "$z requires TPDD2"
+	ocmd_send_req ${opr_fmt[req_write_cache]} $* || return $?
+	ocmd_read_ret || return $?
+	ocmd_check_err
+}
+
+# TPDD2 write to cache, decimal offset for cli convenience
+# lcmd_write_cache mode offset data...
+lcmd_write_cache () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((pdd2)) || abrt "$z requires TPDD2"
 	local x
@@ -1527,18 +1502,16 @@ pdd2_write_cache () {
 	# payload header
 	# 00|01      mode
 	# 0000-0500  offset
-	printf -v x '%02X %02X %02X' $1 $(($2/256)) $(($2%256)) ;shift 2
+	printf -v x '%02X %02X %02X' $1 $((10#$2/256)) $((10#$2%256)) ;shift 2
 
-	ocmd_send_req ${opr_fmt[req_write_cache]} $x $* || return $?
-	ocmd_read_ret || return $?
-	ocmd_check_err
+	pdd2_write_cache $x $* || return $?
 }
 
 # TPDD2 copy sector between disk and cache
 # pdd2_cache_sector track sector mode
 # pdd2_cache_sector 0-79 0-1 0|2
 # mode: 0=disk-to-cache 2=cache-to-disk
-pdd2_cache_sector () {
+pdd2_sector_cache () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((pdd2)) || abrt "$z requires TPDD2"
 	local x m=${3:-0} ;track_num=$1 sector_num=$2
@@ -1561,22 +1534,22 @@ pdd2_cache_sector () {
 pdd2_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((pdd2)) || abrt "$z requires TPDD2"
-	local -i t s f l=128 fq tb b=
-	((fq=PHYSICAL_SECTOR_LENGTH/l))
-	((tb=fq*PHYSICAL_SECTOR_COUNT*2*l))
+	local -i t s f fq tb b=
+	((fq=PHYSICAL_SECTOR_LENGTH/PDD2_SECTOR_CHUNK_LENGTH))
+	((tb=fq*PHYSICAL_SECTOR_COUNT*2*PDD2_SECTOR_CHUNK_LENGTH))
 	((${#1})) && {
 		printf 'Dumping Disk to File: \"%s\"\n' "$1"
-		progressbar 0 $tb bytes
+		pbar 0 $tb bytes
 		>$1
 	}
 
 	for ((t=0;t<PHYSICAL_SECTOR_COUNT;t++)) {
 		for ((s=0;s<2;s++)) {
-			pdd2_cache_sector $t $s 0 || return $?
+			pdd2_sector_cache $t $s 0 || return $?
 			pdd2_read_cache 1 32772 4 $1 || return $? # metadata
 			for ((f=0;f<fq;f++)) {
-				pdd2_read_cache 0 $((l*f)) $l $1 || return $?
-				progressbar $((b+=l)) $tb bytes
+				pdd2_read_cache 0 $((PDD2_SECTOR_CHUNK_LENGTH*f)) $PDD2_SECTOR_CHUNK_LENGTH $1 || return $?
+				pbar $((b+=PDD2_SECTOR_CHUNK_LENGTH)) $tb bytes
 			}
 		}
 	}
@@ -1584,10 +1557,51 @@ pdd2_dump_disk () {
 	((${#1})) && echo
 }
 
+pdd2_flush_cache () {
+	# mystery metadata writes
+	pdd2_write_cache 01 00 83 || return $?
+	pdd2_write_cache 01 00 96 || return $?
+	# flush the cache to disk
+	pdd2_sector_cache $1 $2 2 || return $?
+}
+
 pdd2_restore_disk () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((pdd2)) || abrt "$z requires TPDD2"
+ 	local d r ;local -i i n t s m b= tb=$((PHYSICAL_SECTOR_LENGTH*PHYSICAL_SECTOR_COUNT*2)) ;track_num= sector_num=
 
+	# Format the disk
+	ocmd_format || return $?
+
+	# Read the dump file into d[]
+	exec 5<"$1" || return $?
+	mapfile -u 5 d || return $?
+	exec 5<&-
+	n=${#d[@]}
+
+	# Write the sectors
+	# each record in the file is:
+	# track sector mode offset_msb offset_lsb data...
+	echo "Restoring Disk from $1"
+	for ((i=0;i<n;i++)) {
+		r=(${d[i]})
+		vecho 2 "${r[*]}"
+
+		t=16#${r[0]} s=16#${r[1]} m=16#${r[2]}
+
+		# encountered new sector in file, write cache to disk
+		((t==track_num)) && ((s==sector_num)) || {
+			((i)) && { pdd2_flush_cache $track_num $sector_num || return $? ; }
+			track_num=$t sector_num=$s
+		}
+
+		((m)) || pbar $((b+=${#r[*]}-5)) $tb 'bytes'
+
+		# write to cache
+		pdd2_write_cache ${r[*]:2} || return $?
+	}
+	pdd2_flush_cache $track_num $sector_num || return $?
+	echo
 }
 
 ###############################################################################
@@ -1599,7 +1613,7 @@ pdd2_restore_disk () {
 srv_send_loader () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i i l ;local s REPLY
-	ms_to_s $LOADER_PER_CHAR_MS ;s=$ms_seconds
+	ms_to_s $LOADER_PER_CHAR_MS ;s=$_s
 	file_to_fhex $1
 	fhex+=('0D' $BASIC_EOF)
 
@@ -1612,7 +1626,7 @@ srv_send_loader () {
 	l=${#fhex[*]}
 	for ((i=0;i<l;i++)) {
 		printf '%b' "\x${fhex[i]}" >&3
-		progressbar $((i+1)) $l 'bytes'
+		pbar $((i+1)) $l 'bytes'
 		_sleep $s
 	}
 	echo
@@ -1622,10 +1636,10 @@ srv_send_loader () {
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
 typeset -i _y= pdd2=$((TPDD_MODEL-1)) bank= operation_mode=1 read_err= fdc_err= fdc_res= fdc_len= track_num= sector_num= _om=99
-cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= ret_list='|' ms_seconds=
+cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= ret_list='|' _s=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v==9)) && typeset -i seq=0
-ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout="$ms_seconds"
+ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout="$_s"
 [[ "$0" =~ .*pdd2(\.sh)?$ ]] && pdd2=1 operation_mode=2
 for x in ${!opr_fmt[*]} ;do [[ "$x" =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done
 unset x
