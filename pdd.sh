@@ -321,7 +321,7 @@ file_to_fhex () {
 	while IFS= read -d '' -r -n 1 -u 5 x ;do
 		printf -v x '%02X' "'$x"
 		fhex+=($x)
-		((${#fhex[*]}>TPDD_MAX_FILE_LENGTH)) && { err_msg+=("\"$1\" exceeds ${TPDD_MAX_FILE_LENGTH} bytes") ; break ; }
+		((${#fhex[*]}>TPDD_MAX_FILE_LENGTH)) && { err_msg+=("\"$1\" exceeds $TPDD_MAX_FILE_LENGTH bytes") ; break ; }
 	done
 	exec 5<&-
 
@@ -563,7 +563,7 @@ tpdd_read () {
 	local -i i l=$1 ;local x ;rhex=() read_err=0
 	[[ "$2" ]] && tpdd_wait $2 $3
 	vecho 2 -n "$z: l=$l "
-	l=${1:-${TPDD_MAX_FILE_LENGTH}}
+	l=${1:-$TPDD_MAX_FILE_LENGTH}
 	for ((i=0;i<l;i++)) {
 		tpdd_wait
 		x=
@@ -682,7 +682,7 @@ ocmd_check_err () {
 }
 
 # build a valid operation-mode request block and send it to the tpdd
-# 5a 5a format length data checksum
+# 5A 5A format length data checksum
 # fmt=$1  data=$2-*
 ocmd_send_req () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -787,7 +787,7 @@ ocmd_dirent () {
 	# send the request
 	ocmd_send_req $r ${shex[*]} || return $?
 
-	[[ "$m" == "${dirent_cmd[get_first]}" ]] && w=$LIST_WAIT_MS
+	((m==${dirent_cmd[get_first]})) && w=$LIST_WAIT_MS
 
 	# read the response
 	ocmd_read_ret $w || return $?
@@ -801,23 +801,22 @@ ocmd_dirent () {
 	((${#ret_dat[*]}==28)) || abrt "$z: Got ${#ret_dat[*]} bytes, expected 28"
 
 	# parse a dirent return format
-	((free_sectors=16#${ret_dat[27]})) ;ret_dat[27]=
-	((file_len=16#${ret_dat[25]}*256+16#${ret_dat[26]})) ;ret_dat[26]= ret_dat[25]=
-	printf -v file_attr '%b' "\x${ret_dat[24]}" ;ret_dat[24]=
-	x=(${ret_dat[*]}) ;x="${x[*]}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
+	x="${ret_dat[*]:0:24}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
+	printf -v file_attr '%b' "\x${ret_dat[24]}"
+	((file_len=16#${ret_dat[25]}*256+16#${ret_dat[26]}))
+	((free_sectors=16#${ret_dat[27]}))
 	vecho 1 "$z: mode=$m filename=\"$file_name\" attr=\"$file_attr\" len=$file_len free=$free_sectors"
 
 	# If doing set_name, and we got this far, then return success. Only the
 	# caller knows if they expected file_name & file_attr to be null or not.
-	((m==16#${dirent_cmd[set_name]})) && return 0
+	((m==${dirent_cmd[set_name]})) && return 0
 
 	# If doing get_first or get_next, filename[0]=00 means no more files.
-	# 
 	((16#${ret_dat[0]}))
 }
 
 # Get Drive Status
-# request: 5a 5a 07 00 ##
+# request: 5A 5A 07 00 ##
 # return : 07 01 ?? ##
 ocmd_status () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -828,7 +827,7 @@ ocmd_status () {
 }
 
 # Operation-Mode Format Disk
-#request: 5a 5a 06 00 ##
+#request: 5A 5A 06 00 ##
 #return : 12 01 ?? ##
 # "operation-mode" format is somehow special and different from FDC-mode format.
 # It creates 64-byte logical sectors, but if you use the FDC-mode format command
@@ -860,7 +859,7 @@ ocmd_fdc () {
 }
 
 # Open File
-# request: 5a 5a 01 01 MM ##
+# request: 5A 5A 01 01 MM ##
 # return : 12 01 ?? ##
 # MM = access mode: 01=write_new, 02=write_append, 03=read
 ocmd_open () {
@@ -874,7 +873,7 @@ ocmd_open () {
 }
 
 # Close File
-# request: 5a 5a 02 00 ##
+# request: 5A 5A 02 00 ##
 # return : 12 01 ?? ##
 ocmd_close () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -887,7 +886,7 @@ ocmd_close () {
 }
 
 # Delete File
-# request: 5a 5a 05 00 ##
+# request: 5A 5A 05 00 ##
 # return : 12 01 ?? ##
 ocmd_delete () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -900,7 +899,7 @@ ocmd_delete () {
 }
 
 # Read File data
-# request: 5a 5a 03 00 ##
+# request: 5A 5A 03 00 ##
 # return : 10 00-80 1-128bytes ##
 ocmd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -924,7 +923,7 @@ ocmd_read () {
 }
 
 # Write File Data
-# request: 5a 5a 04 ?? 1-128 bytes ##
+# request: 5A 5A 04 ?? 1-128 bytes ##
 # return : 12 01 ?? ##
 ocmd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -1426,7 +1425,7 @@ read_smt () {
 # TPDD2
 
 # TPDD2 Get Drive Status
-# request: 5a 5a 0C 00 ##
+# request: 5A 5A 0C 00 ##
 # return : 15 01 ?? ##
 pdd2_condition () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -1445,7 +1444,6 @@ pdd2_condition () {
 	} || {
 		# bit 3 - disk changed
 		x= ;((ocmd_cond_b[3])) && x='Changed ,'
-
 		# bit 1 - disk write-protected
 		((ocmd_cond_b[1])) && x+='Write-protected' || x+='Writable'
 	}
