@@ -25,8 +25,8 @@ Or you may specify one as the first argument on the command line.
 **TPDD1/TPDD2 File Access**  
 | command | arguments | description |
 | --- | --- | --- |
-| status | | Report the drive/disk status |
-| D&#160;\|&#160;condition | | Report the drive/disk status |
+| status | | Report the drive/disk status (basic) |
+| D&#160;\|&#160;condition | | Report the drive/disk status (more informative) |
 | b&#160;\|&#160;bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1 - affects list/load/save/del/copy/ren |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
 | rm&#160;\|&#160;del | filename | Delete a file |
