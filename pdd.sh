@@ -1638,7 +1638,7 @@ typeset -i _y= pdd2=$((TPDD_MODEL-1)) bank= operation_mode=1 read_err= fdc_err= 
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= ret_list='|' _s=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
 ((v==9)) && typeset -i seq=0
-ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout="$_s"
+ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=$_s
 [[ "$0" =~ .*pdd2(\.sh)?$ ]] && pdd2=1 operation_mode=2
 for x in ${!opr_fmt[*]} ;do [[ "$x" =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done
 unset x
