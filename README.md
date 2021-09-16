@@ -95,7 +95,7 @@ Example, to list the directory, where the command is: ```ls```, can be used eith
 **Copy a file to the disk**  
 ```pdd save ts-dos_4.1_nec.co DOSNEC.CO```
 
-**Command Lists with ";"**
+**Command Lists with ";"**  
 Delete File, List Directory
 In interactive mode:  
 ```TPDD(opr)> rm DOSNEC.CO ;ls```  
