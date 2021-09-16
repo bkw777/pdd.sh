@@ -454,7 +454,7 @@ close_com () {
 tpdd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x=$*
-	((v>2)) && { local c=$((10000+seq++)) ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
+	((v==9)) && { local c=$((10000+seq++)) ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
 	printf '%b' "\x${x// /\\x}" >&3
 }
 
@@ -497,7 +497,7 @@ tpdd_read () {
 		printf -v rhex[i] '%02X' "'$x"
 		vecho 1 -n "${rhex[i]}"
 	}
-	((v>2)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
+	((v==9)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
 	((read_err>1)) && vecho 1 " read_err:$read_err" || vecho 1 ''
 }
 
@@ -602,7 +602,7 @@ ocmd_check_err () {
 }
 
 # build a valid operation-mode request block and send it to the tpdd
-# 5a 5a format length data checksum
+# 5A 5A format length data checksum
 # fmt=$1  data=$2-*
 ocmd_send_req () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -611,7 +611,7 @@ ocmd_send_req () {
 	printf -v len '%02X' $#
 	calc_cksum $fmt $len $*
 	vecho 1 "$z: fmt=\"$fmt\" len=\"$len\" dat=\"$*\" sum=\"$cksum\""
-	tpdd_write 5a 5a $fmt $len $* $cksum
+	tpdd_write 5A 5A $fmt $len $* $cksum
 }
 
 # read an operation-mode return block from the tpdd
@@ -734,7 +734,7 @@ ocmd_dirent () {
 }
 
 # Get Drive Status
-# request: 5a 5a 07 00 ##
+# request: 5A 5A 07 00 ##
 # return : 07 01 ?? ##
 ocmd_status () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -745,7 +745,7 @@ ocmd_status () {
 }
 
 # Operation-Mode Format Disk
-#request: 5a 5a 06 00 ##
+#request: 5A 5A 06 00 ##
 #return : 12 01 ?? ##
 # "operation-mode" format is somehow special and different from FDC-mode format.
 # It creates 64-byte logical sectors, but if you use the FDC-mode format command
@@ -774,7 +774,7 @@ ocmd_fdc () {
 }
 
 # Open File
-# request: 5a 5a 01 01 MM ##
+# request: 5A 5A 01 01 MM ##
 # return : 12 01 ?? ##
 # MM = access mode: 01=write_new, 02=write_append, 03=read
 ocmd_open () {
@@ -787,7 +787,7 @@ ocmd_open () {
 }
 
 # Close File
-# request: 5a 5a 02 00 ##
+# request: 5A 5A 02 00 ##
 # return : 12 01 ?? ##
 ocmd_close () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -799,7 +799,7 @@ ocmd_close () {
 }
 
 # Delete File
-# request: 5a 5a 05 00 ##
+# request: 5A 5A 05 00 ##
 # return : 12 01 ?? ##
 ocmd_delete () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -811,7 +811,7 @@ ocmd_delete () {
 }
 
 # Read File data
-# request: 5a 5a 03 00 ##
+# request: 5A 5A 03 00 ##
 # return : 10 00-80 1-128bytes ##
 ocmd_read () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -833,7 +833,7 @@ ocmd_read () {
 }
 
 # Write File Data
-# request: 5a 5a 04 ?? 1-128 bytes ##
+# request: 5A 5A 04 ?? 1-128 bytes ##
 # return : 12 01 ?? ##
 ocmd_write () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
@@ -1337,7 +1337,7 @@ typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
 typeset -i ani operation_mode=1 read_err= fdc_err= fdc_res= fdc_len=
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= _s=
 readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
-((v>2)) && typeset -i seq=0
+((v==9)) && typeset -i seq=0
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=$_s
 
 # for _sleep()
