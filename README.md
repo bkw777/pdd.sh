@@ -138,11 +138,11 @@ Suggestion: use \*.p2h for filename for TPDD2 disks in hex dump format
 
 **Restore an entire TPDD1 disk from mydisk.p1h**  
 **(Re-create the TPDD1 Utility Disk)**  
-```pdd1 restore_disk Tandy_Portable_Disk_Drive_26-3808_Utility_Disk.p1h```
+```pdd1 restore_disk TPDD1_26-3808_Utility_Disk.p1h```
 
 **Restore an entire TPDD2 disk from mydisk.p2h**  
 **(Re-create the TPDD2 Utility Disk)**  
-```pdd2 restore_disk Tandy_Portable_Disk_Drive_2_26-3814_Utility_Disk.p2h```
+```pdd2 restore_disk TPDD2_26-3814_Utility_Disk.p2h```
 
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
