@@ -27,7 +27,7 @@ Or you may specify one as the first argument on the command line.
 | --- | --- | --- |
 | status | | Report the drive/disk status |
 | D&#160;\|&#160;condition | | Report the drive/disk status |
-| b\|bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1 - affects list/load/save/del/copy/move |
+| b&#160;\|&#160;bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1 - affects list/load/save/del/copy/ren |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
 | rm&#160;\|&#160;del | filename | Delete a file |
 | cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
