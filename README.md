@@ -63,7 +63,7 @@ Or you may specify one as the first argument on the command line.
 | read_smt | \[0\|1\] | Read the Space Management Table (from bank# if specified) |
 | send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Use to install a TPDD client.<br>See https://github.com/bkw777/dlplus/tree/master/clients |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
-| baud&#160;\|&#160;speed | 9600\|19200 | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
+| baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
 | debug | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose<br>9 = every tpdd_read() or tpdd_write() creates a log file with a copy of the data |
 
 
