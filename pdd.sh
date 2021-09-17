@@ -382,15 +382,15 @@ do_cmd () {
 	for ((_i=0;_i<${#_a[*]};_i++)) {
 		set ${_a[_i]}
 		_c=$1 ;shift
-		_e=999 err_msg=() exit=exit
+		_e=999 err_msg=()
 
 		vecho 2 "$z: ${_c} $@"
 
 	# commands that do not need _init()
 		case "${_c}" in
-			1|pdd1|tpdd1) pdd2=0 operation_mode=1 exit=: _e=$? ;;
-			2|pdd2|tpdd2) pdd2=1 operation_mode=2 exit=: _e=$? ;;
-			b|bank) ((pdd2)) && bank=$1 exit=: _e=$? || abrt "${_c} requires TPDD2" ;;
+			1|pdd1|tpdd1) pdd2=0 operation_mode=1 _e=$? ;;
+			2|pdd2|tpdd2) pdd2=1 operation_mode=2 _e=$? ;;
+			b|bank) ((pdd2)) && bank=$1 _e=$? || abrt "${_c} requires TPDD2" ;;
 			baud|speed) BAUD=$1 _e=$? ;;
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
 			com_open) lcmd_com_open ;_e=$? ;; # open the port
@@ -400,9 +400,9 @@ do_cmd () {
 			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 			send_loader) srv_send_loader "$@" ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
-			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;exit=: _e=$? ;;
+			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;_e=$? ;;
 			q|quit|bye|exit) exit ;;
-			pdd1_boot) pdd1_boot "$@" ;_e=$? ;; # wip
+			pdd1_boot) pdd1_boot "$@" ;_e=$? ;; # [100|200]
 			pdd2_boot) pdd2_boot "$@" ;_e=$? ;; # [100|200]
 			'') _e=0 ;;
 		esac
@@ -432,12 +432,12 @@ do_cmd () {
 			status) ocmd_status ;_e=$? ;((_e)) || echo "OK" ;;
 
 	# TPDD1-only operation-mode command to switch to fdc-mode
-			fdc) ocmd_fdc ;_e=$? ; exit=: ;;
+			fdc) ocmd_fdc ;_e=$? ;;
 
 	# fdc-mode commands
 	# TPDD1 sector access
 	# All of the drive firmware "FDC mode" functions.
-			${fdc_cmd[mode]}|mode) fcmd_mode $* ;_e=$? ;exit=: ;; # select operation-mode or fdc-mode
+			${fdc_cmd[mode]}|mode) fcmd_mode $* ;_e=$? ;; # select operation-mode or fdc-mode
 			${fdc_cmd[condition]}|condition) ((pdd2)) && { pdd2_condition $* ;_e=$? ; } || { fcmd_condition $* ;_e=$? ; } ;; # get drive condition
 			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;_e=$? ;; # format disk - selectable sector size
 			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;_e=$? ;; # format disk no verify
@@ -1731,8 +1731,7 @@ vecho 1 "Using port \"$PORT\""
 open_com || exit $?
 
 # non-interactive mode
-exit=exit
-(($#)) && { do_cmd "$@" ;$exit ; }
+(($#)) && { do_cmd "$@" ;exit $? ; }
 
 # interactive mode
 while read -p"TPDD(${mode[operation_mode]})> " __c ;do do_cmd "${__c}" ;done
