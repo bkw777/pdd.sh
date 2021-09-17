@@ -46,7 +46,8 @@ esac
 # For 9600-only drives like FB-100 or FDD19, change 19200 to 9600
 # (FB-100/FDD19 can run at 19200 by removing the solder blob from dip switch 1)
 # To disable RTS/CTS hardware flow control, change "crtscts" to "-crtscts"
-STTY_FLAGS='19200 crtscts clocal cread raw pass8 flusho -echo'
+: ${BAUD:=19200}
+STTY_FLAGS='crtscts clocal cread raw pass8 flusho -echo'
 
 ###############################################################################
 # tunables
@@ -390,6 +391,7 @@ do_cmd () {
 			1|pdd1|tpdd1) pdd2=0 operation_mode=1 exit=: _e=$? ;;
 			2|pdd2|tpdd2) pdd2=1 operation_mode=2 exit=: _e=$? ;;
 			b|bank) ((pdd2)) && bank=$1 exit=: _e=$? || abrt "${_c} requires TPDD2" ;;
+			baud|speed) BAUD=$1 _e=$? ;;
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
 			com_open) lcmd_com_open ;_e=$? ;; # open the port
 			com_close) lcmd_com_close ;_e=$? ;; # close the port
@@ -494,24 +496,75 @@ tpdd_read_BASIC () {
 # Emulate a client performing the TPDD1 boot sequence
 pdd1_boot () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x=
+	((pdd2)) && abrt "$z requires TPDD1"
+	local REPLY M mdl=${1:-100}
+
+	close_com
+	open_com 9600
+
+	echo -en " Turn the drive power OFF.\n" \
+		"Set all 4 dip switches to ON.\n" \
+		"Turn the drive power ON.\n" \
+		"Press [Enter] when ready: " >&2
+	read -s ;echo
+
+	echo
+	echo "0' $0: $z($@)"
+	echo "0' TPDD1 Boot Sequence - Model $mdl"
+
 	str_to_shex 'S10985157C00AD7EF08B3AS901FE'
-	tpdd_write ${shex[*]} 0d
-	while tpdd_read 1 ;do x+=" ${rhex[*]}" ;done
-	printf '%b' "\x${x// /\\x}"
+	tpdd_write ${shex[*]} 0D
+
+	tpdd_read_BASIC
+	echo
+
+	# 10 PRINT"---INITIAL PROGRAM LOADER---"
+	# 20 PRINT"      WAIT A MINUTE!":CLOSE
+	close_com
+
+	# 30 IF PEEK(1)=171 THEN M2=1 ELSE M2=0
+	#   Model 102: 167 -> M2=0
+	#   Model 200: 171 -> M2=1
+	case "$mdl" in
+		"200") M='01' ;;
+		*) M='00' ;;
+	esac
+
+	# 40 OPEN "COM:88N1DNN" FOR OUTPUT AS #1
+	open_com 9600
+
+	# 50 ?#1,"KK"+CHR$(M2);
+	#   no trailing CR or LF
+	tpdd_write 4B 4B $M
+
+	# 60 FOR I=1 TO 10:NEXT:CLOSE
+	#   1000 = 2 seconds
+	_sleep 0.02
+	close_com
+
+	# 70 LOAD "COM:88N1ENN",R
+	open_com 9600
+	tpdd_read_BASIC
+	echo
+
+	echo -en " Turn the drive power OFF.\n" \
+		"Set all 4 dip switches to OFF.\n" \
+		"Turn the drive power ON.\n" \
+		"Press [Enter] when ready: " >&2
+	read -s ;echo
+
 }
 
 # Emulate a client performing the TPDD2 boot sequence
 # pdd2_boot [100|200]
 pdd2_boot () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local M='03' mdl=${1:-100}
+	((pdd2)) || abrt "$z requires TPDD2"
+	local M mdl=${1:-100}
 
+	echo
 	echo "0' $0: $z($@)"
 	echo "0' TPDD2 Boot Sequence - Model $mdl"
-	case "$mdl" in
-		"200") M='04'
-	esac
 
 	# RUN "COM:98N1ENN"
 	tpdd_read_BASIC
@@ -524,11 +577,16 @@ pdd2_boot () {
 	# 30 IF PEEK(1)=171 THEN M=4 ELSE M=3
 	#   Model 102: 167 -> M=3
 	#   Model 200: 171 -> M=4
+	case "$mdl" in
+		"200") M='04' ;;
+		*) M='03' ;;
+	esac
 
 	# 40 OPEN"COM:98N1DNN" FOR OUTPUT AS #1
+	open_com
+
 	# 50 ?#1,"FF";CHR$(M);
 	#   no trailing CR or LF
-	open_com
 	tpdd_write 46 46 $M
 
 	# 60 FOR I=1 TO 10:NEXT:CLOSE
@@ -561,9 +619,10 @@ test_com () {
 
 open_com () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local b=${1:-$BAUD}
 	test_com && return
 	exec 3<>"${PORT}"
-	stty ${stty_f} "${PORT}" ${STTY_FLAGS}
+	stty ${stty_f} "${PORT}" $b ${STTY_FLAGS}
 	test_com || abrt "Failed to open serial port \"${PORT}\""
 }
 

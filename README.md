@@ -63,7 +63,9 @@ Or you may specify one as the first argument on the command line.
 | read_smt | \[0\|1\] | Read the Space Management Table (from bank# if specified) |
 | send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Use to install a TPDD client.<br>See https://github.com/bkw777/dlplus/tree/master/clients |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
+| baud&#160;\|&#160;speed | 9600\|19200 | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
 | debug | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose<br>9 = every tpdd_read() or tpdd_write() creates a log file with a copy of the data |
+
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
@@ -72,7 +74,8 @@ Multiple commands may be given at once, seperated by ';' to form a pre-loaded se
 Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
-| DEBUG | # | same as debug command above |
+| BAUD | 9600\|19200 | Same as **baud** command above |
+| DEBUG | # | same as **debug** command above |
 | FLOPPY_COMPAT | true\|false | (default is true) Automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
 | TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
 
