@@ -397,10 +397,11 @@ do_cmd () {
 			sum) calc_cksum $* ;_e=$? ;;
 			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 			send_loader) srv_send_loader "$@" ;_e=$? ;;
-			collect_loader) collect_loader "$@" ;_e=$? ;;	# experiment, not working
 			sleep) _sleep $* ;_e=$? ;;
 			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;exit=: _e=$? ;;
 			q|quit|bye|exit) exit ;;
+			pdd1_boot) pdd1_boot "$@" ;_e=$? ;; # wip
+			pdd2_boot) pdd2_boot "$@" ;_e=$? ;; # [100|200]
 			'') _e=0 ;;
 		esac
 		((_e<256)) && {
@@ -469,9 +470,6 @@ do_cmd () {
 			ocmd_read_ret) ocmd_read_ret $* ;_e=$? ;;
 			read_smt) read_smt $* ;_e=$? ;;
 
-	# playground
-			# send the TPDD1 bootstrap S-records
-			tpdd1_boot) lcmd_tpdd1_boot ;_e=$? ;;	# experiment, not working
 
 			*) echo "Unknown command: \"${_c}\"" >&2 ;;
 		esac
@@ -483,13 +481,65 @@ do_cmd () {
 ###############################################################################
 # experimental junk
 
-lcmd_tpdd1_boot () {
+tpdd_read_BASIC () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local x e ;printf -v e '%b' "\x$BASIC_EOF"
+	tpdd_wait
+	while read -r -t 2 -u 3 x ;do
+		printf '%s\n' "$x"
+		[[ "${x: -1}" == "$e" ]] && break
+	done
+}
+
+# Emulate a client performing the TPDD1 boot sequence
+pdd1_boot () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local x=
 	str_to_shex 'S10985157C00AD7EF08B3AS901FE'
 	tpdd_write ${shex[*]} 0d
 	while tpdd_read 1 ;do x+=" ${rhex[*]}" ;done
 	printf '%b' "\x${x// /\\x}"
+}
+
+# Emulate a client performing the TPDD2 boot sequence
+# pdd2_boot [100|200]
+pdd2_boot () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local M='03' mdl=${1:-100}
+
+	echo "0' $0: $z($@)"
+	echo "0' TPDD2 Boot Sequence - Model $mdl"
+	case "$mdl" in
+		"200") M='04'
+	esac
+
+	# RUN "COM:98N1ENN"
+	tpdd_read_BASIC
+
+	# 10 CLS:?"---INITIAL PROGRAM LOADER II---
+	# 20 ?"      WAIT A MINUTE!":CLOSE
+	close_com
+	echo
+
+	# 30 IF PEEK(1)=171 THEN M=4 ELSE M=3
+	#   Model 102: 167 -> M=3
+	#   Model 200: 171 -> M=4
+
+	# 40 OPEN"COM:98N1DNN" FOR OUTPUT AS #1
+	# 50 ?#1,"FF";CHR$(M);
+	#   no trailing CR or LF
+	open_com
+	tpdd_write 46 46 $M
+
+	# 60 FOR I=1 TO 10:NEXT:CLOSE
+	#   1000 = 2 seconds
+	_sleep 0.02
+	close_com
+
+	# 70 RUN"COM:98N1ENN
+	open_com
+	tpdd_read_BASIC
+	echo
 }
 
 ###############################################################################
@@ -1351,39 +1401,6 @@ pdd1_restore_disk () {
 			x=${s[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
 			fcmd_write_logical ${r[0]} $l ${s[*]} || return $?
 		}
-	}
-	echo
-}
-
-# TPDD2 boot sequence
-collect_loader () {
-	local x
-
-	tpdd_wait || return $?
-	tpdd_read
-	close_com
-	x="${rhex[*]}"
-	((${#1})) && {
-		printf '%b' "\x${x// /\\x}" >$1
-	} || {
-		printf '%b' "\x${x// /\\x}"
-	}
-	echo
-
-	open_com
-	tpdd_write 46 46 03
-
-	_sleep 0.01
-	close_com
-	open_com
-
-	tpdd_wait || return $?
-	tpdd_read
-	x="${rhex[*]}"
-	((${#1})) && {
-		printf '%b' "\x${x// /\\x}" >$1
-	} || {
-		printf '%b' "\x${x// /\\x}"
 	}
 	echo
 }
