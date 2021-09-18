@@ -60,7 +60,7 @@ Or you may specify one as the first argument on the command line.
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk & write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore a disk from filename |
-| read_smt | \[0\|1\] | Read the Space Management Table (from bank# if specified) |
+| read_smt | | Read the Space Management Table<br>(for TPDD2, reads the SMT of the currently selected bank) |
 | send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Use to install a TPDD client.<br>See https://github.com/bkw777/dlplus/tree/master/clients |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
