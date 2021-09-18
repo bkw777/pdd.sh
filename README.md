@@ -43,7 +43,7 @@ Or you may specify one as the first argument on the command line.
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to filename if given, else display on screen.<br>default physical 0 logical 1 |
 | A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[filename\] | Read Sector ID Data<br>default physical sector 0 |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] \<ignored\> 12_hex_pairs... | Write the 12-byte Sector ID data. |
-| W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical\>&#160;\<logical\>&#160;hex_pairs...<br>0-79&#160;1-20 | Write one logical sector to disk |
+| W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<physical&#160;0-79\>&#160;\<logical&#160;1-20\>&#160;hex_pairs... | Write one logical sector to disk |
 | rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>write to filename else display on screen |
 
 **TPDD2 Sector Access**  
