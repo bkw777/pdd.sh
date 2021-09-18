@@ -68,9 +68,9 @@ Or you may specify one as the first argument on the command line.
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 
-There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
+Multiple commands may be given at once, seperated by '**;**' to form a pre-loaded sequence.  
 
-Multiple commands may be given at once, seperated by ';' to form a pre-loaded sequence.  
+There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
 Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
