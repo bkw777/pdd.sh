@@ -483,27 +483,18 @@ do_cmd () {
 ###############################################################################
 # experimental junk
 
-tpdd_read_BASIC () {
-	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	local x e ;printf -v e '%b' "\x$BASIC_EOF"
-	tpdd_wait
-	while read -r -t 2 -u 3 x ;do
-		printf '%s\n' "$x"
-		[[ "${x: -1}" == "$e" ]] && break
-	done
-}
-
 # Emulate a client performing the TPDD1 boot sequence
 pdd1_boot () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) && abrt "$z requires TPDD1"
 	local REPLY M mdl=${1:-100}
 
 	close_com
 	open_com 9600
 
-	echo -en " Turn the drive power OFF.\n" \
+	echo -en "------ TDPP1 (26-3808) bootstrap ------\n" \
+		"Turn the drive power OFF.\n" \
 		"Set all 4 dip switches to ON.\n" \
+		"Insert a TPDD1 (26-3808) Utility Disk.\n" \
 		"Turn the drive power ON.\n" \
 		"Press [Enter] when ready: " >&2
 	read -s ;echo
@@ -545,22 +536,55 @@ pdd1_boot () {
 	# 70 LOAD "COM:88N1ENN",R
 	open_com 9600
 	tpdd_read_BASIC
+	close_com
 	echo
 
-	echo -en " Turn the drive power OFF.\n" \
-		"Set all 4 dip switches to OFF.\n" \
-		"Turn the drive power ON.\n" \
-		"Press [Enter] when ready: " >&2
-	read -s ;echo
+	# cycle the port (close & open) between reads
+	echo -e " Don't trust the following binary reads.\n" \
+		"They come out a little different every time.\n" \
+		"tpdd_read_unknown() isn't good enough yet.\n" >&2
 
+	# collect some binary
+	open_com 9600
+	tpdd_read_unknown
+	close_com
+	printf '%s\n\n' "${rhex[*]}"
+
+	# collect some more binary
+	open_com 9600
+	tpdd_read_unknown
+	close_com
+	printf '%s\n\n' "${rhex[*]}"
+
+	# collect some more binary
+	open_com 9600
+	tpdd_read_unknown
+	close_com
+	printf '%s\n\n' "${rhex[*]}"
+
+	echo -e " IPL done.\n" \
+		"Turn the drive power OFF.\n" \
+		"Set all 4 dip switches to OFF.\n" \
+		"Turn the drive power ON." >&2
+
+	open_com
 }
 
 # Emulate a client performing the TPDD2 boot sequence
 # pdd2_boot [100|200]
 pdd2_boot () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
-	((pdd2)) || abrt "$z requires TPDD2"
-	local M mdl=${1:-100}
+	local REPLY M mdl=${1:-100}
+
+	echo -en "------ TDPP2 (26-3814) bootstrap ------\n" \
+		"Turn the drive power OFF.\n" \
+		"Insert a TPDD2 (26-3814) Utility Disk.\n" \
+		"(Verify that the write-protect hole is OPEN)\n" \
+		"Leave the drive power OFF.\n" \
+		"Press [Enter] when ready: " >&2
+	read -s
+	echo -e "\n\nNow turn the drive power ON." >&2
+
 
 	echo
 	echo "0' $0: $z($@)"
@@ -597,7 +621,33 @@ pdd2_boot () {
 	# 70 RUN"COM:98N1ENN
 	open_com
 	tpdd_read_BASIC
+	close_com
 	echo
+
+	# cycle the port (close & open) between reads
+	echo -e " Don't trust the following binary reads.\n" \
+		"They come out a little different every time.\n" \
+		"tpdd_read_unknown() isn't good enough yet.\n" >&2
+
+	# collect binary
+	open_com
+	tpdd_read_unknown
+	close_com
+	printf '%s\n\n' "${rhex[*]}"
+
+	# collect binary
+	open_com
+	tpdd_read_unknown
+	close_com
+	printf '%s\n\n' "${rhex[*]}"
+
+	# collect binary
+	open_com
+	tpdd_read_unknown
+	close_com
+	printf '%s\n\n' "${rhex[*]}"
+
+	open_com
 }
 
 ###############################################################################
@@ -677,13 +727,39 @@ tpdd_read () {
 		tpdd_wait
 		x=
 		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
-		((read_err==1)) && rhex[i]='00' read_err=0
+		((read_err==1)) && read_err=0
 		((read_err)) && break
 		printf -v rhex[i] '%02X' "'$x"
 		vecho 2 -n "$i:${rhex[i]} "
 	}
 	((v==9)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
 	((read_err>1)) && vecho 2 "read_err:$read_err" || vecho 2 ''
+}
+
+tpdd_read_unknown () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local -i e= ;local x ;rhex=()
+	tpdd_wait_s
+	while : ;do
+		x=
+		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;e=$?
+		((e==1)) && e=0
+		((e)) && break
+		printf -v x '%02X' "'$x"
+		rhex+=($x)
+	done
+	((v==9)) && { local c=$((10000+seq++)) ;x="${rhex[*]}" ;printf '%b' "\x${x// /\\x}" >${0##*/}.$$.${c#?}.$z ; }
+	:
+}
+
+tpdd_read_BASIC () {
+	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
+	local x e ;printf -v e '%b' "\x$BASIC_EOF"
+	tpdd_wait
+	while read -r -t 2 -u 3 x ;do
+		printf '%s\n' "$x"
+		[[ "${x: -1}" == "$e" ]] && break
+	done
 }
 
 # check if data is available without consuming any
@@ -713,6 +789,10 @@ tpdd_wait () {
 	((b==1)) && spin -
 	((b)) && echo
 	vecho 1 "$z: $@:$((i*p))"
+}
+
+tpdd_wait_s () {
+	until tpdd_check ;do _sleep 0.05 ;done
 }
 
 # Drain output from the drive to get in sync with it's input vs output.
