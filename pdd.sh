@@ -1562,15 +1562,12 @@ lcmd_com_close () {
 }
 
 # read the Space Managment Table
-# track 0 sector 0, bytes 1240-1260
+# track 0 sector 0, bytes 1240-1259
 read_smt () {
 	((pdd2)) && {
-		pdd2_sector_cache 0 0 0 || return $?
+		pdd2_sector_cache 0 $bank 0 || return $?
 		pdd2_read_cache 0 $SMT_OFFSET $SMT_LENGTH >/dev/null || return $?
-		echo "SMT 0: ${ret_dat[*]:3}"
-		pdd2_sector_cache 0 1 0 || return $?
-		pdd2_read_cache 0 $SMT_OFFSET $SMT_LENGTH >/dev/null || return $?
-		echo "SMT 1: ${ret_dat[*]:3}"
+		echo "SMT $bank: ${ret_dat[*]:3}"
 	} || {
 		pdd1_read_physical 0 >/dev/null || return $?
 		echo "SMT: ${rhex[*]:$SMT_OFFSET:$SMT_LENGTH}"
