@@ -1315,7 +1315,7 @@ fcmd_write_id () {
 }
 
 # write a logical sector
-# fcmd_write_logical physical logical length data(hex pairs)
+# fcmd_write_logical physical logical data(hex pairs)
 fcmd_write_logical () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	((operation_mode)) && ocmd_fdc
