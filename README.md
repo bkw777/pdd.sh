@@ -8,6 +8,9 @@ It's pure bash except for the following:
 
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
+[Does not work in WSL2.](https://github.com/microsoft/WSL/issues/4322)  
+[Maybe it works in WSL1.](https://docs.microsoft.com/en-us/windows/wsl/compare-versions#exceptions-for-using-wsl-1-rather-than-wsl-2) Untested.
+
 ## Installation
 ```sudo make install```
 
