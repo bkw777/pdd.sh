@@ -3,13 +3,14 @@
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in pure\* bash.
 
 It's pure bash except for the following:  
-* "stty" is needed once at startup to configure the serial port.  
-* "mkfifo" is used once at startup for \_sleep() without /usr/bin/sleep .  
+* ```stty``` is needed once at startup to configure the serial port.  
+* ```mkfifo``` is used once at startup for ```_sleep()``` without ```/usr/bin/sleep```.  
 
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
-[Does not work in WSL2.](https://github.com/microsoft/WSL/issues/4322)  
-[Maybe it works in WSL1.](https://docs.microsoft.com/en-us/windows/wsl/compare-versions#exceptions-for-using-wsl-1-rather-than-wsl-2) Untested.
+[Does not work in WSL2](https://github.com/microsoft/WSL/issues/4322).  
+Maybe this [com2tcp workaround](https://matevarga.github.io/esp32/m5stack/esp-idf/wsl2/2020/05/31/flashing-esp32-under-wsl2.html) works. Untested.  
+[Maybe works in WSL1](https://docs.microsoft.com/en-us/windows/wsl/compare-versions#exceptions-for-using-wsl-1-rather-than-wsl-2). Untested.
 
 ## Installation
 ```sudo make install```
