@@ -13,12 +13,13 @@ Any linux, macos/osx, bsd, any architecture.
 
 Other unix like SCO, Solaris, etc should work with only minor adjustment (tty device names, stty commandline arguments).
 
-Windows is a problem but may work with effort.
+Windows is a problem but may work with effort.  
 [Does not work in WSL2](https://github.com/microsoft/WSL/issues/4322).  
 Maybe this [com2tcp workaround](https://matevarga.github.io/esp32/m5stack/esp-idf/wsl2/2020/05/31/flashing-esp32-under-wsl2.html) works. Untested.  
 [Should work in WSL1](https://docs.microsoft.com/en-us/windows/wsl/compare-versions#exceptions-for-using-wsl-1-rather-than-wsl-2). Untested.
 
-Or maybe it finally does work in WSL2 now. [this page](https://github.com/dorssel/usbipd-win/wiki/WSL-support) describes how to make it work by building a custom kernel, but also says that this is no longer necessary for common hardware. Untested.
+Or maybe it finally does work in WSL2 now.  
+[this page](https://github.com/dorssel/usbipd-win/wiki/WSL-support) describes how to make it work by building a custom kernel, but also says that this is no longer necessary for common hardware. Untested.
 
 Other people have said that it works as long as you access the com port from Windows first using anything, IE putty, just open the port once using any app and then close the app and that's it. Untested.
 
