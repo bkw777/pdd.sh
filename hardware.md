@@ -8,7 +8,7 @@ If your drive doesn't work, see the section about the belt.
 
 * Some 720K disks. Not 1.44M
 
-* Some form of serial port. Either an old motherboard or laptop that has real com ports, or a usb-serial adapter, preferrably with [FTDI chip and nuts](http://tandy.wiki/Model_T_Serial_Cable#USB-Serial_Adapters) not screws.
+* Some form of serial port. Either an old motherboard or laptop that has real com ports, or a [usb-serial adapter](http://tandy.wiki/Model_T_Serial_Cable#USB-Serial_Adapters), preferrably with FTDI chip and nuts not screws.
 
 * Serial cable adapters to go from the PC's 9-pin male connector to the tpdd cables's 25-pin male connector.
 
