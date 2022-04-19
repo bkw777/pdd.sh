@@ -23,12 +23,12 @@ Assuming you have a motherboard or usb-serial adapter with a 9-pin male connecto
 
 ----
 
-If you can find one, the simplest is a DE9F to DB25F straight-through adapter. These are not common.  
+The simplest is a DE9F to DB25F straight-through adapter. These are NOT common, but here is one.  
 https://www.jensentools.com/pan-pacific-ad-d25f9f-a-serial-adapter-db-9f-to-db-25f/p/502-600
 
 You may possibly get lucky on ebay but be careful and make sure you're getting 9-female to 25-male, straight-through NOT null-modem. Also make sure the 9-pin side has screws not nuts. Nuts would get in the way with the nuts on the usb-serial adapter or motherboard com port. Most 9-25 adapters will NOT be right.
 
-If you can find one, then that single adapter does the whole job, and you can skip the rest of this file.
+As long as that link still works or if you can find the same thing elsewhere, then that single adapter does the whole job, and you can skip the rest of this file.
 
 ----
 
