@@ -31,6 +31,8 @@ sudo make install
 ```
 
 ## Usage
+First assemble the [hardware](hardware.md)
+
 ```pdd [tty_device] [command [args...]] [;commands...]```
 
 With no arguments, it will run in interactive command mode.  
