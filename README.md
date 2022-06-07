@@ -77,6 +77,7 @@ Or you may specify one as the first argument on the command line.
 **General/Other**  
 | command | arguments | Description |
 | --- | --- | --- |
+| detect_model | | Detects TPDD1 vs TPDD2 connected. Sets TPDD1 vs TPDD2 mode based on detection. |
 | 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk & write to filename or display on screen |
@@ -100,6 +101,7 @@ Additionally, some behavior may be modified by setting environment variables.
 | DEBUG | # | same as **debug** command above |
 | FLOPPY_COMPAT | true\|false | (default is true) Automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
 | TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
+| MODEL_DETECTION | true\|false | (default is true) Use the "TS-DOS mystery command" to automatically detect if the attached TPDD drive is a TPDD1 or TPDD2 |
 
 Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility.  
 ```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
