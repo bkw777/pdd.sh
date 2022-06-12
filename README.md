@@ -78,6 +78,10 @@ Or you may specify one as the first argument on the command line.
 | command | arguments | Description |
 | --- | --- | --- |
 | detect_model | | Detects TPDD1 vs TPDD2 connected. Sets TPDD1 vs TPDD2 mode based on detection. |
+| compat | \[floppy\|wp2\|raw\] | Set a compatibility on-disk filename format and attribute byte. With no args presents a menu.<br>floppy : space-padded 6.2 filenames with attr 'F'<br>wpr : space-padded 8.2 filenames with attr 'F'<br>raw : 24 byte filenames with attr ' '<br>New compat definitions may be added by adding entries to the compat\[\] array near the top.<br>The default compat mode is **floppy**, which is needed for working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, and Kyotronic KC-85.<br>But if for example you save files to a disk with a TANDY WP-2,<br>and then get "No such file" when trying to read them here,<br>try ```compat raw``` and then ```ls``` to get a clue what's wrong<br>then ```compat wp2``` and try to load the file again. |
+| names | \[floppy\|wp2\|raw\] | Just the filename part of **compat** |
+| attr | \[F\|' '\|other\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. |
+| detect_model | | Detects TPDD1 vs TPDD2 connected. Sets TPDD1 vs TPDD2 mode based on detection. |
 | 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk & write to filename or display on screen |
@@ -99,7 +103,7 @@ Additionally, some behavior may be modified by setting environment variables.
 | --- | --- | --- |
 | BAUD | 9600\|19200 | Same as **baud** command above |
 | DEBUG | # | same as **debug** command above |
-| FLOPPY_COMPAT | true\|false | (default is true) Automatically pad & un-pad filenames between the natural form and the space-padded 6.2 form needed to be compatible with "Floppy" & "Flopy2". Disabling allows you to see the actual on-disk file names like <pre>**"A     .BA               "**</pre> and allows you to use the entire 24-byte filename field however you want |
+| COMPAT | \[floppy\|wp2\|raw\] | same as **compat** command above |
 | TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
 | MODEL_DETECTION | true\|false | (default is true) Use the "TS-DOS mystery command" to automatically detect if the attached TPDD drive is a TPDD1 or TPDD2 |
 
