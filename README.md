@@ -8,20 +8,26 @@ It's pure bash except for the following:
 
 That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
 
+There are a lot of commands and options. This is a swiss army knife for the TPDD.  
+It can be used to inspect, copy, restore, repair, or craft TPDD disks in ways that normal client software like TS-DOS or PDD.EXE doesn't provide or allow.
+
+## Particularly Unique Features  
+Things this util can do that not even the commercial MS-DOS tpdd utils can do  
+ - TPDD2 sector data and sector metadata read & write
+ - Ability to clone "problem" disks, including:  
+   - TPDD1 Utility Disk
+   - TPDD2 Utility Disk
+   - Disk-Power Distribution Disk
+ - Ability to create disks from downloadable disk image files  
+   - ...and do so without special hardware other than the drive itself (no kryoflux or the like needed, nor a MS-DOS machine old enough to have the right kind of floppy controller, nor a hard-to-find 720K 3.5" drive)  
+ - Work with disks/files formatted for other clients than the KC-85 platform clones
+
 ## Supported OS's
 Any linux, macos/osx, bsd, any architecture.  
 
 Other unix like SCO, Solaris, etc should work with only minor adjustment (tty device names, stty commandline arguments).
 
-Windows is a problem but may work with effort.  
-[Does not work in WSL2](https://github.com/microsoft/WSL/issues/4322).  
-Maybe this [com2tcp workaround](https://matevarga.github.io/esp32/m5stack/esp-idf/wsl2/2020/05/31/flashing-esp32-under-wsl2.html) works. Untested.  
-[Should work in WSL1](https://docs.microsoft.com/en-us/windows/wsl/compare-versions#exceptions-for-using-wsl-1-rather-than-wsl-2). Untested.
-
-Or maybe it finally does work in WSL2 now.  
-[This page](https://github.com/dorssel/usbipd-win/wiki/WSL-support) describes how to make it work by building a custom kernel, but also says that this is no longer necessary for common hardware. Untested.
-
-Yet another option is, people have reported that it works as long as you access the com port from Windows first, using anything, IE putty, just open the port once using any app and then close the app and that's it. Untested.
+Windows is a [problem](https://github.com/microsoft/WSL/issues/4322) but [may work with effort](https://github.com/dorssel/usbipd-win/wiki/WSL-support).   <!-- (other references: [com2tcp workaround](https://matevarga.github.io/esp32/m5stack/esp-idf/wsl2/2020/05/31/flashing-esp32-under-wsl2.html), [WSL1](https://docs.microsoft.com/en-us/windows/wsl/compare-versions#exceptions-for-using-wsl-1-rather-than-wsl-2), people have also reported that usb-serial ports are usable from WSL2 as long as you simply access the com port from any Windows app first, like putty, just open the port once using any app and then close the app before trying to use it from WSL2. All untested by me.) -->
 
 ## Installation
 ```
@@ -35,13 +41,31 @@ First assemble the [hardware](hardware.md)
 
 ```pdd [tty_device] [command [args...]] [;commands...]```
 
-With no arguments, it will run in interactive command mode.  
-You get a ```TPDD($mode)>``` prompt where you can enter commands.  
-"help" is still not one of them ;) Sorry.
-
 **tty_device** will be auto-detected in most cases.  
 Failing that, you'll get a list to select from.  
 Or you may specify one as the first argument on the command line.  
+
+With no arguments, it will run in interactive command mode.  
+You get a ```PDD(mode[bank]:names,attr)>``` prompt where you can enter commands.  
+"help" is still not one of them, Sorry.
+
+The intercative mode prompt indicates various aspects of the current operating state:  
+```PDD(mode[bank]:names,attr)>```  
+<ul>
+  <b>mode</b>: The basic operating mode. Affected by <b>pdd1</b>, <b>pdd2</b>, and <b>detect_model</b>.<br>
+    <ul>
+    opr = TPDD1 in "Operation-mode" (the normal filesystem/file-access mode of TPDD1)<br>
+    fdc = TPDD1 in "FDC-mode" (a seperate command set that TPDD1 has for sector access)<br>
+    pdd2 = TPDD2<br>
+  </ul>
+  <b>[bank]</b>: The currently selected bank, if any. Affected by <b>bank</b>.<br>
+    <ul>
+    In TPDD1 mode, this field is not included<br>
+    In TPDD2 mode, the current bank is shown as [0] or [1]<br>
+  </ul>
+  <b>names</b>: The format of filenames used to save or load files from the drive. Affected by <b>compat</b> and <b>names</b>.<br>
+  <b>attr</b>: The "attribute" byte used to save or load files from the drive. Affected by <b>compat</b> and <b>attr</b>.<br>
+</ul>
 
 **TPDD1/TPDD2 File Access**  
 | command | arguments | description |
@@ -77,17 +101,16 @@ Or you may specify one as the first argument on the command line.
 **General/Other**  
 | command | arguments | Description |
 | --- | --- | --- |
-| detect_model | | Detects TPDD1 vs TPDD2 connected. Sets TPDD1 vs TPDD2 mode based on detection. |
-| compat | \[floppy\|wp2\|raw\] | Set a compatibility on-disk filename format and attribute byte. With no args presents a menu.<br>floppy : space-padded 6.2 filenames with attr 'F'<br>wpr : space-padded 8.2 filenames with attr 'F'<br>raw : 24 byte filenames with attr ' '<br>New compat definitions may be added by adding entries to the compat\[\] array near the top.<br>The default compat mode is **floppy**, which is needed for working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, and Kyotronic KC-85.<br>But if for example you save files to a disk with a TANDY WP-2,<br>and then get "No such file" when trying to read them here,<br>try ```compat raw``` and then ```ls``` to get a clue what's wrong<br>then ```compat wp2``` and try to load the file again. |
-| names | \[floppy\|wp2\|raw\] | Just the filename part of **compat** |
-| attr | \[F\|' '\|other\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. |
-| detect_model | | Detects TPDD1 vs TPDD2 connected. Sets TPDD1 vs TPDD2 mode based on detection. |
+| detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
+| compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
+| names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
+| attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
 | 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
-| dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk & write to filename or display on screen |
-| rd&#160;\|&#160;restore_disk | \<filename\> | Restore a disk from filename |
+| dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
+| rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
 | read_smt | | Read the Space Management Table<br>(for TPDD2, reads the SMT of the currently selected bank) |
-| send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Use to install a TPDD client.<br>See https://github.com/bkw777/dlplus/tree/master/clients |
+| send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
 | debug | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose<br>9 = every tpdd_read() or tpdd_write() creates a log file with a copy of the data |
@@ -107,7 +130,7 @@ Additionally, some behavior may be modified by setting environment variables.
 | TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
 | MODEL_DETECTION | true\|false | (default is true) Use the "TS-DOS mystery command" to automatically detect if the attached TPDD drive is a TPDD1 or TPDD2 |
 
-Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility.  
+Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility. This doesn't really matter since the drive model is automatically detected before any commands that are affected by it. In most cases you can just run "pdd" regardless which type of drive is connected.
 ```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
 Running ```pdd1 some_command``` is equivalent to running ```pdd "1;some_command"```  
 Running ```pdd2 some_command``` is equivalent to running ```pdd "2;some_command"```  
@@ -192,3 +215,4 @@ http://www.bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd2-sector-0.html  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd-sector-access.html  
 https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt  
+https://github.com/bkw777/dlplus  
