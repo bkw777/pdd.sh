@@ -30,6 +30,7 @@ Other unix like SCO, Solaris, etc should work with only minor adjustment (tty de
 Windows is a [problem](https://github.com/microsoft/WSL/issues/4322) but [may work with effort](https://github.com/dorssel/usbipd-win/wiki/WSL-support).   <!-- (other references: [com2tcp workaround](https://matevarga.github.io/esp32/m5stack/esp-idf/wsl2/2020/05/31/flashing-esp32-under-wsl2.html), [WSL1](https://docs.microsoft.com/en-us/windows/wsl/compare-versions#exceptions-for-using-wsl-1-rather-than-wsl-2), people have also reported that usb-serial ports are usable from WSL2 as long as you simply access the com port from any Windows app first, like putty, just open the port once using any app and then close the app before trying to use it from WSL2. All untested by me.) -->
 
 ## Installation
+It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions. But there is a "make install" to do it.  
 ```
 git clone git@github.com:bkw777/pdd.sh.git
 cd pdd.sh
