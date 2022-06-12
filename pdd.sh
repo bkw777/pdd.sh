@@ -387,7 +387,7 @@ str_to_shex () {
 }
 
 # Convert a local filename to the on-disk tpdd filename
-# "hi.do" -> "hi    .do"
+# "A.BA" -> "A     .BA"
 mk_tpdd_file_name () {
 	local z=${FUNCNAME[0]} ;vecho 1 "$z($@)"
 	local -i nl el ;local n e f="$1" ;tpdd_file_name=
@@ -911,6 +911,7 @@ ocmd_delete () {
 }
 
 # TPDD2 Rename File (TPDD1 does not have this command)
+# $1 = destination filename
 # request: 5A 5A 0D 1C ##  (0-24 filename, 25 attr)
 # return : 12 01 ?? ##
 ocmd_pdd2_rename () {
@@ -918,9 +919,10 @@ ocmd_pdd2_rename () {
 	((operation_mode)) || fcmd_mode 1
 	local f="$1" a="$2" r=${opr_fmt[req_pdd2_rename]}
 	((bank)) && printf -v r '%02X' $((16#$r+16#40))
-	printf -v f "%-24.24s" "$f" ;str_to_shex "$f"
-	((${#}>1)) || a="$ATTR" # unset different from set empty
+	((${#}>1)) || a="$ATTR"
 	((${#a}==2)) || printf -v a "%02X" "'$a"
+	mk_tpdd_file_name "$f"
+	str_to_shex "$tpdd_file_name"
 	ocmd_send_req $r ${shex[*]} $a || return $?
 	ocmd_read_ret $RENAME_WAIT_MS 1 || return $?
 	ocmd_check_err
@@ -1330,7 +1332,7 @@ ask_names () {
 			parse_compat "${x// /}" && break || continue
 		done
 	}
-	[[ ":$ATTR" != ":$a" ]] && ATTR="$a" COMPAT="none" 
+	[[ ":$ATTR" != ":$a" ]] && ATTR="$a" COMPAT="none"
 }
 
 set_attr () {
@@ -1345,18 +1347,20 @@ set_attr () {
 # surely this can be smaller
 ask_attr () {
 	local -i n="$FNL" e="$FEL" ;local x a=() m=() PS3="Attribute byte: "
-	for COMPAT in ${!compat[@]} ;do
-		parse_compat ;FNL="$n" FEL="$e"
-		[[ "${a[$FAH]}" ]] || a[$FAH]="$ATTR" m+=("$FAH '$ATTR'")
-	done
-	select x in "${m[@]}" other ;do
+	((${#1})) && set_attr "$1" || {
+		for COMPAT in ${!compat[@]} ;do
+			parse_compat ;FNL="$n" FEL="$e"
+			[[ "${a[$FAH]}" ]] || a[$FAH]="$ATTR" m+=("$FAH '$ATTR'")
+		done
+		select x in "${m[@]}" other ;do
 		x="${x%% *}"
 		case "$x" in
 			other) x= ;read -p "Enter a single byte or a hex pair: " x ;;
 			*) [[ "${a[$x]}" ]] && x="${a[$x]}" || x= ;;
 		esac
-		set_attr "$x" && break
-	done
+			set_attr "$x" && break
+		done
+	}
 	((FNL==n && FEL==e)) || COMPAT="none" FNL="$n" FEL="$e"
 }
 
@@ -1391,7 +1395,6 @@ lcmd_load () {
 	local x s="$1" d="${2:-$1}" a="$3" r=false ;local -i p= l= ;fhex=()
 	((${#}<3)) && a="$ATTR"
 	((${#}>3)) && r=true
-	echo "#=$# FNL=$FNL FEL=$FEL ATTR=$ATTR a=$a"
 	$r && d= || {
 		((${#d})) || {
 			echo "save src [dest] [attr]"
@@ -1477,7 +1480,6 @@ lcmd_rm () {
 	ocmd_dirent "$1" "$a" ${dirent_cmd[set_name]} || return $?
 	((${#file_name})) || { err_msg+=('No Such File') ; return 1 ; }
 	ocmd_delete || return $?
-	printf '\r%79s\rDeleted TPDD%s:%s (%s) \n' ' ' "$bd" "$1" "$a"
 }
 
 lcmd_mv () {
@@ -1619,7 +1621,7 @@ pdd2_dump_disk () {
 			pdd2_read_cache 1 32772 4 $1 || return $? # metadata
 			for ((f=0;f<fq;f++)) {
 				pdd2_read_cache 0 $((PDD2_SECTOR_CHUNK_LENGTH*f)) $PDD2_SECTOR_CHUNK_LENGTH $1 || return $?
-				pbar $((b+=PDD2_SECTOR_CHUNK_LENGTH)) $tb bytes
+				((${#1})) && pbar $((b+=PDD2_SECTOR_CHUNK_LENGTH)) $tb bytes
 			}
 		}
 	}
