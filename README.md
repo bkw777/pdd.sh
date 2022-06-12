@@ -12,7 +12,7 @@ There are a lot of commands and options. This is a swiss army knife for the TPDD
 It can be used to inspect, copy, restore, repair, or craft TPDD disks in ways that normal client software like TS-DOS or PDD.EXE doesn't provide or allow.
 
 ## Particularly Unique Features  
-Things this util can do that not even the commercial MS-DOS tpdd utils can do  
+Things this util can do that not even the commercial TPDD utils can do  
  - TPDD2 sector data and sector metadata read & write
  - Ability to clone "problem" disks, including:  
    - TPDD1 Utility Disk
