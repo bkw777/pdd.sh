@@ -99,7 +99,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | read_cache | \<mode&#160;0\|1\>&#160;\<offset&#160;0-252\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's sector cache.<br>mode 0 = normal sector data<br>mode 1 = metadata |
 | write_cache | \<mode&#160;0\|1\>&#160;\<offset&#160;0-252\>&#160;\<data...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode 0 = normal sector data<br>mode 1 = metadata |
 
-**General/Other**  
+**Other**  
 | command | arguments | Description |
 | --- | --- | --- |
 | detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
@@ -209,18 +209,17 @@ and \*.p2h for image filanames for TPDD2 disks in hex dump format
 ```pdd rd TPDD2_26-3814_Utility_Disk.p2h```  
 [(here is a nice label for it)](https://github.com/bkw777/disk_labels)
 
-**Explicitly use TPDD1 mode**  
-Disables the TPDD1 vs TPDD2 drive detection command normally sent at start-up  
-```pdd1 ls```
-
-**Explicitly use TPDD2 mode**  
-Disables the TPDD1 vs TPDD2 drive detection command normally sent at start-up  
-```pdd2 ls```
+**Explicitly use TPDD1 or TPDD2 mode**  
+Disables the automatic TPDD1 vs TPDD2 drive detection  
+```
+pdd1 ls
+pdd2 ls
+```
 
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
 This function is not used with a TPDD drive but with a "Model T" computer like a TRS-80 Model 100, usually to install a TPDD client like TS-DOS, TEENY, or DSKMGR.  
-```pdd send_loader TS-DOS.100```  
+```pdd bootstrap TS-DOS.100```  
 You can find a collection of TPDD client loaders at https://github.com/bkw777/dlplus/tree/master/clients
 
 # References
