@@ -823,8 +823,7 @@ ocmd_pdd2_unk23 () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) || fcmd_mode 1
 	ret_dat=()
-	ocmd_send_req ${opr_fmt[req_pdd2_unk23]} || return $?
-	ocmd_read_ret
+	ocmd_send_req ${opr_fmt[req_pdd2_unk23]} && ocmd_read_ret
 	[[ ":${ret_dat[*]}" == ":${UNK23_RET_DAT[*]}" ]] && {
 		vecho 1 'Detected TPDD2'
 		pdd2=true operation_mode=2 bd="[$bank]"
@@ -1916,13 +1915,14 @@ pdd2_boot () {
 
 do_cmd () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i _i _e ;local _a=$@ _c ifs=$IFS
+	local -i _i _e _det=256 ;local _a=$@ _c ifs=$IFS
 	local IFS=';' ;_a=(${_a}) ;IFS=$ifs
 	for ((_i=0;_i<${#_a[@]};_i++)) {
 		eval set ${_a[_i]}
 		_c=$1 ;shift
-		_e=0 err_msg=()
+		_e=${_det} err_msg=()
 
+	# commands that don't need or are even broken by _ini()
 	# mostly options, controls, mode-setting, local/internal functions,
 	# mostly things that don't send commands to the drive
 		case ${_c} in
@@ -1943,16 +1943,36 @@ do_cmd () {
 			sync|drain) tpdd_drain ;_e=$? ;;
 			sum|checksum) calc_cksum $* ;_e=$? ;;
 			ocmd_check_err) ocmd_check_err ;_e=$? ;;
-			send_loader) srv_send_loader "$@" ;_e=$? ;;
+			boot|bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
 			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;_e=0 ;;
 			q|quit|bye|exit) exit ;;
+			'') _e=0 ;;
+		esac
+		((_e!=_det)) && { # detect if we ran any of the above
+			((${#err_msg[*]})) && printf '\n%s: %s\n' "${_c}" "${err_msg[*]}" >&2
+			continue
+		}
+
+	# We need this split and delayed _init(), instead of just doing _init()
+	# once at start=up right in main, to avoid doing _init() until we
+	# actually have a drive connected, or at least until the user asks for
+	# a command that sends to a drive.
+	#
+	# Especially avoid doing _init() for bootstrap. In bootstrap scenario,
+	# there is either no cable connected yet, or it's connected but the
+	# serial port is not open and the client is not receiving, and we would
+	# block while trying to send the TPDD2 detect command,
+	# and again later when trying to send the FDC->OPR command on exit.
+		_init
+		_e=0
 
 	# TPDD1 operation-mode commands
 	# TPDD1 & TPDD2 file access
 	# All of the drive firmware "operation mode" functions.
 	# Most of these are low-level, not used directly by a user.
 	# Higher-level commands like ls, load, & save are built out of these.
+		case ${_c} in
 			dirent) ocmd_dirent "$@" ;_e=$? ;;
 			open) ocmd_open $* ;_e=$? ;;
 			close) ocmd_close ;_e=$? ;;
@@ -1995,11 +2015,10 @@ do_cmd () {
 			dd|dump_disk) $pdd2 && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;;
 			rd|restore_disk) $pdd2 && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;;
 
-	# low level manual/raw/debug use any function directly
+	# other
+			model|detect|detect_model) ocmd_pdd2_unk23 ;_e=$? ;;
 			pdd1_boot) pdd1_boot "$@" ;_e=$? ;; # [100|200]
 			pdd2_boot) pdd2_boot "$@" ;_e=$? ;; # [100|200]
-			model|detect|detect_model) ocmd_pdd2_unk23 ;_e=$? ;;
-			'') _e=0 ;;
 			*) ${_c} "$@" ;_e=$? ;;
 
 		esac
@@ -2030,8 +2049,6 @@ for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
 [[ "$PORT" ]] && shift || get_tpdd_port
 vecho 1 "Using port \"$PORT\""
 open_com || exit $?
-
-_init
 
 # non-interactive mode
 (($#)) && { do_cmd "$@" ;exit $? ; }
