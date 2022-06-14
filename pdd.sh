@@ -503,7 +503,7 @@ set_stty () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local b=${1:-${BAUD:-19200}} r= x= ;${RTSCTS:-true} || r='-' ;${XONOFF:-false} || x='-'
 	stty ${stty_f} "${PORT}" $b ${STTY_FLAGS} ${r}crtscts ${x}ixon ${x}ixoff
-	((debug>1)) && stty ${stty_f} "${PORT}" -a ;:
+	((v>1)) && stty ${stty_f} "${PORT}" -a ;:
 }
 
 open_com () {
@@ -1286,30 +1286,43 @@ pdd2_flush_cache () {
 
 # write $* to com port with per-character delay
 # followed by the BASIC EOF character
+slowbyte () {
+	printf '%b' "\x$1" >&3
+	_sleep $s
+}
+
 srv_send_loader () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local -i i l ;local s REPLY x="${XONOFF:-false}"
-	ms_to_s $LOADER_PER_CHAR_MS ;s=$_s
+	ms_to_s $LOADER_PER_CHAR_MS ;s=${_s}
 	file_to_fhex $1
-	fhex+=('0D' $BASIC_EOF)
 
-	close_com ;XONOFF=true ;open_com
+	XONOFF=true ;set_stty
 
 	echo "Installing $1"
 	echo 'Prepare the portable to receive:'
-	echo -e "\tRUN \"COM:98N1ENN\"\t(for TANDY, Kyotronic, Olivetti)"
-	echo -e "\tRUN \"COM:9N81XN\"\t(for NEC)\n"
+	echo 'TANDY, Kyotronic, Olivetti:  RUN "COM:98N1ENN"'
+	echo '                       NEC:  RUN "COM:9N81XN"'
 	read -p 'Press [Enter] when ready...'
 
 	l=${#fhex[*]}
-	for ((i=0;i<l;i++)) {
-		printf '%b' "\x${fhex[i]}" >&3
-		pbar $((i+1)) $l 'bytes'
-		_sleep $s
-	}
-	echo
+	for ((i=0;i<l;i++)) ;do
+		slowbyte ${fhex[i]}
+		((v)) && {
+			((i && 16#${fhex[i-1]}==16#$BASIC_EOL && 16#${fhex[i]}!=16#0A)) && echo
+			printf '%b' "\x${fhex[i]}"
+		} || pbar $((i+1)) $l 'bytes'
+	done
 
-	close_com ;XONOFF=$x ;open_com
+	# Send trailing CR and/or Ctrl-Z, if the file didn't. Don't pbar() just
+	# so the final bytes-sent display still matches the expected file size.
+	case ${fhex[i]} in
+		$BASIC_EOF) : ;;
+		$BASIC_EOL) slowbyte $BASIC_EOF ;;
+		*) slowbyte $BASIC_EOL ;slowbyte $BASIC_EOF ;;
+	esac
+
+	XONOFF=$x ;set_stty ;echo
 }
 
 ###############################################################################
@@ -1945,7 +1958,7 @@ do_cmd () {
 			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 			boot|bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
-			debug) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;_e=0 ;;
+			debug|verbose) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;_e=0 ;;
 			q|quit|bye|exit) exit ;;
 			'') _e=0 ;;
 		esac
