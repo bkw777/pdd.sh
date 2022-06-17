@@ -9,7 +9,8 @@ PHONY: all
 all: $(SOURCE)
 
 install: all
-	@install -v -m 755 -D $(SOURCE) $(BINDIR)/$(NAME) && cd $(BINDIR) && { ln -svf $(NAME) $(NAME)1 ;ln -svf $(NAME) $(NAME)2 ; }
+	@mkdir -p $(BINDIR)
+	@install -v -o root -m 755 $(SOURCE) $(BINDIR)/$(NAME) && cd $(BINDIR) && { ln -svf $(NAME) $(NAME)1 ;ln -svf $(NAME) $(NAME)2 ; }
 
 PHONY: uninstall
 uninstall:

@@ -37,10 +37,10 @@ v=${DEBUG:-0}
 
 # Default rs232 tty device name, with platform differences
 # The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
-			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB		# linux
+			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB	# linux
 case "${OSTYPE,,}" in
-	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;		# *bsd
-	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial- ;;	# osx
+	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=cu ;;	# *bsd
+	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu. ;;	# osx
 esac
 
 # stty flags to set the serial port parameters & tty behavior
@@ -496,7 +496,7 @@ get_tpdd_port () {
 
 test_com () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	{ : >&3 ; } 2>&-
+	[[ -t 3 ]]
 }
 
 set_stty () {
