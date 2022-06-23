@@ -23,14 +23,15 @@ Things this util can do that not even the commercial TPDD utils can do
  - Work with disks/files formatted for other clients than the KC-85 platform clones
 
 ## Supported OS's
-Any linux, macos/osx, bsd, any architecture.  
+Any linux, macos/osx, bsd, any cpu architecture.  
 
 Other unix like SCO, Solaris, etc should work with only minor adjustment (tty device names, stty commandline arguments).
 
-Windows [is a problem](https://github.com/microsoft/WSL/issues/4322).
+Windows... [with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).
 
 ## Installation
-It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions. But there is a "make install" to do it.  
+It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions.  
+But there is a "make install" for convenience.  
 ```
 git clone git@github.com:bkw777/pdd.sh.git
 cd pdd.sh
@@ -38,7 +39,7 @@ sudo make install
 ```
 
 ## Usage
-First assemble the [hardware](hardware.md)
+First gather the [hardware](hardware.md)
 
 ```pdd [tty_device] [command [args...]] [;commands...]```
 
