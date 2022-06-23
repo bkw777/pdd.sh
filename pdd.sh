@@ -1098,7 +1098,7 @@ fcmd_format () {
 }
 
 # See the software manual page 11
-# The drive firmware function returns 13 bytes, only the 1st byte is used.
+# The drive firmware function returns 12 bytes, only the 1st byte is used.
 #
 # 00 - current sector is not used by a file
 # ** - sector number of next sector in current file
