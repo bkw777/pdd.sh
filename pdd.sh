@@ -1074,11 +1074,10 @@ fcmd_condition () {
 	fcmd_read_result || return $?
 	((fdc_err)) && return $fdc_err
 
-	((fdc_res)) || echo "OK"
 	((fdc_res&FDC_COND_NOTINS)) && echo "Disk Not Inserted"
 	((fdc_res&FDC_COND_REMOVED)) && echo "Disk Removed"
 	((fdc_res&FDC_COND_WP)) && echo "Disk Write-Protected"
-	:
+	((fdc_res)) || echo "OK"
 }
 
 # FDC-mode format disk
