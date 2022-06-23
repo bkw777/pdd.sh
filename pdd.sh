@@ -310,6 +310,11 @@ typeset -ra fdc_msg=(
 	[209]='Disk Not Inserted'
 )
 
+# FDC condition bit flags
+((FDC_COND_NOTINS=0x80))  # bit 7: 1 = disk not inserted
+((FDC_COND_REMOVED=0x40)) # bit 6: 1 = disk removed
+((FDC_COND_WP=0x20))      # bit 5: 1 = disk write-protected
+
 # FDC Format Disk Logical Sector Size Codes
 typeset -ra fdc_format_sector_size=(
 	[0]=64
@@ -345,7 +350,7 @@ typeset -r \
 typeset -rA compat=(	# fname(dec.dec) fattr(hex)
 	[floppy]='6,2,46'	# 6.2  F
 	[wp2]='8,2,46'		# 8.2  F
-#	[z88]='24,,00'		# 24   null     # not sure yet
+#	[z88]='24,,00'		# 24   null     # not sure what z88 wants yet
 	[raw]='24,,20'		# 24   space
 )
 
@@ -1010,7 +1015,7 @@ ocmd_write () {
 fcmd_read_result () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local -i i ;local x ;fdc_err= fdc_res= fdc_len= fdc_res_b=()
+	local -i i ;local x ;fdc_err= fdc_res= fdc_len=
 
 	# read 8 bytes
 	tpdd_read 8 $* || return $?
@@ -1037,12 +1042,7 @@ fcmd_read_result () {
 	x= ;[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
 	((fdc_err)) && err_msg+=("${x:-ERROR:${fdc_err}}")
 
-	# For some commands, fdc_res is actually 8 individual bit flags.
-	# Provide the individual bits in fdc_res_b[] for convenience.
-	fdc_res_b=()
-	for ((i=7;i>=0;i--)) { fdc_res_b+=(${D2B[fdc_res]:i:1}) ; }
-
-	vecho 1 "$z: err:$fdc_err:\"${fdc_msg[fdc_err]}\" res:$fdc_res(${D2B[fdc_res]}) len:$fdc_len"
+	vecho 1 "$z: err:$fdc_err:\"${fdc_msg[fdc_err]}\" res:$fdc_res len:$fdc_len"
 }
 
 ###############################################################################
@@ -1074,14 +1074,11 @@ fcmd_condition () {
 	fcmd_read_result || return $?
 	((fdc_err)) && return $fdc_err
 
-	# result bit 7 - disk not inserted
-	x= ;((fdc_res_b[7])) && x=' Not'
-	echo -n "Disk${x} Inserted"
-	((fdc_res_b[7])) && { echo ;return ; }
-
-	# result bit 5 - disk write-protected
-	x='Writable' ;((fdc_res_b[5])) && x='Write-protected'
-	echo ", $x"
+	((fdc_res)) || echo "OK"
+	((fdc_res&FDC_COND_NOTINS)) && echo "Disk Not Inserted"
+	((fdc_res&FDC_COND_REMOVED)) && echo "Disk Removed"
+	((fdc_res&FDC_COND_WP)) && echo "Disk Write-Protected"
+	:
 }
 
 # FDC-mode format disk
@@ -1115,9 +1112,8 @@ fcmd_read_id () {
 	((operation_mode)) && ocmd_fdc
 	str_to_shex "${fdc_cmd[read_id]}$1"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:\"${fdc_res_b[*]}\"") ;return $? ; }
-	#vecho 2 "P:$1 LEN:${fdc_len} RES:${fdc_res}[${fdc_res_b[*]}]"
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:\"${fdc_res_b[*]}\"") ;return $fdc_err ; }
+	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	tpdd_write 0D || return $?
 	tpdd_read $PDD1_SECTOR_ID_LENGTH || return $?
 	((${#rhex[*]}<PDD1_SECTOR_ID_LENGTH)) && { err_msg+=("Got ${#rhex[*]} of $PDD1_SECTOR_ID_LENGTH bytes") ; return 1 ; }
@@ -1133,8 +1129,8 @@ fcmd_read_logical () {
 	local -i ps=$1 ls=${2:-1} || return $? ;local x
 	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0D || return $?
 	# stty will say the drive is ready with data right away,
@@ -1154,12 +1150,12 @@ fcmd_write_id () {
 	local -i p=$((10#$1)) ;shift
 	str_to_shex "${fdc_cmd[write_id]}$p"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	shift ; # discard the size field
 	tpdd_write $* || return $?
-	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	:
 }
 
@@ -1171,11 +1167,11 @@ fcmd_write_logical () {
 	local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 2
 	str_to_shex "${fdc_cmd[write_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	tpdd_write $* || return $?
-	fcmd_read_result || { err_msg+=("err:$? res[${fdc_res_b[*]}]") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res[${fdc_res_b[*]}]") ;return $fdc_err ; }
+	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	:
 }
 
@@ -2042,10 +2038,10 @@ do_cmd () {
 
 ###############################################################################
 # Main
-typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fdc_res_b=()
+typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=()
 typeset -i _y= bank= operation_mode=1 read_err= fdc_err= fdc_res= fdc_len= track_num= sector_num= _om=99 FNL # allow FEL to be unset or ''
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= ret_list='|' _s= pdd2=false bd=
-readonly LANG=C D2B=({0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1}{0,1})
+readonly LANG=C
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
 [[ "$0" =~ .*pdd[12](\.sh)?$ ]] && MODEL_DETECTION=false
 ((TPDD_MODEL==2)) || [[ "$0" =~ .*pdd2(\.sh)?$ ]] && pdd2=true operation_mode=2 bd="[$bank]"
