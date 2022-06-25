@@ -39,8 +39,8 @@ v=${DEBUG:-0}
 # The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
 			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB	# linux
 case "${OSTYPE,,}" in
-	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=cu ;;	# *bsd
-	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu. ;;	# osx
+	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;	# *bsd
+	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.  ;;	# osx
 esac
 
 # stty flags to set the serial port parameters & tty behavior
@@ -1033,7 +1033,7 @@ fcmd_read_result () {
 	# Decode the 8 bytes as
 	# 2 bytes = hex pair representing an 8-bit integer error code
 	# 2 bytes = hex pair representing an 8-bit integer result data
-	# 4 bytes = 2 hex pairs representing a 16-bit integer length value
+	# 4 bytes = 2 hex pairs representing a 16-bit integer length or address
 	((fdc_err=16#${x:0:2})) # first 2 = status
 	((fdc_res=16#${x:2:2})) # next 2  = result
 	((fdc_len=16#${x:4:4})) # last 4  = length
@@ -1050,7 +1050,7 @@ fcmd_read_result () {
 # wrappers for each "FDC mode" function of the drive firmware
 
 # select operation mode
-# fcmd_mode <0-1>
+# fcmd_mode <0|1>
 # 0=fdc 1=operation
 fcmd_mode () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
@@ -1063,11 +1063,11 @@ fcmd_mode () {
 	tpdd_drain
 }
 
-# report drive condition
+# report not-ready conditions
+# bit flags for some not-ready conditions
 fcmd_condition () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	local x
 	str_to_shex "${fdc_cmd[condition]}"
 	tpdd_write ${shex[*]} 0D || return $?
 
@@ -1081,14 +1081,18 @@ fcmd_condition () {
 }
 
 # FDC-mode format disk
+# The FDC-mode format command is a low level format that only writes the
+# physical sector ID sections, including the logical sector size code.
+# It allows the disk to be used with FDC-mode sector access commands to
+# read and write raw data. It does not create the filesystem in sector 0.
 # fcmd_format [logical_sector_size_code]
 # size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes
-# The drive firmware defaults to size code 3 when not given.
-# We intercept that and fill in our own default of 6 instead.
+# The drive firmware defaults to 3 when not given, so this does too,
+# but all disks with filesystems are actually either 0 or 6.
 fcmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
-	typeset -i s=${1:-6}
+	typeset -i s=${1:-3}
 	str_to_shex ${fdc_cmd[format]}$s
 	echo "Formatting Disk, TPDD1 \"FDC\" mode, ${fdc_format_sector_size[s]:-\"\"}-Byte Logical Sectors"
 	tpdd_write ${shex[*]} 0D || return $?
@@ -1097,15 +1101,24 @@ fcmd_format () {
 	return $fdc_err
 }
 
-# See the software manual page 11
-# The drive firmware function returns 12 bytes, only the 1st byte is used.
+# sector ID section - See the software manual page 11
+# There is one ID section per physical sector.
+# There are 19 bytes described there, but the leading 5 header bytes and the
+# trailing 2 crc bytes are used by the drive itself. In the 5-byte header
+# the logical sector size code is written by the format command. Other than
+# that, only the 12 byte section is readable/writable by the user.
+# The read_id/write_id/search_id functions operate on that section.
 #
-# 00 - current sector is not used by a file
-# ** - sector number of next sector in current file
-# FF - current sector is the last sector in current file
+# The data can be anything. The drive's built-in filesystem
+# (aka Operation-mode) uses only the first byte:
+#   00 - current sector is not used by a file
+#   ** - sector number of next sector in current file
+#   FF - current sector is the last sector in current file
 #
 # read sector id section
-# fcmd_read_id physical_sector [quiet]
+# ri P [quiet]
+# P : physical sector number 0-79 as plain ascii decimal integer
+# [quiet] :used internally to suppress output during disk dump
 fcmd_read_id () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
@@ -1120,8 +1133,11 @@ fcmd_read_id () {
 }
 
 # read a logical sector
-# fcmd_read_logical physical logical [quiet]
-# physical=0-79 logical=1-20
+# A logical sector is a 64-1280 byte chunk of a 1280-byte physical sector.
+# rl P L [quiet]
+# P : physical sector number 0-79 as plain ascii decimal integer
+# L : logical sector number 1-20 as plain ascii decimal integer
+# [quiet] :used internally to suppress output during disk dump
 fcmd_read_logical () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
@@ -1132,9 +1148,12 @@ fcmd_read_logical () {
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0D || return $?
-	# stty will say the drive is ready with data right away,
-	# but if you read too soon the data will be corrupt or incomplete.
-	# Take 2/3 of the number of bytes we expect to read, and sleep that many ms.
+	# tpdd_check() (stty) will say there is data ready right away, but if
+	# you read too soon the data will be corrupt or incomplete. Take 2/3 of
+	# the number of bytes we expect (64 to 1280), and sleep that many ms.
+	#ms_to_s $(((fdc_len/4)) ;_sleep $_s
+	#ms_to_s $(((fdc_len/3)) ;_sleep $_s
+	#ms_to_s $(((fdc_len/2)) ;_sleep $_s
 	ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
@@ -1142,7 +1161,10 @@ fcmd_read_logical () {
 }
 
 # write a physical sector ID section
-# fcmd_write_id physical data(hex pairs)
+# wi P - 12_hex_pairs...
+# P : physical sector number 0-79 as plain ascii decimal integer
+# - : anything, must put something but it is ignored
+# hex-pairs... : 12 bytes of binary sector ID data as hex pairs
 fcmd_write_id () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
@@ -1151,7 +1173,7 @@ fcmd_write_id () {
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
-	shift ; # discard the size field
+	shift ; # size field from the disk dump file
 	tpdd_write $* || return $?
 	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
@@ -1159,7 +1181,12 @@ fcmd_write_id () {
 }
 
 # write a logical sector
-# fcmd_write_logical physical logical data(hex pairs)
+# wl P L hex-pairs...
+# P : physical sector number 0-79 as plain ascii decimal integer
+# L : logical sector number 1-20 as plain ascii decimal integer
+# hex-pairs... : 64-1280 bytes of binary sector data as spaced hex pairs
+# The number of bytes of data must match the target sector's logical
+# sector size. (written into the ID section by the format command)
 fcmd_write_logical () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
@@ -1990,8 +2017,9 @@ do_cmd () {
 			format) ocmd_format ;_e=$? ;;
 			status) ocmd_status ;_e=$? ;((_e)) || echo "OK" ;;
 
-	# TPDD1-only operation-mode command to switch to fdc-mode
+	# TPDD1 switch between operation and fdc-modes
 			fdc) ocmd_fdc ;_e=$? ;;
+			opr) fcmd_mode 1 ;_e=$? ;;
 
 	# TPDD1 sector access
 	# All of the drive firmware "FDC mode" functions.
