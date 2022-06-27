@@ -65,32 +65,27 @@ TTY_READ_TIMEOUT_MS=100
 # Wait this long (by default) for the drive to respond after issuing a command.
 # Some commands like dirent(get_first) and close can take 2 seconds to respond.
 # Some commands like format take 100 seconds.
-TPDD_WAIT_TIMEOUT_MS=5000
+TPDD_WAIT_TIMEOUT_MS=100
 TPDD_WAIT_PERIOD_MS=100
 
-# How long to wait for format to complete
-# Usually takes just under 100 seconds.
-# If you ever get a timeout while formatting, increase this by 1000 until
-# you no longer get timeouts.
-FORMAT_WAIT_MS=105000
-FORMAT_TPDD2_EXTRA_WAIT_MS=10000
-
-# How long to wait for delete to complete
-# Delete takes from 3 to 20 seconds. Larger files take longer.
-# 65534 byte file takes 20.2 seconds, so 30 seconds should be safe.
-DELETE_WAIT_MS=30000
-
-# How long to wait for pdd2_rename
-RENAME_WAIT_MS=10000
-
-# How long to wait for close to complete
-CLOSE_WAIT_MS=20000
-
-# The initial dirent(get_first) for a directory listing
-LIST_WAIT_MS=10000
-
-# Reading a block of 1-128 bytes of data from a file
-READ_WAIT_MS=2000
+# Timouts for various commands - unfortunately necessary
+FORMAT_WAIT_MS=105000       # ocmd_format takes just under 100 seconds
+FORMAT_TPDD2_EXTRA_WAIT_MS=10000 # tpdd2 uses the same command but takes longer
+DELETE_WAIT_MS=30000        # ocmd_delete takes 3 to 20 seconds
+RENAME_WAIT_MS=10000        # ocmd_pdd2_rename
+OPEN_WAIT_MS=5000           # ocmd_open
+CLOSE_WAIT_MS=20000         # ocmd_close
+DIRENT_WAIT_MS=10000        # ocmd_dirent
+READ_WAIT_MS=5000           # ocmd_read
+WRITE_WAIT_MS=5000          # ocmd_write
+RI_WAIT_MS=5000             # fcmd_read_id
+RL_WAIT_MS=5000             # fcmd_read_logical
+WI_WAIT_MS=5000             # fcmd_write_id
+WL_WAIT_MS=5000             # fcmd_write_logical
+SC_WAIT_MS=5000             # pdd2_sector_cache
+WC_WAIT_MS=5000             # pdd2_write_cache
+RC_WAIT_MS=5000             # pdd2_read_cache
+DC_WAIT_MS=5000             # pdd2_drive_condition
 
 # TS-DOS "mystery" command - TPDD2 detection
 # real TPDD2 responds with this immediately
@@ -472,19 +467,15 @@ parse_compat () {
 
 _init () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	((_om==operation_mode)) && return # done already
-	_om=${operation_mode}
+	$did_init && return
+	${FONZIE_SMACK} && fonzie_smack
 	${MODEL_DETECTION} && ocmd_pdd2_unk23
-	_om=${operation_mode}
-	case "${mode[operation_mode]}" in
-		fdc|opr)
-			trap 'fcmd_mode 1' EXIT # leave pdd1 in opr mode
-			fcmd_mode 1             # start pdd1 in opr mode
-			;;
-		*)
+	did_init=true MODEL_DETECTION=false FONZIE_SMACK=false
+	$pdd2 && {
 			trap '' EXIT
-			;;
-	esac
+	} || {
+			trap 'fcmd_mode 1' EXIT # leave pdd1 in opr mode
+	}
 }
 
 ###############################################################################
@@ -562,11 +553,15 @@ tpdd_write () {
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local -i i l=$1 ;local x ;rhex=() read_err=0
-	[[ "$2" ]] && tpdd_wait $2 $3
+	(($#>1)) && tpdd_wait $2 $3
+	#local -i i l=$1 ;local x tw=tpdd_wait ;rhex=() read_err=0
+	#(($#>1)) && {
+	#	(($2)) && { tpdd_wait $2 $3 ; } || tw=
+	#}
 	vecho 2 -n "$z: l=$l "
 	l=${1:-$PHYSICAL_SECTOR_LENGTH}
 	for ((i=0;i<l;i++)) {
-		tpdd_wait
+		#$tw
 		x=
 		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
 		((read_err==1)) && read_err=0
@@ -768,7 +763,7 @@ ocmd_read_ret () {
 # search form = 00=set_name | 01=get_first | 02=get_next | 03=get_prev | 04=close
 ocmd_dirent () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i e w=10000 ;local r=${opr_fmt[req_dirent]} x f="$1" a="${2:-00}" m=${3:-${dirent_cmd[get_first]}}
+	local -i e ;local r=${opr_fmt[req_dirent]} x f="$1" a="${2:-00}" m=${3:-${dirent_cmd[get_first]}}
 	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1
 
@@ -788,18 +783,16 @@ ocmd_dirent () {
 	vecho 1 "$z: req: filename=\"$tpdd_file_name\" attr=0x$a action=$m"
 	ocmd_send_req $r ${shex[*]} || return $?
 
-	((m==${dirent_cmd[get_first]})) && w=$LIST_WAIT_MS
-
 	# read the response
-	ocmd_read_ret $w || return $?
+	ocmd_read_ret $DIRENT_WAIT_MS || return $?
 
 	# check which kind of response we got
 	case "$ret_fmt" in
 		"${opr_fmt[ret_std]}") ocmd_check_err || return $? ;;	# got a valid error return
 		"${opr_fmt[ret_dirent]}") : ;;				# got a valid dirent return
-		*) perr "$z: Unexpected Return" ;return 1 ;;	# got no valid return
+		*) err_msg+=("$z: Unexpected Return") ;return 1 ;;	# got no valid return
 	esac
-	((${#ret_dat[*]}==28)) || { perr "$z: Got ${#ret_dat[*]} bytes, expected 28" ;return 1 ; }
+	((${#ret_dat[*]}==28)) || { err_msg+=("$z: Got ${#ret_dat[*]} bytes, expected 28") ;return 1 ; }
 
 	# parse a dirent return format
 	x="${ret_dat[*]:0:24}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
@@ -893,7 +886,7 @@ ocmd_open () {
 	local r=${opr_fmt[req_open]} m ;printf -v m '%02X' $1
 	((bank)) && printf -v r '%02X' $((16#$r+16#40))
 	ocmd_send_req $r $m || return $?	# open the file
-	ocmd_read_ret || return $?
+	ocmd_read_ret $OPEN_WAIT_MS || return $?
 	ocmd_check_err
 }
 
@@ -975,7 +968,7 @@ ocmd_write () {
 	local r=${opr_fmt[req_write]}
 	((bank)) && printf -v r '%02X' $((16#$r+16#40))
 	ocmd_send_req $r $* || return $?
-	tpdd_check || return 0
+	tpdd_wait $WRITE_WAIT_MS
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
@@ -1011,22 +1004,15 @@ ocmd_write () {
 ###############################################################################
 # "FDC Mode" support functions
 
-# read an FDC-mode 8-byte result block
+# read a standard FDC-mode 4-pair result
+# $* timout & busy indication forwarded to tpdd_read()
 fcmd_read_result () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	local -i i ;local x ;fdc_err= fdc_res= fdc_len=
 
-	# read 8 bytes
+	# read 8 bytes reconstitute the hex pairs back to the original bytes
 	tpdd_read 8 $* || return $?
-
-	# This may look a little confusing because we end up un-hexing the same data
-	# twice. tpdd_read() returns all data encoded as hex pairs, because that's
-	# how we have to deal with binary data in shell variables. In this case the
-	# original 8 bytes from the drive are themselves ascii hex pairs.
-
-	# re-constitute rhex[] from tpdd_read() back to the actual bytes sent
-	# by the drive
 	x="${rhex[*]}" ;printf -v x '%b' "\x${x// /\\x}"
 	vecho 1 "$z:$x"
 
@@ -1124,9 +1110,12 @@ fcmd_read_id () {
 	((operation_mode)) && ocmd_fdc
 	str_to_shex "${fdc_cmd[read_id]}$1"
 	tpdd_write ${shex[*]} 0D || return $?
+	#fcmd_read_result $RI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	while _sleep 0.1 ;do tpdd_check && break ;done
 	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	tpdd_write 0D || return $?
+	while _sleep 0.1 ;do tpdd_check && break ;done
 	tpdd_read $PDD1_SECTOR_ID_LENGTH || return $?
 	((${#rhex[*]}<PDD1_SECTOR_ID_LENGTH)) && { err_msg+=("Got ${#rhex[*]} of $PDD1_SECTOR_ID_LENGTH bytes") ; return 1 ; }
 	((${#2})) || printf "I %02u %04u %s\n" "$1" "$fdc_len" "${rhex[*]}"
@@ -1144,38 +1133,39 @@ fcmd_read_logical () {
 	local -i ps=$1 ls=${2:-1} || return $? ;local x
 	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	#while _sleep 0.1 ;do tpdd_check && break ;done
+	fcmd_read_result $RL_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0D || return $?
-	# tpdd_check() (stty) will say there is data ready right away, but if
-	# you read too soon the data will be corrupt or incomplete. Take 2/3 of
-	# the number of bytes we expect (64 to 1280), and sleep that many ms.
+	# tpdd_check() will say there is data available immediately, but if you
+	# read too soon the data will be corrupt or incomplete. Take 2/3 of the
+	# number of bytes we expect to read (64 to 1280), and sleep that many ms.
 	#ms_to_s $(((fdc_len/4)) ;_sleep $_s
 	#ms_to_s $(((fdc_len/3)) ;_sleep $_s
 	#ms_to_s $(((fdc_len/2)) ;_sleep $_s
-	ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
+	#ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
+	#while _sleep 0.05 ;do printf "." ;tpdd_check && break ;done  # never does a 2nd dot
+	_sleep 0.05
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
 	((${#3})) || printf "S %02u %02u %04u %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
 }
 
 # write a physical sector ID section
-# wi P - 12_hex_pairs...
+# wi P hex_pairs...
 # P : physical sector number 0-79 as plain ascii decimal integer
-# - : anything, must put something but it is ignored
-# hex-pairs... : 12 bytes of binary sector ID data as hex pairs
+# hex-pairs... : 12 hex pairs of sector ID data
 fcmd_write_id () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode)) && ocmd_fdc
 	local -i p=$((10#$1)) ;shift
 	str_to_shex "${fdc_cmd[write_id]}$p"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	fcmd_read_result $WI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
-	shift ; # size field from the disk dump file
 	tpdd_write $* || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	fcmd_read_result $WI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	:
 }
@@ -1193,10 +1183,10 @@ fcmd_write_logical () {
 	local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 2
 	str_to_shex "${fdc_cmd[write_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	fcmd_read_result $WL_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	tpdd_write $* || return $?
-	fcmd_read_result || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	fcmd_read_result $WL_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	:
 }
@@ -1213,7 +1203,7 @@ pdd2_condition () {
 	$pdd2 || { perr "$z requires TPDD2" ;return 1 ; }
 	local -i i ;local x
 	ocmd_send_req ${opr_fmt[req_condition]} || return $?
-	ocmd_read_ret || return $?
+	ocmd_read_ret $DC_WAIT_MS || return $?
 
 	# response data is a single byte wih 4 bit-flags
 	ocmd_cond_b=()
@@ -1248,7 +1238,7 @@ pdd2_read_cache () {
 	printf -v x '%02X %02X %02X %02X' $1 $(($2/256)) $(($2%256)) $3
 
 	ocmd_send_req ${opr_fmt[req_read_cache]} $x || return $?
-	ocmd_read_ret || return $?
+	ocmd_read_ret $RC_WAIT_MS || return $?
 
 	# returned data:
 	# [0]     mode
@@ -1267,7 +1257,7 @@ pdd2_write_cache () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { perr "$z requires TPDD2" ;return 1 ; }
 	ocmd_send_req ${opr_fmt[req_write_cache]} $* || return $?
-	ocmd_read_ret || return $?
+	ocmd_read_ret $WC_WAIT_MS || return $?
 	ocmd_check_err
 }
 
@@ -1289,7 +1279,7 @@ pdd2_sector_cache () {
 	printf -v x '%02X 00 %02X 00 %02X' $m $track_num $sector_num
 
 	ocmd_send_req ${opr_fmt[req_sector_cache]} $x || return $?
-	ocmd_read_ret || return $?
+	ocmd_read_ret $SC_WAIT_MS || return $?
 	ocmd_check_err
 }
 
@@ -1350,6 +1340,22 @@ srv_send_loader () {
 ###############################################################################
 # Local Commands
 # high level functions implemented here in the client
+
+# unconditionally send fdc set mode 1, opr switch to fdc, fdc set mode 1
+# reset the drive from unknown / out of sync state to known state
+fonzie_smack () {
+	tpdd_drain
+	tpdd_write 4D 31 0D
+	_sleep 0.01
+	tpdd_drain
+	tpdd_write 5A 5A 08 00 F7
+	_sleep 0.01
+	tpdd_drain
+	tpdd_write 4D 31 0D
+	_sleep 0.01
+	tpdd_drain
+	operation_mode=1 bd=
+}
 
 bank () {
 	$pdd2 || { bank=0 bd= operation_mode=1 ;perr "requires TPDD2" ; return 1; }
@@ -1507,9 +1513,6 @@ lcmd_save () {
 	for ((p=0;p<l;p+=TPDD_DATA_MAX)) {
 		pbar $p $l 'bytes'
 		ocmd_write ${fhex[*]:p:$TPDD_DATA_MAX} || return $?
-		tpdd_wait
-		ocmd_read_ret || return $?
-		ocmd_check_err || return $?
 	}
 	pbar $l $l 'bytes'
 	echo
@@ -1561,7 +1564,7 @@ lcmd_cp () {
 	lcmd_load "$sn" '' "$sa" r && lcmd_save '' "$dn" "$da"
 }
 
-# read ID and all logical sectors in a physical sector
+# read all logical sectors in a physical sector
 # lcmd_read_physical physical [quiet]
 pdd1_read_physical () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
@@ -1582,7 +1585,7 @@ pdd1_read_physical () {
 # read all physical sectors on the disk
 pdd1_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i p t=$PHYSICAL_SECTOR_COUNT m=1 n ;local f=$1
+	local -i p t=$PHYSICAL_SECTOR_COUNT n ;local f=$1
 	((${#f})) && {
 		echo "Dumping Disk to File: \"$f\""
 		[[ -e "$f" ]] && { err_msg+=('File Exists') ;return 1 ; }
@@ -1596,8 +1599,8 @@ pdd1_dump_disk () {
 		((n=PHYSICAL_SECTOR_LENGTH/fdc_len))
 		((${#f})) && printf '%02u %04u %s ' "$p" "$fdc_len" "${rhex[*]}" >> $f
 
-		# read the physical sector
-		pdd1_read_physical $p $m || return $?
+		# read the DATA section
+		pdd1_read_physical $p $f || return $?
 		((${#f})) && {
 			printf '%s\n' "${rhex[*]}" >> $f
 			pbar $((p+1)) $t "P:$p L:$n"
@@ -1639,7 +1642,7 @@ pdd1_restore_disk () {
 		x=${r[@]:2} ;x=${x//[ 0]/} ;((${#x})) || continue
 
 		# write the ID section
-		fcmd_write_id ${r[@]:0:$((2+PDD1_SECTOR_ID_LENGTH))} || return $?
+		fcmd_write_id ${r[0]} ${r[@]:2:$((PDD1_SECTOR_ID_LENGTH))} || return $?
 
 		# logical sectors count from 1
 		for ((l=1;l<=n;l++)) {
@@ -1999,7 +2002,7 @@ do_cmd () {
 	# serial port is not open and the client is not receiving, and we would
 	# block while trying to send the TPDD2 detect command,
 	# and again later when trying to send the FDC->OPR command on exit.
-		_init
+		$did_init || _init
 		_e=0
 
 	# TPDD1 operation-mode commands
@@ -2020,6 +2023,7 @@ do_cmd () {
 	# TPDD1 switch between operation and fdc-modes
 			fdc) ocmd_fdc ;_e=$? ;;
 			opr) fcmd_mode 1 ;_e=$? ;;
+			pdd1_reset) pdd1_mode_reset ;_e=$? ;;
 
 	# TPDD1 sector access
 	# All of the drive firmware "FDC mode" functions.
@@ -2052,6 +2056,7 @@ do_cmd () {
 			rd|restore_disk) $pdd2 && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;;
 
 	# other
+			read_smt) read_smt ;_e=$? ;;
 			model|detect|detect_model) ocmd_pdd2_unk23 ;_e=$? ;;
 			pdd1_boot) pdd1_boot "$@" ;_e=$? ;; # [100|200]
 			pdd2_boot) pdd2_boot "$@" ;_e=$? ;; # [100|200]
@@ -2067,11 +2072,11 @@ do_cmd () {
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=()
 typeset -i _y= bank= operation_mode=1 read_err= fdc_err= fdc_res= fdc_len= track_num= sector_num= _om=99 FNL # allow FEL to be unset or ''
-cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= ret_list='|' _s= pdd2=false bd=
+cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= ret_list='|' _s= pdd2=false bd= did_init=false FONZIE_SMACK=true
 readonly LANG=C
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
-[[ "$0" =~ .*pdd[12](\.sh)?$ ]] && MODEL_DETECTION=false
-((TPDD_MODEL==2)) || [[ "$0" =~ .*pdd2(\.sh)?$ ]] && pdd2=true operation_mode=2 bd="[$bank]"
+MODEL_DETECTION=true ;[[ "$0" =~ .*pdd[12](\.sh)?$ ]] && MODEL_DETECTION=false
+((TPDD_MODEL==2)) || [[ "$0" =~ .*pdd2(\.sh)?$ ]] && pdd2=true operation_mode=2 bd="[$bank]" FONZIE_SMACK=false
 for x in ${!opr_fmt[*]} ;do [[ "$x" =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done ;unset x
 parse_compat
 
