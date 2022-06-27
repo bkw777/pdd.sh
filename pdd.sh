@@ -1141,12 +1141,7 @@ fcmd_read_logical () {
 	# tpdd_check() will say there is data available immediately, but if you
 	# read too soon the data will be corrupt or incomplete. Take 2/3 of the
 	# number of bytes we expect to read (64 to 1280), and sleep that many ms.
-	#ms_to_s $(((fdc_len/4)) ;_sleep $_s
-	#ms_to_s $(((fdc_len/3)) ;_sleep $_s
-	#ms_to_s $(((fdc_len/2)) ;_sleep $_s
-	#ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
-	#while _sleep 0.05 ;do printf "." ;tpdd_check && break ;done  # never does a 2nd dot
-	_sleep 0.05
+	ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
 	((${#3})) || printf "S %02u %02u %04u %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
