@@ -55,20 +55,26 @@ STTY_FLAGS='raw pass8 clocal cread -echo'
 # tunables
 
 # tty read timeout in ms
-# When issuing the "read" command to read bytes from the serial port, wait this
-# long (in ms) for a byte to appear before giving up.
-# This is not the TPDD read command to read a block of 128 bytes of file data,
-# this is the bash builtin read command to read bytes from a file descriptor.
+# When issuing the "read" command to read bytes from the serial port,
+# wait this long (in ms) for a byte to appear before giving up.
+# This is not the TPDD read command to read a block of 128 bytes of file
+# data, this is converted from ms to seconds and used with "read -t".
+# It applies to all reads from the drive tty by any command.
 TTY_READ_TIMEOUT_MS=100
 
-# Default tpdd_wait() timout in ms
-# Wait this long (by default) for the drive to respond after issuing a command.
-# Some commands like dirent(get_first) and close can take 2 seconds to respond.
-# Some commands like format take 100 seconds.
+# Default timout and polling period in tpdd_wait().
+# Almost all commands have a timeout allowance for reading the result after
+# issuing a command. tpdd_wait() polls the tty to see if data is available
+# without consuming any, until either data arrives, or the timeout expires.
+# These are the polling period, and the default timeout if not supplied.
 TPDD_WAIT_TIMEOUT_MS=100
 TPDD_WAIT_PERIOD_MS=100
 
 # Timouts for various commands - unfortunately necessary
+# If you get timouts on some command, increase the relevant value by
+# 1000 until you stop getting timeouts. Most of the commands with 5
+# seconds (5000) below usually respond much sooner, but any command
+# might also take a long time to respond when the drive has been idle.
 FORMAT_WAIT_MS=105000       # ocmd_format takes just under 100 seconds
 FORMAT_TPDD2_EXTRA_WAIT_MS=10000 # tpdd2 uses the same command but takes longer
 DELETE_WAIT_MS=30000        # ocmd_delete takes 3 to 20 seconds
@@ -333,7 +339,7 @@ typeset -ri \
 	TPDD_FILENAME_LENGTH=24 \
 	PDD2_SECTOR_CHUNK_LENGTH=64 \
 	SMT_OFFSET=1240 \
-	SMT_LENGTH=20 \
+	SMT_LENGTH=21 \
 	TPDD_DATA_MAX=128
 
 typeset -r \
@@ -554,14 +560,9 @@ tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local -i i l=$1 ;local x ;rhex=() read_err=0
 	(($#>1)) && tpdd_wait $2 $3
-	#local -i i l=$1 ;local x tw=tpdd_wait ;rhex=() read_err=0
-	#(($#>1)) && {
-	#	(($2)) && { tpdd_wait $2 $3 ; } || tw=
-	#}
 	vecho 2 -n "$z: l=$l "
 	l=${1:-$PHYSICAL_SECTOR_LENGTH}
 	for ((i=0;i<l;i++)) {
-		#$tw
 		x=
 		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
 		((read_err==1)) && read_err=0
@@ -1354,7 +1355,7 @@ fonzie_smack () {
 
 bank () {
 	$pdd2 || { bank=0 bd= operation_mode=1 ;perr "requires TPDD2" ; return 1; }
-	(($#)) && bank=$1 || ((bank)) && bank=0 || bank=1
+	(($#)) && bank=$1 || { ((bank)) && bank=0 || bank=1 ; }
 	bd="[$bank]"
 	echo "Bank: $bank"
 }
@@ -1718,16 +1719,25 @@ pdd2_restore_disk () {
 }
 
 # read the Space Managment Table
-# track 0 sector 0, bytes 1240-1259
+# track 0 sector 0, bytes 1240-1261
 read_smt () {
+	local x=() s=() t ;local -i y i=
 	$pdd2 && {
 		pdd2_sector_cache 0 $bank 0 || return $?
 		pdd2_read_cache 0 $SMT_OFFSET $SMT_LENGTH >/dev/null || return $?
-		echo "SMT $bank: ${ret_dat[*]:3}"
+		x=(${ret_dat[*]:3})
 	} || {
 		pdd1_read_physical 0 >/dev/null || return $?
-		echo "SMT: ${rhex[*]:$SMT_OFFSET:$SMT_LENGTH}"
+		x=(${rhex[*]:$SMT_OFFSET:$SMT_LENGTH})
 	}
+	echo "SMT${bd}: ${x[*]}"
+	for ((y=0;y<SMT_LENGTH-1;y++)) {
+		for b in 0x80 0x20 0x08 0x02 ;do
+			t="not " ;((0x${x[y]}&b)) && t=
+			printf "%02d: %sused\n" $((i++)) "$t"
+		done
+	}
+	printf "Used: %d sectors (%d bytes)\n" "0x${x[y]}" "$((0x${x[y]}*PHYSICAL_SECTOR_LENGTH))"
 }
 
 ###############################################################################
@@ -1961,7 +1971,7 @@ do_cmd () {
 		case ${_c} in
 			1|pdd1|tpdd1) pdd2=false operation_mode=1 bd= _e=$? ;;
 			2|pdd2|tpdd2) pdd2=true operation_mode=2 bd="[$bank]" _e=$? ;;
-			b|bank) bank "$@" ;_e=$? ;;
+			b|bank) bank $1 ;_e=$? ;;
 			names) ask_names "$@" ;_e=$? ;;
 			attr|attrib|attribute) ask_attr "$@" ;_e=$? ;;
 			compat) ask_compat "$@" ;_e=$? ;;
