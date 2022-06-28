@@ -119,6 +119,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | debug | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
+| expose | | Expose non-printable bytes in filenames (see the tpdd2 util disk) |
 
 Multiple commands may be given at once, seperated by '**;**' to form a pre-loaded sequence.  
 
