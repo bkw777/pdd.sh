@@ -665,7 +665,7 @@ tpdd_drain () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local x= s=() ;local -i i
 	while tpdd_check ;do
-		x= IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x
+		x= ;IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x
 		((v>2)) && printf -v s[i++] '%02X' "'$x"
 	done
 	((v>2)) && ((${#s[*]})) && vecho 3 "$z: ${s[*]}"
