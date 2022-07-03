@@ -25,8 +25,6 @@ Things this util can do that not even the commercial TPDD utils can do
 ## Supported OS's
 Any linux, macos/osx, bsd, any cpu architecture.  
 
-Other unix like SCO, Solaris, etc should work with only minor adjustment (tty device names, stty commandline arguments).
-
 Windows... [with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).
 
 ## Installation
@@ -87,7 +85,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | command | arguments | Description |
 | --- | --- | --- |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector (256 in not specified). This format does not create a filesystem disk. It just allows reading/writing sectors. |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\[filename\] | Read Sector ID Data<br>default physical sector 0 |
+| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;all | Read Sector ID Data<br>default physical sector 0<br>"all" reads the ID section from every sector.<br>TPDD2: Displays the 4 metadata bytes. |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] 12_hex_pairs... | Write the 12-byte Sector ID data. |
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to filename if given, else display on screen.<br>default physical 0 logical 1 |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<0-79\>&#160;\<1-20\>&#160;hex_pairs... | Write one logical sector at address: physical(0-79) logical(1-20). |
@@ -113,7 +111,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
-| read_smt | | Read the Space Management Table |
+| read_smt | | Display the Space Management Table |
 | send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
@@ -191,28 +189,34 @@ The logical sector size that a disk is formatted with can be seen by running the
 The quickest is to run either ```ri``` or ```rl``` with no arguments:  
 ```pdd ri``` or ```pdd rl```
 
-**Read the Sector ID Data for all 80 physical sectors (TPDD1)**  
-(using bash shell expansion to do something the program doesn't provide itself)  
-```pdd ri\ {0..79}\;```
+**Read the Sector ID/Metadata for all 80 physical sectors**  
+```pdd ri all```
 
-**Dump an entire TPDD disk to a hex dump file**  
-The dump/image file format is different for TPDD2 vs TPDD1 (and FB-100/FDD19/Puple-Computing)  
-Suggestion: use \*.p1h for image filanames for TPDD1 disks in hex dump format  
-and \*.p2h for image filanames for TPDD2 disks in hex dump format  
-(There is no binary format currently so all dumps are hex dumps)  
-```pdd dd mydisk.p1h```
+**Dump an entire TPDD disk to a disk image file**  
+The file format is different for TPDD2 vs TPDD1  
+TPDD1 images files have a .pdd1 extension, TPDD2 image files have .pdd2
+If you don't specify the extension, the drive model is detected and the
+right one added.
+```pdd dd mydisk```
+Creates midisk.pdd1 or mydisk.pdd2
 
-**Restore an entire TPDD1 disk from a tpdd1 hex dump file**  
-**(Re-create the TPDD1 Utility Disk)**  
-```pdd rd TPDD1_26-3808_Utility_Disk.p1h```  
+**Restore an entire disk from a disk image file**  
+pdd.sh now reads and writes a binary disk image file format, and it's the same
+format as what dlplus uses. You can use pdd.sh to dump a real disk to a file,
+and then use that file with dlplus. Or you can re-create a real disk from
+a downloadable file.
+
+**TPDD1 Utility Disk**  
+```pdd rd TPDD1_26-3808_Utility_Disk.pdd1```  
 [(here is a nice label for it)](https://github.com/bkw777/disk_labels)  
-Also included is a disk image of the American dictionary disk for Sardine.  
-```pdd rd Sardine_American.p1h```
 
-**Restore an entire TPDD2 disk from a tpdd2 hex dump file**  
-**(Re-create the TPDD2 Utility Disk)**  
-```pdd rd TPDD2_26-3814_Utility_Disk.p2h```  
+**TPDD2 Utility Disk**  
+```pdd rd TPDD2_26-3814_Utility_Disk.pdd2```  
 [(here is a nice label for it)](https://github.com/bkw777/disk_labels)
+
+Also included is a disk image of the American dictionary disk for Sardine.  
+```pdd rd Sardine_American.pdd1```
+
 
 **Explicitly use TPDD1 or TPDD2 mode**  
 Disables the automatic TPDD1 vs TPDD2 drive detection  
@@ -220,7 +224,6 @@ Disables the automatic TPDD1 vs TPDD2 drive detection
 pdd1 ls
 pdd2 ls
 ```
-
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
 This function is not used with a TPDD drive but with a "Model T" computer like a TRS-80 Model 100, usually to install a TPDD client like TS-DOS, TEENY, or DSKMGR.  
