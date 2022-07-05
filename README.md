@@ -111,7 +111,9 @@ The intercative mode prompt indicates various aspects of the current operating s
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
-| read_smt | | Display the Space Management Table |
+| read_fcb&#160;\|&#160;fcb | | Display the File Control Block list - the underlying data that dirent() uses for the directory list |
+| read_smt&#160;\|&#160;smt | | Display the Space Management Table |
+| ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides. Affects **ls** and **load** |
 | send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
@@ -119,8 +121,6 @@ The intercative mode prompt indicates various aspects of the current operating s
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | expose | | Expose non-printable bytes in filenames (see the tpdd2 util disk) |
-
-Multiple commands may be given at once, seperated by '**;**' to form a pre-loaded sequence.  
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
@@ -141,19 +141,21 @@ Running ```pdd2 some_command``` is equivalent to running ```pdd "2;some_command"
 ## Examples
 The same commands can be given either on the command line, or at the interactive prompt.  
 Example, to list the directory, where the command is: ```ls```, can be used either of these ways:  
-```pdd ls``` or ```TPDD(opr)> ls```
+```$ pdd ls``` or ```PDD(pdd2:6.2(F)> ls```
+
+Multiple commands may be given at once, seperated by '**;**' to form a pre-loaded sequence.  
 
 **Load a file from the disk**  
-```pdd load DOSNEC.CO```
+```load DOSNEC.CO```
 
 **Load a file from the disk and save to a different local name**  
-```pdd load DOSNEC.CO ts-dos_4.1_nec.co```
+```load DOSNEC.CO ts-dos_4.1_nec.co```
 
 **Save a file to the disk**  
-```pdd save ts-dos_4.1_nec.co DOSNEC.CO```
+```save ts-dos_4.1_nec.co DOSNEC.CO```
 
 **Save a file to the disk with an empty (space, 0x20) attribute flag**  
-```pdd save ts-dos_4.1_nec.co DOSNEC.CO ' '```
+```save ts-dos_4.1_nec.co DOSNEC.CO ' '```
 
 **Rename a file on a WP-2 disk**  
 Notice that the filename format indicator in the prompt changes from 6.2 to 8.2 with the "wp2" command.  
@@ -174,31 +176,38 @@ Switch to bank 1 of a TPDD2 disk, Save a file, list directory
 **Drive/Disk Condition**  
 ```
 $ pdd condition
-Disk Inserted, Writable
+Disk Changed
+Disk Write-Protected
 ```
 
 **Verbose/debug mode**  
-```DEBUG=1 pdd ...``` or ```PDD(opr:6.2(F)> debug 1```
+```DEBUG=1 pdd ...``` or ```PDD(opr:6.2(F)> v 1```
 
 **More verbose/debug mode**  
-```DEBUG=2 pdd ...``` or ```PDD(opr:6.2(F)> debug 2```
+```DEBUG=2 pdd ...``` or ```PDD(opr:6.2(F)> v 2```
 
 **Find out a TPDD1 disk's logical sector size**  
 Most disks are formatted with 20 64-byte logical sectors per physical sector, since that's what the operation-mode format function in the firmware does, but there are exceptions. The TPDD1 Utility Disk seems like a normal disk, but it's actually formatted with 1 1280-byte logical sector per physical sector. You need to know this to use some FDC-Mode commands.  
 The logical sector size that a disk is formatted with can be seen by running the read_physical, read_logical, or read_id commands on any sector.  
 The quickest is to run either ```ri``` or ```rl``` with no arguments:  
-```pdd ri``` or ```pdd rl```
+```
+PDD(fdc:6.2,F)> ri
+I 00 0064 : 00 00 00 00 00 00 00 00 00 00 00 00
+PDD(fdc:6.2,F)> 
+```  
+This shows this disk has 64-byte logical sectors.  
+TPDD2 does not have logical sectors.
 
 **Read the Sector ID/Metadata for all 80 physical sectors**  
-```pdd ri all```
+```ri all```
 
 **Dump an entire TPDD disk to a disk image file**  
 The file format is different for TPDD2 vs TPDD1  
 TPDD1 images files have a .pdd1 extension, TPDD2 image files have .pdd2
 If you don't specify the extension, the drive model is detected and the
 right one added.
-```pdd dd mydisk```
-Creates midisk.pdd1 or mydisk.pdd2
+```dd mydisk```
+Creates `midisk.pdd1` or `mydisk.pdd2`
 
 **Restore an entire disk from a disk image file**  
 pdd.sh now reads and writes a binary disk image file format, and it's the same
@@ -207,15 +216,15 @@ and then use that file with dlplus. Or you can re-create a real disk from
 a downloadable file.
 
 **TPDD1 Utility Disk**  
-```pdd rd TPDD1_26-3808_Utility_Disk.pdd1```  
+```rd disk_images/TPDD1_26-3808_Utility_Disk.pdd1```  
 [(here is a nice label for it)](https://github.com/bkw777/disk_labels)  
 
 **TPDD2 Utility Disk**  
-```pdd rd TPDD2_26-3814_Utility_Disk.pdd2```  
+```rd disk_images/TPDD2_26-3814_Utility_Disk.pdd2```  
 [(here is a nice label for it)](https://github.com/bkw777/disk_labels)
 
-Also included is a disk image of the American dictionary disk for Sardine.  
-```pdd rd Sardine_American.pdd1```
+Also included is a disk image of the American English dictionary disk for Sardine.  
+```rd disk_images/Sardine_American.pdd1```
 
 
 **Explicitly use TPDD1 or TPDD2 mode**  
