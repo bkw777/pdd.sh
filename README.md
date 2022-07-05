@@ -112,7 +112,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
-| opr&#160;\|&#160;fdc\| | switch to Operation or FDC mode (TPDD1 only) |
+| opr&#160;\|&#160;fdc | switch to Operation or FDC mode (TPDD1 only) |
 | compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
 | floppy\|wp2\|raw | | Shortcut for **compat floppy** , **compat wp2** , **compat raw**  |
 | names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
