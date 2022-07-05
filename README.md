@@ -120,7 +120,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default on. Affects **ls** and **load** |
 | send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
-| debug | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose |
+| debug&#160;\|&#160;v | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
