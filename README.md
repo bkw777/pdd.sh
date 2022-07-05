@@ -85,11 +85,9 @@ The intercative mode prompt indicates various aspects of the current operating s
 | command | arguments | Description |
 | --- | --- | --- |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector (256 in not specified). This format does not create a filesystem disk. It just allows reading/writing sectors. |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;all | Read Sector ID Data<br>default physical sector 0<br>"all" reads the ID section from every sector.<br>TPDD2: Displays the 4 metadata bytes. |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] 12_hex_pairs... | Write the 12-byte Sector ID data. |
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to filename if given, else display on screen.<br>default physical 0 logical 1 |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<0-79\>&#160;\<1-20\>&#160;hex_pairs... | Write one logical sector at address: physical(0-79) logical(1-20). |
-| rp&#160;\|&#160;read_physical | \[0-79\] \[filename\] | Read all logical sectors in a physical sector<br>default physical sector 0<br>write to filename else display on screen |
 
 **TPDD2 Sector Access**  
 | command | arguments | Description |
@@ -98,29 +96,33 @@ The intercative mode prompt indicates various aspects of the current operating s
 | cache_read | \<mode&#160;0\|1\>&#160;\<offset&#160;0-252\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's sector cache.<br>mode 0 = normal sector data<br>mode 1 = metadata |
 | cache_write | \<mode&#160;0\|1\>&#160;\<offset&#160;0-252\>&#160;\<data...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode 0 = normal sector data<br>mode 1 = metadata |
 
-**Other**  
-| command | arguments | Description |
-| --- | --- | --- |
-| detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
-| compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
-| opr&#160;\|&#160;fdc\| | switch to Operation or FDC mode (TPDD1 only) |
-| floppy\|wp2\|raw | | Shortcut for **compat floppy** , **compat wp2** , **compat raw**  |
-| names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
-| attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
-| 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
-| 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
+**TPDD1/TPDD2 Sector Access**  
+| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]\&#160;\|&#160;\[0-79,0-1\]&#160;\|all | Read Sector ID Data<br>default physical sector 0<br>"all" reads the ID section from every sector.<br>TPDD2: Displays the 4 metadata bytes. |
+| rs&#160;\|&#160;read_sector | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector". For TPDD2 there are not logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
 | read_fcb&#160;\|&#160;fcb | | Display the File Control Block list - the underlying data that dirent() uses for the directory list |
 | read_smt&#160;\|&#160;smt | | Display the Space Management Table |
-| ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides. Affects **ls** and **load** |
+
+**Other**  
+| command | arguments | Description |
+| --- | --- | --- |
+| 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
+| 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
+| detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
+| opr&#160;\|&#160;fdc\| | switch to Operation or FDC mode (TPDD1 only) |
+| compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
+| floppy\|wp2\|raw | | Shortcut for **compat floppy** , **compat wp2** , **compat raw**  |
+| names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
+| attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
+| ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default on. Affects **ls** and **load** |
 | send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
-| q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
 | debug | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
-| expose | | Expose non-printable bytes in filenames (see the tpdd2 util disk) |
+| expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
+| q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
