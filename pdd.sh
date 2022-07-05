@@ -28,7 +28,7 @@ case "$DEBUG" in
 	false|off|n|no) DEBUG=0 ;;
 	true|on|y|yes|:) DEBUG=1 ;;
 esac
-v=${DEBUG:-0}
+typeset -i v=${DEBUG:-0}
 
 # filename munging and display
 # these can also be invoked with the expose,compat,raw,wp2,floppy commands
@@ -1710,11 +1710,26 @@ fonzie_smack () {
 	operation_mode=1 bd=
 }
 
+set_fcb_filesizes () {
+	case "$1" in
+		true|on|yes|1) ffs=true ;;
+		false|off|no|0) ffs=false ;;
+		'') $ffs && ffs=false || ffs=true ;;
+	esac
+	echo "Get accurate file lengths from FCB: $ffs"
+}
+
 set_expose () {
 	local -i e=$EXPOSE_FILENAMES
-	((${#1})) && e=$1 || { ((e)) && e=0 || e=1 ; }
+	case "$1" in
+		true|on|yes) e=1 ;;
+		false|off|no) e=0 ;;
+		0|1|2) e=$1 ;;
+		'') ((e)) && e=0 || e=1 ;;
+	esac
+	EXPOSE_FILENAMES=$e
 	echo -n 'Expose non-printable bytes in filenames: '
-	((e)) && echo 'Enabled' && echo 'Disabled'
+	((EXPOSE_FILENAMES)) && echo 'Enabled' || echo 'Disabled'
 }
 
 get_condition () {
@@ -1794,6 +1809,7 @@ lcmd_ls () {
 	}
 
 	while ocmd_dirent '' "$1" $m ;do
+		un_tpdd_file_name "$file_name" ;printf -v file_name '%-24.24b' "$file_name"
 		((EXPOSE_FILENAMES)) && {
 			local -i i x ;local h t f=
 			for ((i=0;i<PDD_FNAME_LEN;i++)) {
@@ -1824,7 +1840,6 @@ lcmd_ls () {
 			esac
 			printf '%s | %s | %6u\n' "$f" "$t" "$file_len"
 		} || { # casual filename display
-			#un_tpdd_file_name "$file_name"
 			printf '%-24.24b | %1s | %6u\n' "$file_name" "$file_attr" "$file_len"
 		}
 
@@ -2205,8 +2220,8 @@ do_cmd () {
 			boot|bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
 			debug|verbose|v) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;echo "Verbose level: $v" ;_e=0 ;;
-			ffs|use_fcb|fcb_filesizes) case "$1" in true|on|yes|1) ffs=true ;; false|off|no|0) ffs=false ;; '') $ffs && ffs=false || ffs=true ;; esac ;echo "Get accurate file lengths from FCB: $ffs" ;_e=0 ;;
-			expose) set_sexpose $1 ;_e=0 ;;
+			ffs|use_fcb|fcb_filesizes) set_fcb_filesizes $1 ;_e=0 ;;
+			expose) set_expose $1 ;_e=0 ;;
 			model|detect|detect_model) ocmd_pdd2_unk23 ;_e=$? ;;
 			q|quit|bye|exit) exit ;;
 			'') _e=0 ;;
