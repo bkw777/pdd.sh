@@ -169,13 +169,13 @@ PDD(pdd2:8.2(F)> mv CAMEL.CO WP2FORTH.CO
 ```
 
 **Command Lists with ";"**  
-Delete File, List Directory
+Delete File, then List Directory
 In interactive mode:  
 ```PDD(opr:6.2(F)> rm DOSNEC.CO ;ls```  
 In non-interactive mode, quote the list because of the ";"  
-```pdd "rm DOSNEC.CO ;ls"```  
+```$ pdd "rm DOSNEC.CO ;ls"```  
 Switch to bank 1 of a TPDD2 disk, Save a file, list directory  
-```pdd "bank 1 ;save ts-dos_4.1_nec.co DOSNEC.CO ;ls"```
+```$ pdd "bank 1 ;save ts-dos_4.1_nec.co DOSNEC.CO ;ls"```
 
 **Drive/Disk Condition**  
 ```
@@ -185,25 +185,10 @@ Disk Write-Protected
 ```
 
 **Verbose/debug mode**  
-```DEBUG=1 pdd ...``` or ```PDD(opr:6.2(F)> v 1```
+```$ DEBUG=1 pdd ...``` or ```PDD(opr:6.2(F)> v 1```
 
 **More verbose/debug mode**  
-```DEBUG=2 pdd ...``` or ```PDD(opr:6.2(F)> v 2```
-
-**Find out a TPDD1 disk's logical sector size**  
-Most disks are formatted with 20 64-byte logical sectors per physical sector, since that's what the operation-mode format function in the firmware does, but there are exceptions. The TPDD1 Utility Disk seems like a normal disk, but it's actually formatted with 1 1280-byte logical sector per physical sector. You need to know this to use some FDC-Mode commands.  
-The logical sector size that a disk is formatted with can be seen by running the read_physical, read_logical, or read_id commands on any sector.  
-The quickest is to run either ```ri``` or ```rl``` with no arguments:  
-```
-PDD(fdc:6.2,F)> ri
-I 00 0064 : 00 00 00 00 00 00 00 00 00 00 00 00
-PDD(fdc:6.2,F)> 
-```  
-This shows this disk has 64-byte logical sectors.  
-TPDD2 does not have logical sectors.
-
-**Read the Sector ID/Metadata for all 80 physical sectors**  
-```ri all```
+```$ DEBUG=2 pdd ...``` or ```PDD(opr:6.2(F)> v 2```
 
 **Dump an entire TPDD disk to a disk image file**  
 The file format is different for TPDD2 vs TPDD1  
@@ -230,13 +215,11 @@ a downloadable file.
 Also included is a disk image of the American English dictionary disk for Sardine.  
 ```rd disk_images/Sardine_American_English.pdd1```
 
+** Directory Listing**  
+* The drive firmware's directory listing function returns file sizes that are often off by several bytes. The correct filesizes are available on the disk in the FCB. There is a setting, enabled by default, that makes the pdd.sh's dirent() function read the FCB to get filesizes. This makes directory listings and open-file-for-read take an extra second every time, but the displays the correct exact filesizes. This can be turned on/off with the **ffs** command.  
+* Filenames can have non-printing characters in them. There is an option, enabled by default, to expose things like that in filenames (and the attr bytes). When a byte in a filename has an ascii value less than 32, it's displayed as the ctrl code that produces that byte, in inverse video. Bytes with ascii values above 126 are all displayed as just inverse "+". ex: null is ^@ or Ctrl+@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, except it makes the filename field look one character too short. The expose option exposes that hidden byte in the name. This can be toggled with the **expose** command.   
+* The write-protect status of the disk is indicated in the bottom-right corner of the listing with a [WP] if the disk is write-protected.
 
-**Explicitly use TPDD1 or TPDD2 mode**  
-Disables the automatic TPDD1 vs TPDD2 drive detection  
-```
-pdd1 ls
-pdd2 ls
-```
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
 This function is not used with a TPDD drive but with a "Model T" computer like a TRS-80 Model 100, usually to install a TPDD client like TS-DOS, TEENY, or DSKMGR.  
