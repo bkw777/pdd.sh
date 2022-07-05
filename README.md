@@ -226,7 +226,7 @@ a downloadable file.
 [(here is a nice label for it)](https://github.com/bkw777/disk_labels)
 
 Also included is a disk image of the American English dictionary disk for Sardine.  
-```rd disk_images/Sardine_American.pdd1```
+```rd disk_images/Sardine_American_English.pdd1```
 
 
 **Explicitly use TPDD1 or TPDD2 mode**  
