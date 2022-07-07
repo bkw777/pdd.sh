@@ -72,7 +72,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | --- | --- | --- |
 | ready&#160;\|&#160;status | | Report the drive & disk ready/not-ready status  |
 | D&#160;\|&#160;condition&#160;\|&#160;cond | | Report combination of bit flags for different not-ready conditions |
-| b&#160;\|&#160;bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1<br>affects list/load/save/del/copy/ren/read_smt |
+| b&#160;\|&#160;bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1<br>affects list/load/save/del/copy/ren/read_smt/read_fcb |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
 | rm&#160;\|&#160;del | filename | Delete a file |
 | cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
