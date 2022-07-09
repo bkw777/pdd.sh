@@ -65,7 +65,7 @@ esac
 : ${BAUD:=19200}
 : ${RTSCTS:=true}
 : ${XONOFF:=false}
-STTY_FLAGS='raw pass8 clocal cread -echo'
+STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 
 ###############################################################################
 # tunables
@@ -76,7 +76,7 @@ STTY_FLAGS='raw pass8 clocal cread -echo'
 # This is not the TPDD read command to read a block of 128 bytes of file
 # data, this is converted from ms to seconds and used with "read -t".
 # It applies to all reads from the drive tty by any command.
-TTY_READ_TIMEOUT_MS=100
+TTY_READ_TIMEOUT_MS=5000
 
 # Default timout and polling period in tpdd_wait().
 # Almost all commands have a timeout allowance for reading the result after
@@ -99,6 +99,7 @@ OPEN_WAIT_MS=5000           # ocmd_open
 CLOSE_WAIT_MS=20000         # ocmd_close
 DIRENT_WAIT_MS=10000        # ocmd_dirent
 READ_WAIT_MS=5000           # ocmd_read
+OCMD_READ_PAUSE=0.5         # seconds (not ms) _sleep() between send_req & read_ret for each chunk of a file in ocmd_load
 WRITE_WAIT_MS=5000          # ocmd_write
 READY_WAIT_MS=5000          # ocmd_ready, fcmd_ready, pdd2_ready
 RI_WAIT_MS=5000             # pdd1_read_id
@@ -1011,6 +1012,16 @@ ocmd_read () {
 	local r=${opr_fmt[req_read]}
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r || return $?
+	# tpdd_check() (read -t 0) says there's data available immediately so all
+	# the tty checks in the child functions from here are pointless and we have
+	# to just blindly pause or else some files fsail.
+	# Bad example is INSTAL.COM from the Disk Power KC-85 distribution disk.
+	# We need a way to interrogate the drive besides the tty-level "read -t 0"
+	# Something doesn't add up. "read -t 0" says there is data available, but
+	# then the actual read times out and returns 142 (which is timeout), even
+	# with a very long timeout like -t 5.
+	# maybe we have to switch to purely non-blocking timed polling reads. UGH.
+	_sleep $OCMD_READ_PAUSE
 	ocmd_read_ret $READ_WAIT_MS || return $?
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
