@@ -433,7 +433,7 @@ vecho () {
 
 _sleep () {
 	local x
-	read -t ${1:-1} -u 4 x
+	read -t ${1:-1} -u 1 x
 	:
 }
 
@@ -1213,6 +1213,7 @@ fcmd_read_logical () {
 	# tpdd_check() will say there is data available immediately, but if you
 	# read too soon the data will be corrupt or incomplete. Take 2/3 of the
 	# number of bytes we expect to read (64 to 1280), and sleep that many ms.
+	# The tpdd_wait() in the inner per-byte loop in tpdd_read() is not enough.
 	ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
@@ -2324,11 +2325,6 @@ MODEL_DETECTION=true ;[[ "$0" =~ .*pdd[12](\.sh)?$ ]] && MODEL_DETECTION=false
 for x in ${!opr_fmt[*]} ;do [[ "$x" =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done
 for x in ${!lsl[*]} ;do lsc[${lsl[x]}]=$x ;done ;readonly lsc ;unset x
 parse_compat
-
-# for _sleep()
-readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
-[[ -p $sleep_fifo ]] || mkfifo "$sleep_fifo" || abrt "Error creating sleep fifo \"$sleep_fifo\""
-exec 4<>$sleep_fifo
 
 # tpdd serial port
 for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
