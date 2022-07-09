@@ -99,7 +99,6 @@ OPEN_WAIT_MS=5000           # ocmd_open
 CLOSE_WAIT_MS=20000         # ocmd_close
 DIRENT_WAIT_MS=10000        # ocmd_dirent
 READ_WAIT_MS=5000           # ocmd_read
-OCMD_READ_PAUSE=0.5         # seconds (not ms) _sleep() between send_req & read_ret for each chunk of a file in ocmd_load
 WRITE_WAIT_MS=5000          # ocmd_write
 READY_WAIT_MS=5000          # ocmd_ready, fcmd_ready, pdd2_ready
 RI_WAIT_MS=5000             # pdd1_read_id
@@ -615,6 +614,7 @@ tpdd_read () {
 	vecho 2 -n "$z: l=$l "
 	l=${1:-$SECTOR_DATA_LEN}
 	for ((i=0;i<l;i++)) {
+		tpdd_wait # yes really, before each read, even one byte
 		x=
 		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
 		((read_err==1)) && read_err=0
@@ -631,6 +631,7 @@ tpdd_read_unknown () {
 	local -i e= ;local x ;rhex=()
 	tpdd_wait_s || return $?
 	while : ;do
+		tpdd_wait
 		x=
 		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;e=$?
 		((e==1)) && e=0
@@ -1012,16 +1013,6 @@ ocmd_read () {
 	local r=${opr_fmt[req_read]}
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r || return $?
-	# tpdd_check() (read -t 0) says there's data available immediately so all
-	# the tty checks in the child functions from here are pointless and we have
-	# to just blindly pause or else some files fsail.
-	# Bad example is INSTAL.COM from the Disk Power KC-85 distribution disk.
-	# We need a way to interrogate the drive besides the tty-level "read -t 0"
-	# Something doesn't add up. "read -t 0" says there is data available, but
-	# then the actual read times out and returns 142 (which is timeout), even
-	# with a very long timeout like -t 5.
-	# maybe we have to switch to purely non-blocking timed polling reads. UGH.
-	_sleep $OCMD_READ_PAUSE
 	ocmd_read_ret $READ_WAIT_MS || return $?
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
