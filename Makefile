@@ -14,4 +14,4 @@ install: all
 
 PHONY: uninstall
 uninstall:
-	@rm -v $(BINDIR)/$(NAME){,1,2}
+	@rm -v $(BINDIR)/$(NAME) $(BINDIR)/$(NAME)1 $(BINDIR)/$(NAME)2

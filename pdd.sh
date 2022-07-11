@@ -364,7 +364,7 @@ typeset -ra lsl=(
 # bit 0: Low power
 
 # Condition bit flags
-typeset -a pdd2_cond=(
+typeset -ra pdd2_cond=(
 	[0x00]='Ready'
 	[0x01]='Low Battery'
 	[0x02]='Disk Write-Protected'
@@ -433,7 +433,7 @@ vecho () {
 
 _sleep () {
 	local x
-	read -t ${1:-1} -u 1 x
+	read -t ${1:-1} -u 4 x
 	:
 }
 
@@ -749,12 +749,11 @@ verify_checksum () {
 # check if a ret_std format response was ok (00) or error
 ocmd_check_err () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i e ;local x
+	local -i e ;local x='OK'
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 	((${#ret_dat[*]}==1)) || { err_msg+=('Corrupt Response') ; ret_dat=() ;return 1 ; }
 	vecho 1 -n "$z: ${ret_dat[0]}:"
 	((e=0x${ret_dat[0]}))
-	x='OK'
 	((e)) && {
 		x='UNKNOWN ERROR'
 		((${#opr_msg[${ret_dat[0]}]})) && x="${opr_msg[${ret_dat[0]}]}"
@@ -1389,23 +1388,25 @@ pdd2_ready () {
 # TPDD2 copy sector between disk and cache
 # pdd2_cache_load track sector mode
 # pdd2_cache_load 0-79 0-1 0|2
-# mode: 0=disk-to-cache 2=cache-to-disk
+# mode: 0=load (cache<disk) 2=unload (cache>disk)
 pdd2_cache_load () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
-	local x m=${3:-0} ;local -i t=$1 s=$2
+	local x ;local -i t=$1 s=$2 a=$3 e
 
 	# 5-byte request data
-	# 00|02 mode
+	# 00|02 action 0=load 2=unload
 	# 00    unknown
-	# 00-4F track#
+	# 00-4F track
 	# 00    unknown
 	# 00-01 sector
-	printf -v x '%02X 00 %02X 00 %02X' $m $t $s
+	printf -v x '%02X 00 %02X 00 %02X' $a $t $s
 
 	ocmd_send_req ${opr_fmt[req_cache_load]} $x || return $?
 	ocmd_read_ret $SC_WAIT_MS || return $?
-	ocmd_check_err
+	ocmd_check_err ;e=$?
+	(($3==0)) && ((e==0x50)) && e= err_msg=() # if not writing, don't treat write-protected disk as error
+	return $e
 }
 
 # TPDD2 read from cache
@@ -1554,8 +1555,9 @@ pdd2_restore_disk () {
 		for ((s=0;s<PDD2_SECTORS;s++)) { # sectors
 			pbar $((i++)) $j "T:$t S:$s C:-"
 
-			# If the entire upcoming sector matches a fresh format, then we can skip this sector.
-			[[ ":${fhex[*]:p:PDD2_META_LEN}" == ":16 00 00 00" ]] && {
+			# skip this sector if it matches a fresh format
+			((t)) && x='16 00 00 00' || x='16 FF 00 00'
+			[[ ":${fhex[*]:p:PDD2_META_LEN}" == ":$x" ]] && {
 				x=${fhex[*]:p+PDD2_META_LEN:SECTOR_DATA_LEN} ;x=${x//[ 0]/}
 				((${#x})) || { ((p+=PDD2_META_LEN+SECTOR_DATA_LEN)) ;continue ; }
 			}
@@ -2325,6 +2327,11 @@ MODEL_DETECTION=true ;[[ "$0" =~ .*pdd[12](\.sh)?$ ]] && MODEL_DETECTION=false
 for x in ${!opr_fmt[*]} ;do [[ "$x" =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done
 for x in ${!lsl[*]} ;do lsc[${lsl[x]}]=$x ;done ;readonly lsc ;unset x
 parse_compat
+
+# for _sleep()
+readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
+[[ -p $sleep_fifo ]] || mkfifo "$sleep_fifo" || abrt "Error creating sleep fifo \"$sleep_fifo\""
+exec 4<>$sleep_fifo
 
 # tpdd serial port
 for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
