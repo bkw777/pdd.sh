@@ -81,15 +81,15 @@ The intercative mode prompt indicates various aspects of the current operating s
 | save | local_filename&#160;\[disk_filename\] | Write a file to the disk |
 | format&#160;\|&#160;mkfs | | Format the disk with filesystem. This format (not FDC format below) is required to create a normal disk that can save & load files. |
 
-**TPDD1 Sector Access**  
+**TPDD1-only Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector (256 in not specified). This format does not create a filesystem disk. It just allows reading/writing sectors. |
+| F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector (default 3). This format does not create a filesystem disk. It just allows reading/writing sectors. |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] 12_hex_pairs... | Write the 12-byte Sector ID data. |
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\]&#160;\[filename\] | Read one logical sector at address: physical(0-79) logical(1-20). Save to filename if given, else display on screen.<br>default physical 0 logical 1 |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<0-79\>&#160;\<1-20\>&#160;hex_pairs... | Write one logical sector at address: physical(0-79) logical(1-20). |
 
-**TPDD2 Sector Access**  
+**TPDD2-only Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
 | cache_load | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache & the disk.<br>mode 0 = load from disk to cache<br>mode 2 = flush cache to disk |
@@ -111,16 +111,16 @@ The intercative mode prompt indicates various aspects of the current operating s
 | --- | --- | --- |
 | 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
-| detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
+| model&#160;\|&#160;detect&#160;\|&#160;detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
 | opr&#160;\|&#160;fdc | switch to Operation or FDC mode (TPDD1 only) |
 | compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
 | floppy\|wp2\|raw | | Shortcut for **compat floppy** , **compat wp2** , **compat raw**  |
 | names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
 | attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
-| ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default on. Affects **ls** and **load** |
+| ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB is a sector access operation that most tpdd servers don't implement. |
 | send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
-| debug&#160;\|&#160;v | \[#\] | Debug/Verbose level - Toggle between 0 & 1, or set specified level<br>0 = debug mode off<br>1 = debug mode on<br>\>1 = more verbose |
+| debug&#160;\|&#160;v | \[#\] | Debug/Verbose level - With no arguments toggles on/off (0/1), or set specified level<br>0 = verbose off<br>1 = verbose level 1<br>2+ = more verbose |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
@@ -132,10 +132,14 @@ Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
 | BAUD | 9600\|19200 | Same as **baud** command above |
+| RTSCTS | true\|false | same as **rtscts** command above |
 | DEBUG | # | same as **debug** command above |
 | COMPAT | \[floppy\|wp2\|raw\] | same as **compat** command above |
-| TPDD_MODEL | 1\|2 | (default is 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
-| MODEL_DETECTION | true\|false | (default is true) Use the "TS-DOS mystery command" to automatically detect if the attached TPDD drive is a TPDD1 or TPDD2 |
+| TPDD_MODEL | 1\|2 | (default 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
+| EXPOSE | 0\|1\|2 | same as **expose** command above |
+| USE_FCB | true\|false | same as **ffs** command above |
+| MODEL_DETECTION | true\|false | (default true) Use the "TS-DOS mystery command" to automatically detect if the attached TPDD drive is a TPDD1 or TPDD2 | 
+| FONZIE_SMACK | true\|false | (default true) During \_init(), do (or don't) do the fdc-opr-fdc-opr flip-flop to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state. |
 
 Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility. This doesn't really matter since the drive model is automatically detected before any commands that are affected by it. In most cases you can just run "pdd" regardless which type of drive is connected.
 ```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
