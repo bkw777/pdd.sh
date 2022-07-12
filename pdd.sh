@@ -385,8 +385,11 @@ typeset -ri \
 	PDD1_ID_LEN=12 \
 	PDD2_TRACKS=80 \
 	PDD2_SECTORS=2 \
-	PDD2_CHUNK_LEN=64 \
+	PDD2_CHUNK_LEN_R=160 \
+	PDD2_CHUNK_LEN_W=80 \
 	PDD2_META_ADDR=32772 \
+	PDD2_MYSTERY_ADDR1=131 \
+	PDD2_MYSTERY_ADDR2=150 \
 	PDD2_META_LEN=4 \
 	SMT_SECTOR=0 \
 	SMT_OFFSET=1240 \
@@ -1410,22 +1413,23 @@ pdd2_cache_load () {
 }
 
 # TPDD2 read from cache
-# pdd2_cache_read mode offset length
+# pdd2_cache_read area offset length
 pdd2_cache_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
 	local x
 
 	# 4-byte request data
-	# 00         mode
+	# 00         area  0=data 1=meta
 	# 0000-04C0  offset
 	# 00-FC      length
 	printf -v x '%02X %02X %02X %02X' $1 $((($2>>8)&0xFF)) $(($2&0xFF)) $3
 	ocmd_send_req ${opr_fmt[req_cache_read]} $x || return $?
 	ocmd_read_ret $RC_WAIT_MS || return $?
+	#ocmd_check_err || return $? # needs to be taught about ret_cache_std
 
 	# returned data:
-	# [0]     mode
+	# [0]     area
 	# [1]     offset MSB
 	# [2]     offset LSB
 	# [3]+    data
@@ -1434,7 +1438,7 @@ pdd2_cache_read () {
 }
 
 # TPDD2 write to cache
-# pdd2_cache_write mode offset data...
+# pdd2_cache_write area offset data...
 pdd2_cache_write () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
@@ -1446,16 +1450,19 @@ pdd2_cache_write () {
 
 pdd2_flush_cache () {
 	# mystery metadata writes - no idea what these do, copied from backup log
-	pdd2_cache_write 1 131 || return $?  # 01 00 83
-	pdd2_cache_write 1 150 || return $?  # 01 00 96
+	pdd2_cache_write 1 $PDD2_MYSTERY_ADDR1 || return $?  # 01 00 83 00
+	pdd2_cache_write 1 $PDD2_MYSTERY_ADDR2 || return $?  # 01 00 96 00
 	# flush the cache to disk
 	pdd2_cache_load $1 $2 2 || return $?
 }
 
 # Similar to TPDD1 pdd1_read_id, but just 4 bytes and we don't know the meaning.
 # pdd2_read_meta [T,S|all] [T,S ...]
-# T = track# 0-79
+# T = track  0-79
 # S = sector 0-1
+# or
+# pdd2_read_meta [LS] [LS..]
+# LS = linear sector 0-159
 # no args reads 0,0 , "all" reads all sectors on the disk
 pdd2_read_meta () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
@@ -1463,26 +1470,33 @@ pdd2_read_meta () {
 	case "$1" in '') set 0,0 ;; all) set {0..79},{0,1} ;; esac
 	local a ;local -i t s
 	for a in $* ;do
-		t=${a%%,*} s=${a##*,}
+		[[ ":$a" =~ "," ]] && t=${a%%,*} s=${a##*,} || t=$((a/2)) s=$((a-(a/2)*2))
 		pdd2_cache_load $t $s 0 || return $?
 		quiet=true pdd2_cache_read 1 $PDD2_META_ADDR $PDD2_META_LEN || return $?
 		$quiet || printf 'T:%02u S:%u : %s\n' $t $s "${ret_dat[*]:3}"
 	done
 }
 
+# PDD2_CHUNK_LEN_R
+# read_cache() can fetch any arbitrary length from 0 to 252 bytes,
+# from any arbitrary offset within the 1280-byte cache. largest divisor = 160
+
+# PDD2_CHUNK_LEN_W
+# write_cache() is limited to 0-127. largest divisor = 80
+
 # Read one full 1280-byte sector.
-# CHUNK_LEN is arbitrary. read_cache() can fetch any arbitrary length from
-# 1 to 76 bytes from any arbitrary byte offset within the 1280-byte cache.
-# 64 is just convenient as the largest available value that divides 1280 evenly.
+# pdd2_read_sector T S
+# T = track 0-79
+# S = sector 0-1
 pdd2_read_sector () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
 	local -i i t=$1 s=$2 c n ;local h=()
-	((n=SECTOR_DATA_LEN/PDD2_CHUNK_LEN))
+	((n=SECTOR_DATA_LEN/PDD2_CHUNK_LEN_R))
 	pdd2_cache_load $t $s 0 || return $?
 	$quiet || echo "Track $t, Sector $s"
 	for ((c=0;c<n;c++)) {
-		quiet=true pdd2_cache_read 0 $((PDD2_CHUNK_LEN*c)) $PDD2_CHUNK_LEN || return $?
+		quiet=true pdd2_cache_read 0 $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
 		$quiet || printf '%05u : %s\n' "0x${ret_dat[1]}${ret_dat[2]}" "${ret_dat[*]:3}"
 		h+=( ${ret_dat[*]:3} )
 	}
@@ -1495,7 +1509,7 @@ pdd2_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
 	local f=$1 x ;local -i n j t s i= c
-	((n=SECTOR_DATA_LEN/PDD2_CHUNK_LEN)) # number of chunks / sector
+	((n=SECTOR_DATA_LEN/PDD2_CHUNK_LEN_R)) # number of chunks / sector
 	((j=PDD2_TRACKS*PDD2_SECTORS)) # job size for progress display
 
 	((${#f})) && {
@@ -1519,7 +1533,7 @@ pdd2_dump_disk () {
 			# main data
 			for ((c=0;c<n;c++)) { # chunks
 				((${#f})) && pbar $i $j "T:$t S:$s C:$c"
-				pdd2_cache_read 0 $((PDD2_CHUNK_LEN*c)) $PDD2_CHUNK_LEN || return $?
+				pdd2_cache_read 0 $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
 				((${#f})) && x+=" ${ret_dat[*]:3}"
 			}
 		}
@@ -1537,7 +1551,7 @@ pdd2_restore_disk () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
 	local f=$1 x ;local -i n j t s i= p= c
-	((n=SECTOR_DATA_LEN/PDD2_CHUNK_LEN)) # number of chunks / sector
+	((n=SECTOR_DATA_LEN/PDD2_CHUNK_LEN_W)) # number of chunks / sector
 	((j=PDD2_TRACKS*PDD2_SECTORS))       # job size for progress display
 	[[ -e "$f" ]] || [[ ":${f##*.}" == ":${PDD2_IMG_EXT}" ]] || f+=".${PDD2_IMG_EXT}"
 	echo "Restoring Disk from File: \"$f\""
@@ -1569,8 +1583,8 @@ pdd2_restore_disk () {
 			# main data
 			for ((c=0;c<n;c++)) { # chunks
 				pbar $i $j "T:$t S:$s C:$c"
-				pdd2_cache_write 0 $((c*PDD2_CHUNK_LEN)) ${fhex[*]:p:PDD2_CHUNK_LEN} || return $?
-				((p+=PDD2_CHUNK_LEN))
+				pdd2_cache_write 0 $((c*PDD2_CHUNK_LEN_W)) ${fhex[*]:p:PDD2_CHUNK_LEN_W} || return $?
+				((p+=PDD2_CHUNK_LEN_W))
 			}
 
 			# update/unload sector from cache to media
@@ -2284,7 +2298,7 @@ do_cmd () {
 	# TPDD2 sector access
 			cache_load) pdd2_cache_load $* ;_e=$? ;;	# load cache to or from disk
 			cache_read) pdd2_cache_read $* ;_e=$? ;;	# read from cache to client
-			cache_write) lcmd2_cache_write $* ;_e=$? ;;	# write from client to cache
+			cache_write) pdd2_cache_write $* ;_e=$? ;;	# write from client to cache
 
 	# TPDD1 & TPDD2 local/client file access
 	# These are used by the user directly
