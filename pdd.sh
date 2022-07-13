@@ -39,17 +39,15 @@ typeset -i v=${DEBUG:-0}
 # raw    : 24 byte names with attribute ' '          - Cambridge Z88, CP/M, etc
 : ${COMPAT:=floppy}
 # show non-printing bytes in filenames with inverse video hex or ctrl codes
-EXPOSE_FILENAMES=1
+: ${EXPOSE:=1}
 # 0 casual / normal filename display
 # 1 shows <32 as n+64 ctrl chars, >126 as "+"
 # 2 shows all bytes <32 >126 as hex pairs
 
-# make lcmd_dirent() get the real file size from the FCB
+# make lcmd_dirent() get the real file sizes from the FCB
 # The file length provided by dirent() is garbage, but the FCB has the
-# correct size.
-# Works, but reading the fcb makes every file access take an extra
-# couple seconds to open a file for reading or start a directory listing.
-USE_FCB_FILE_LENGTHS=true # true|false
+# correct size. Works great, but only on real drives. Manual toggle: "ffs".
+: ${USE_FCB:=false} # true|false
 
 # Default rs232 tty device name, with platform differences
 # The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
@@ -516,6 +514,28 @@ spin () {
 		*) printf '\b\b%s ' "${_Y[_y]}" ;;
 	esac
 	((++_y>3)) && _y=0
+}
+
+# scan global $g_x for non-printing bytes
+# and replace them with a displayable rendition
+expose_bytes () {
+	local -i i n ;local t x=
+	for ((i=0;i<${#g_x};i++)) {
+		t="${g_x:i:1}"
+		printf -v n "%u" "'$t"
+		case $EXPOSE in
+			2)
+				((n>0&&n<32||n>126)) && printf -v t "\033[7m%02X\033[m" $n
+				((n)) || t=' '
+				;;
+			*)
+				((n<32)) && { printf -v t "%02X" $((n+64)) ;printf -v t "\033[7m%b\033[m" "\x$t" ; }
+				((n>126)) && printf -v t "\033[7m+\033[m"
+				;;
+		esac
+		x+="$t"
+	}
+	g_x="$x"
 }
 
 parse_compat () {
@@ -1619,7 +1639,15 @@ read_fcb () {
 		fcb_head[n]="${rhex[*]:i:1}" ;((i++)) ;fcb_head[n]=$((0x${fcb_head[n]}))
 		fcb_tail[n]="${rhex[*]:i:1}" ;((i++)) ;fcb_tail[n]=$((0x${fcb_tail[n]}))
 		((v)) || ((${#fcb_fname[n]} + ${#fcb_attr[n]} + ${fcb_size[n]} + ${fcb_head[n]} + ${fcb_tail[n]})) || continue
-		$quiet || printf "%2u : %s | %1b | %5u | %s | %2u | %2u\n" $n "${fcb_fname[n]}" "${fcb_attr[n]}" "${fcb_size[n]}" "${fcb_resv[n]}" "${fcb_head[n]}" "${fcb_tail[n]}"
+
+		printf -v d_fname '%-24.24b' "${fcb_fname[n]}"
+		printf -v d_attr '%1.1s' "${fcb_attr[n]}"
+		((EXPOSE)) && {
+			g_x="$d_fname" ;expose_bytes ;d_fname="$g_x"
+			g_x="$d_attr" ;expose_bytes ;d_attr="$g_x"
+		}
+
+		$quiet || printf "%2u : %s | %s | %5u | %s | %2u | %2u\n" $n "$d_fname" "$d_attr" "${fcb_size[n]}" "${fcb_resv[n]}" "${fcb_head[n]}" "${fcb_tail[n]}"
 	}
 }
 
@@ -1739,16 +1767,16 @@ set_fcb_filesizes () {
 }
 
 set_expose () {
-	local -i e=$EXPOSE_FILENAMES
+	local -i e=$EXPOSE
 	case "$1" in
 		true|on|yes) e=1 ;;
 		false|off|no) e=0 ;;
 		0|1|2) e=$1 ;;
 		'') ((e)) && e=0 || e=1 ;;
 	esac
-	EXPOSE_FILENAMES=$e
+	EXPOSE=$e
 	echo -n 'Expose non-printable bytes in filenames: '
-	((EXPOSE_FILENAMES)) && echo 'Enabled' || echo 'Disabled'
+	((EXPOSE)) && echo 'Enabled' || echo 'Disabled'
 }
 
 get_condition () {
@@ -1828,42 +1856,19 @@ lcmd_ls () {
 	}
 
 	while ocmd_dirent '' "$1" $m ;do
-		un_tpdd_file_name "$file_name" ;printf -v file_name '%-24.24b' "$file_name"
-		((EXPOSE_FILENAMES)) && {
-			local -i i x ;local h t f=
-			for ((i=0;i<PDD_FNAME_LEN;i++)) {
-				t="${file_name:i:1}"
-				printf -v x "%u" "'$t"
-				case $EXPOSE_FILENAMES in
-					2)
-						((x>0&&x<32||x>126)) && printf -v t "\033[7m%02X\033[m" $x
-						((x)) || t=' '
-						;;
-					*)
-						((x<32)) && { printf -v t "%02X" $((x+64)) ;printf -v t "\033[7m%b\033[m" "\x$t" ; }
-						((x>126)) && printf -v t "\033[7m+\033[m"
-						;;
-				esac
-				f+="$t"
-			}
-			t="$file_attr"
-			printf -v x "%u" "'$t"
-			case $EXPOSE_FILENAMES in
-				2)
-					((x<32||x>126)) && printf -v t "\033[7m%02X\033[m" $x
-					;;
-				*)
-					((x<32)) && { printf -v t "%02X" $((x+64)) ;printf -v t "\033[7m%b\033[m" "\x$t" ; }
-					((x>126)) && printf -v t "\033[7m+\033[m"
-					;;
-			esac
-			printf '%s | %s | %6u\n' "$f" "$t" "$file_len"
-		} || { # casual filename display
-			printf '%-24.24b | %1s | %6u\n' "$file_name" "$file_attr" "$file_len"
+		un_tpdd_file_name "$file_name"
+		printf -v d_fname '%-24.24b' "$file_name"
+		printf -v d_attr '%1.1s' "$file_attr"
+
+		((EXPOSE)) && {
+			g_x="$d_fname" ;expose_bytes ;d_fname="$g_x"
+			g_x="$d_attr" ;expose_bytes ;d_attr="$g_x"
 		}
 
+		printf '%s | %s | %6u\n' "$d_fname" "$d_attr" "$file_len"
 		((m==${dirent_cmd[get_first]})) && m=${dirent_cmd[get_next]}
 	done
+
 	echo '-------------------------------------'
 	((${#err_msg[*]})) && return
 	quiet=true get_condition || return $?
@@ -2333,7 +2338,7 @@ do_cmd () {
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
 typeset -i _y= bank= operation_mode=1 read_err= fdc_err= fdc_res= fdc_len= _om=99 FNL # allow FEL to be unset or ''
-cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= ret_list='|' _s= pdd2=false bd= did_init=false quiet=false ffs=$USE_FCB_FILE_LENGTHS
+cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= pdd2=false bd= did_init=false quiet=false ffs=$USE_FCB g_x=
 readonly LANG=C
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
 MODEL_DETECTION=true ;[[ "$0" =~ .*pdd[12](\.sh)?$ ]] && MODEL_DETECTION=false
