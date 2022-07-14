@@ -93,14 +93,14 @@ The intercative mode prompt indicates various aspects of the current operating s
 | command | arguments | Description |
 | --- | --- | --- |
 | cache_load | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache & the disk.<br>mode 0 = load from disk to cache<br>mode 2 = flush cache to disk |
-| cache_read | \<mode&#160;0\|1\>&#160;\<offset&#160;0-252\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's sector cache.<br>mode 0 = normal sector data<br>mode 1 = metadata |
-| cache_write | \<mode&#160;0\|1\>&#160;\<offset&#160;0-252\>&#160;\<data...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode 0 = normal sector data<br>mode 1 = metadata |
+| cache_read | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's sector cache.<br>mode 0 = main data, 1 = metadata |
+| cache_write | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<data 0-127 hex pairs...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode: 0 = main data, 1 = metadata |
 
 **TPDD1/TPDD2 Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read Sector ID Data<br>default physical sector 0<br>"all" reads the ID section from every sector.<br>TPDD2: Displays the 4 metadata bytes. |
-| rs&#160;\|&#160;read_sector | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector". For TPDD2 there are not logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
+| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read the TPDD1 Sector ID Data or TPDD2 metadata field<br>default physical sector 0<br>"all" reads the ID/metadata field from every sector.<br>For TPDD2 the argument may be either track,sector (0-79,0-1) or a single linear sector number 0-159. |
+| rs&#160;\|&#160;read_sector | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector". For TPDD2 there are no logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
 | read_fcb&#160;\|&#160;fcb | | Display the File Control Block list - the underlying data that dirent() uses for the directory list |
