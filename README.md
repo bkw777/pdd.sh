@@ -99,7 +99,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 **TPDD1/TPDD2 Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|all | Read Sector ID Data<br>default physical sector 0<br>"all" reads the ID section from every sector.<br>TPDD2: Displays the 4 metadata bytes. |
+| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read Sector ID Data<br>default physical sector 0<br>"all" reads the ID section from every sector.<br>TPDD2: Displays the 4 metadata bytes. |
 | rs&#160;\|&#160;read_sector | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector". For TPDD2 there are not logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
