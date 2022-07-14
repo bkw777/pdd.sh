@@ -92,7 +92,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 **TPDD2-only Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| cache_load | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache & the disk.<br>mode 0 = load from disk to cache<br>mode 2 = flush cache to disk |
+| cache_load | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache & the disk.<br>mode 0 = load from disk to cache<br>mode 2 = unload cache to disk |
 | cache_read | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's sector cache.<br>mode 0 = main data, 1 = metadata |
 | cache_write | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<data&#160;0-127&#160;hex&#160;pairs...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode: 0 = main data, 1 = metadata |
 
