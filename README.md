@@ -219,7 +219,7 @@ a downloadable file.
 Also included is a disk image of the American English dictionary disk for Sardine.  
 ```rd disk_images/Sardine_American_English.pdd1```
 
-** Directory Listing**  
+**Directory Listing**  
 * The drive firmware's directory listing function returns file sizes that are often off by several bytes. The correct filesizes are available on the disk in the FCB. There is a setting, enabled by default, that makes the pdd.sh's dirent() function read the FCB to get filesizes. This makes directory listings and open-file-for-read take an extra second every time, but the displays the correct exact filesizes. This can be turned on/off with the **ffs** command.  
 * Filenames can have non-printing characters in them. There is an option, enabled by default, to expose things like that in filenames (and the attr bytes). When a byte in a filename has an ascii value less than 32, it's displayed as the ctrl code that produces that byte, in inverse video. Bytes with ascii values above 126 are all displayed as just inverse "+". ex: null is ^@ or Ctrl+@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, except it makes the filename field look one character too short. The expose option exposes that hidden byte in the name. This can be toggled with the **expose** command.   
 * The write-protect status of the disk is indicated in the bottom-right corner of the listing with a [WP] if the disk is write-protected.
