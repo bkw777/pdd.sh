@@ -111,6 +111,8 @@ RC_WAIT_MS=5000             # pdd2_cache_read
 # real TPDD2 responds with this immediately
 # real TPDD1 does not respond
 UNK23_RET_DAT=(41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00)
+# similar but not used by TS-DOS, or anything else seen so far
+#UNK11_RET_DAT=(80 13 05 00 10 E1)
 
 # Per-byte delay in send_loader()
 LOADER_PER_CHAR_MS=7
@@ -1498,11 +1500,16 @@ pdd2_read_meta () {
 }
 
 # PDD2_CHUNK_LEN_R
-# read_cache() can fetch any arbitrary length from 0 to 252 bytes,
-# from any arbitrary offset within the 1280-byte cache. largest divisor = 160
+# read_cache() can read any arbitrary length from 0 to 252 bytes,
+# from any arbitrary offset within the 1280-byte cache.
+# The largest possible read that divides into 1280 evenly is 160 bytes.
+# So pdd2_read_sector() and pdd2_dump_disk() read in 160-byte chunks.
 
 # PDD2_CHUNK_LEN_W
-# write_cache() is limited to 0-127. largest divisor = 80
+# write_cache() can write any arbitrary length from 0 to 127 bytes,
+# from any arbitrary offset within the 1280-byte cache.
+# The largest possible write that divides into 1280 evenly is 80 bytes.
+# So pdd2_write_sector() and pdd2_restore_disk() write in 80-byte chunks.
 
 # Read one full 1280-byte sector.
 # pdd2_read_sector T S
