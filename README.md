@@ -27,6 +27,8 @@ Any linux, macos/osx, bsd, any cpu architecture.
 
 Windows... [with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).
 
+OSX: Requires bash from macports or brew. Doesn't work with the stock bash that ships with osx.
+
 ## Installation
 It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions.  
 But there is a "make install" for convenience.  
