@@ -115,7 +115,7 @@ UNK23_RET_DAT=(41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00)
 #UNK11_RET_DAT=(80 13 05 00 10 E1)
 
 # Per-byte delay in send_loader()
-LOADER_PER_CHAR_MS=7
+LOADER_PER_CHAR_MS=8
 
 # extensions for disk image files
 PDD1_IMG_EXT=pdd1
