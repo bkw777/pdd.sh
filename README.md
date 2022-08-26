@@ -9,7 +9,7 @@ It's pure bash except for the following:
 * ```sleep```, as in /bin/sleep, is called a *lot* , ugh... bash4 and up does not need this, but the stock bash on macos needs it :/
 <!-- * ```mkfifo``` is used once at startup for ```_sleep()``` without ```/usr/bin/sleep```.   -->
 
-That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
+That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).  
 But that damned external /bin/sleep is called a bezillion times...
 
 There are a lot of commands and options. This is a swiss army knife for the TPDD.  
