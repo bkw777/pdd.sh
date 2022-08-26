@@ -52,8 +52,10 @@ typeset -i v=${DEBUG:-0}
 # Default rs232 tty device name, with platform differences
 # The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
 			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB	# linux
-case "${OSTYPE,,}" in
-	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;	# *bsd
+#case "${OSTYPE,,}" in # macos bash3 doesn't support
+case "${OSTYPE}" in
+#	*bsd*) 	stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;	# *bsd
+	*[Bb][Ss][Dd]*) 	stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;	# *bsd
 	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.  ;;	# osx
 esac
 
@@ -143,7 +145,8 @@ typeset -ra mode=(
 # "Operation Mode" constants
 
 # Operation Mode Request/Return Block Formats
-typeset -rA opr_fmt=(
+#typeset -rA opr_fmt=(   # macos bash3 doesn't support
+typeset -r opr_fmt=(
 	# requests
 	[req_dirent]='00'
 	[req_open]='01'
@@ -214,73 +217,73 @@ typeset -rA opr_fmt=(
 )
 
 # Operation Mode Error Codes
-typeset -rA opr_msg=(
-	[00]='Operation Complete'
-	[10]='File Not Found'
-	[11]='File Exists'
-	[30]='Command Parameter or Sequence Error'
-	[31]='Directory Search Error'
-	[35]='Bank Error'
-	[36]='Parameter Error'
-	[37]='Open Format Mismatch'
-	[3F]='End of File'
-	[40]='No Start Mark'
-	[41]='ID CRC Check Error'
-	[42]='Sector Length Error'
-	[43]='Read Error 3'
-	[44]='Format Verify Error'
-	[45]='Disk Not Formatted'
-	[46]='Format Interruption'
-	[47]='Erase Offset Error'
-	[48]='Read Error 8'
-	[49]='DATA CRC Check Error'
-	[4A]='Sector Number Error'
-	[4B]='Read Data Timeout'
-	[4C]='Read Error C'
-	[4D]='Sector Number Error'
-	[4E]='Read Error E'
-	[4F]='Read Error F'
-	[50]='Write-Protected Disk'
-	[5E]='Disk Not Formatted'
-	[60]='Disk Full or Max File Size Exceeded or Directory Full' # TPDD2 'Directory Full'
-	[61]='Disk Full'
-	[6E]='File Too Long'
-	[70]='No Disk'
-	[71]='Disk Not Inserted or Disk Change Error' # TPDD2 'Disk Change Error'
-	[72]='Disk Insertion Error 2'
-	[73]='Disk Insertion Error 3'
-	[74]='Disk Insertion Error 4'
-	[75]='Disk Insertion Error 5'
-	[76]='Disk Insertion Error 6'
-	[77]='Disk Insertion Error 7'
-	[78]='Disk Insertion Error 8'
-	[79]='Disk Insertion Error 9'
-	[7A]='Disk Insertion Error A'
-	[7B]='Disk Insertion Error B'
-	[7C]='Disk Insertion Error C'
-	[7D]='Disk Insertion Error D'
-	[7E]='Disk Insertion Error E'
-	[7F]='Disk Insertion Error F'
-	[80]='Hardware Fault 0'
-	[81]='Hardware Fault 1'
-	[82]='Hardware Fault 2'
-	[83]='Defective Disk (power-cycle to clear error)'
-	[84]='Hardware Fault 4'
-	[85]='Hardware Fault 5'
-	[86]='Hardware Fault 6'
-	[87]='Hardware Fault 7'
-	[88]='Hardware Fault 8'
-	[89]='Hardware Fault 9'
-	[8A]='Hardware Fault A'
-	[8B]='Hardware Fault B'
-	[8C]='Hardware Fault C'
-	[8D]='Hardware Fault D'
-	[8E]='Hardware Fault E'
-	[8F]='Hardware Fault F'
+typeset -ra opr_msg=(
+	[0x00]='Operation Complete'
+	[0x10]='File Not Found'
+	[0x11]='File Exists'
+	[0x30]='Command Parameter or Sequence Error'
+	[0x31]='Directory Search Error'
+	[0x35]='Bank Error'
+	[0x36]='Parameter Error'
+	[0x37]='Open Format Mismatch'
+	[0x3F]='End of File'
+	[0x40]='No Start Mark'
+	[0x41]='ID CRC Check Error'
+	[0x42]='Sector Length Error'
+	[0x43]='Read Error 3'
+	[0x44]='Format Verify Error'
+	[0x45]='Disk Not Formatted'
+	[0x46]='Format Interruption'
+	[0x47]='Erase Offset Error'
+	[0x48]='Read Error 8'
+	[0x49]='DATA CRC Check Error'
+	[0x4A]='Sector Number Error'
+	[0x4B]='Read Data Timeout'
+	[0x4C]='Read Error C'
+	[0x4D]='Sector Number Error'
+	[0x4E]='Read Error E'
+	[0x4F]='Read Error F'
+	[0x50]='Write-Protected Disk'
+	[0x5E]='Disk Not Formatted'
+	[0x60]='Disk Full or Max File Size Exceeded or Directory Full' # TPDD2 'Directory Full'
+	[0x61]='Disk Full'
+	[0x6E]='File Too Long'
+	[0x70]='No Disk'
+	[0x71]='Disk Not Inserted or Disk Change Error' # TPDD2 'Disk Change Error'
+	[0x72]='Disk Insertion Error 2'
+	[0x73]='Disk Insertion Error 3'
+	[0x74]='Disk Insertion Error 4'
+	[0x75]='Disk Insertion Error 5'
+	[0x76]='Disk Insertion Error 6'
+	[0x77]='Disk Insertion Error 7'
+	[0x78]='Disk Insertion Error 8'
+	[0x79]='Disk Insertion Error 9'
+	[0x7A]='Disk Insertion Error A'
+	[0x7B]='Disk Insertion Error B'
+	[0x7C]='Disk Insertion Error C'
+	[0x7D]='Disk Insertion Error D'
+	[0x7E]='Disk Insertion Error E'
+	[0x7F]='Disk Insertion Error F'
+	[0x80]='Hardware Fault 0'
+	[0x81]='Hardware Fault 1'
+	[0x82]='Hardware Fault 2'
+	[0x83]='Defective Disk (power-cycle to clear error)'
+	[0x84]='Hardware Fault 4'
+	[0x85]='Hardware Fault 5'
+	[0x86]='Hardware Fault 6'
+	[0x87]='Hardware Fault 7'
+	[0x88]='Hardware Fault 8'
+	[0x89]='Hardware Fault 9'
+	[0x8A]='Hardware Fault A'
+	[0x8B]='Hardware Fault B'
+	[0x8C]='Hardware Fault C'
+	[0x8D]='Hardware Fault D'
+	[0x8E]='Hardware Fault E'
+	[0x8F]='Hardware Fault F'
 )
 
 # Directory Entry Search Forms
-typeset -rA dirent_cmd=(
+typeset -r dirent_cmd=(
 	[set_name]=0
 	[get_first]=1
 	[get_next]=2
@@ -289,7 +292,7 @@ typeset -rA dirent_cmd=(
 )
 
 # File Open Access Modes
-typeset -rA open_mode=(
+typeset -r open_mode=(
 	[write_new]=1
 	[write_append]=2
 	[read]=3
@@ -299,7 +302,7 @@ typeset -rA open_mode=(
 # "FDC Mode" constants
 
 # FDC Mode Commands
-typeset -rA fdc_cmd=(
+typeset -r fdc_cmd=(
 	[mode]='M'
 	[condition]='D'
 	[format]='F'
@@ -406,7 +409,7 @@ typeset -r \
 
 # Filename field on the drive is 24 bytes. These can not exceed that.
 # [platform_compatibility_name]=file_name_len , file_ext_len , hex_file_attr_byte
-typeset -rA compat=(	# fname(dec.dec) fattr(hex)
+typeset -r compat=(	# fname(dec.dec) fattr(hex)
 	[floppy]='6,2,46'	# 6.2  F
 	[wp2]='8,2,46'		# 8.2  F
 #	[z88]='24,,00'		# 24   null     # not sure what z88 wants yet
@@ -434,28 +437,31 @@ vecho () {
 	shift ;echo "$@" >&2
 }
 
-_sleep () {
-	local x
-	read -t ${1:-1} -u 4 x
-	:
-}
+#_sleep () {
+#	local x
+#	read -t ${1:-1} -u 4 x
+#	:
+#}
 
 confirm  () {
 	local r=
 	read -p "${@}: Are you sure? (y/N) " r
-	[[ ":${r,,}" == ":y" ]]
+#	[[ ":${r,,}" == ":y" ]] # macos bash3 does not support
+	[[ _$r == _[Yy] ]]
 }
 
 # Milliseconds to seconds
 ms_to_s () {
-	_s="000$1" ;_s="${_s:0:-3}.${_s: -3}"
+	#_s="000$1" ;_s="${_s:0:-3}.${_s: -3}"  # UGHHH macos bash3 doesn't support
+	_s="000$1" ;_s="${_s:0:${#_s}-3}.${_s: ${#_s}-3}"
 }
 
 # Convert a plain text string to hex pairs stored in shex[]
 str_to_shex () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	local x="$*" ;local -i i l=${#x} ;shex=()
-	for ((i=0;i<l;i++)) { printf -v shex[i] '%02X' "'${x:i:1}" ; }
+	local x="$*" h ;local -i i l=${#x} ;shex=()
+	#for ((i=0;i<l;i++)) { printf -v shex[i] '%02X' "'${x:i:1}" ; } # macos bash3 does not support
+	for ((i=0;i<l;i++)) { printf -v h '%02X' "'${x:i:1}" ; shex[i]=$h ; }
 	vecho 3 "shex[] ${shex[*]}"
 }
 
@@ -485,7 +491,8 @@ file_to_fhex () {
 	local -i i= m=${2:-$PDD_MAX_FLEN} ;local x ;fhex=()
 	[[ -r "$1" ]] || { err_msg+=("\"$1\" not found or not readable") ;return 1 ; }
 	while IFS= read -d '' -r -n 1 x ;do
-		printf -v fhex[i++] '%02X' "'$x"
+		#printf -v fhex[i++] '%02X' "'$x" # macos bash3 does not support
+		printf -v h '%02X' "'$x" ;fhex[i++]=$h
 		((m)) && ((i>=m)) && { err_msg+=("\"$1\" exceeds $PDD_MAX_FLEN bytes") fhex=() i=-1 ;break ; }
 	done <"$1"
 	vecho 2 "${#fhex[*]} bytes"
@@ -634,7 +641,7 @@ tpdd_write () {
 # >128 = we timed out, $x is empty because there was no data, not even a null
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i i l=$1 ;local x ;rhex=() read_err=0
+	local -i i l=$1 ;local x h ;rhex=() read_err=0
 	tpdd_wait $2 $3 || return $?
 	vecho 2 -n "$z: l=$l "
 	l=${1:-$SECTOR_DATA_LEN}
@@ -644,7 +651,8 @@ tpdd_read () {
 		IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x ;read_err=$?
 		((read_err==1)) && read_err=0
 		((read_err)) && break
-		printf -v rhex[i] '%02X' "'$x"
+		#printf -v rhex[i] '%02X' "'$x" # macos bash3 does not support
+		printf -v h '%02X' "'$x" ;rhex[i]=$h
 	}
 	((read_err>1)) && err_msg+=("tty read err:$read_err")
 	vecho 2 "${rhex[*]}"
@@ -699,7 +707,7 @@ tpdd_wait () {
 	until ((++i>n)) ;do
 		tpdd_check && break
 		${d[b]} $i $n
-		_sleep $s
+		sleep $s
 	done
 	((i>n)) && { err_msg+=("$z: TIMED OUT / no response from drive") ; return 1 ; }
 	${d[b]} 1 1
@@ -710,16 +718,17 @@ tpdd_wait () {
 
 tpdd_wait_s () {
 	test_com || { err_msg+=("$PORT closed") ;return 1 ; }
-	until tpdd_check ;do _sleep 0.1 ;done
+	until tpdd_check ;do sleep 0.1 ;done
 }
 
 # Drain output from the drive to get in sync with it's input vs output.
 tpdd_drain () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local x= s=() ;local -i i
+	local x= s=() h ;local -i i
 	while tpdd_check ;do
 		x= ;IFS= read -d '' -r -t $read_timeout -n 1 -u 3 x
-		((v>2)) && printf -v s[i++] '%02X' "'$x"
+		#((v>2)) && printf -v s[i++] '%02X' "'$x" # macos bash3 does not support
+		((v>2)) && { printf -v h '%02X' "'$x" ;s[i++]=$h ; } 
 	done
 	((v>2)) && ((${#s[*]})) && vecho 3 "$z: ${s[*]}"
 	:
@@ -781,7 +790,7 @@ ocmd_check_err () {
 	((e=0x${ret_dat[0]}))
 	((e)) && {
 		x='UNKNOWN ERROR'
-		((${#opr_msg[${ret_dat[0]}]})) && x="${opr_msg[${ret_dat[0]}]}"
+		((${#opr_msg[0x${ret_dat[0]}]})) && x="${opr_msg[0x${ret_dat[0]}]}"
 		ret_err=${ret_dat[0]}
 		err_msg+=("$x")
 	}
@@ -864,7 +873,8 @@ ocmd_dirent () {
 		str_to_shex "$tpdd_file_name"		# filename (shex[0-23])
 		((${#a}<2)) && printf -v a '%02X' "'$a" ;shex[24]=$a	# attribute
 	}
-	printf -v shex[25] '%02X' $m		# action
+	#printf -v shex[25] '%02X' $m	# macos bash3 does not support
+	printf -v x '%02X' $m ;shex[25]=$x		# action
 
 	# send the request
 	vecho 1 "$z: req: filename=\"$tpdd_file_name\" attr=0x$a action=$m"
@@ -966,7 +976,7 @@ ocmd_fdc () {
 	$pdd2 && { echo "$z requires TPDD1" ;return 1 ; }
 	ocmd_send_req ${opr_fmt[req_fdc]} || return $?
 	operation_mode=0
-	_sleep 0.1
+	sleep 0.1
 	tpdd_drain
 }
 
@@ -1137,7 +1147,7 @@ fcmd_mode () {
 	str_to_shex "${fdc_cmd[mode]}$1"
 	tpdd_write ${shex[*]} 0D || return $?
 	operation_mode=$1
-	_sleep 0.1
+	sleep 0.1
 	tpdd_drain
 }
 
@@ -1209,7 +1219,7 @@ pdd1_read_id () {
 		fcmd_read_ret $RI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 		((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 		tpdd_write 0D || return $?
-		while _sleep 0.1 ;do tpdd_check && break ;done # sleep at least once
+		while sleep 0.1 ;do tpdd_check && break ;done # sleep at least once
 		tpdd_read $PDD1_ID_LEN || return $?
 		((${#rhex[*]}<PDD1_ID_LEN)) && { err_msg+=("Got ${#rhex[*]} of $PDD1_ID_LEN bytes") ; return 1 ; }
 		$quiet || printf "I %02u %04u : %s\n" "$i" "$fdc_len" "${rhex[*]}"
@@ -1238,7 +1248,7 @@ fcmd_read_logical () {
 	# read too soon the data will be corrupt or incomplete. Take 2/3 of the
 	# number of bytes we expect to read (64 to 1280), and sleep that many ms.
 	# The tpdd_wait() in the inner per-byte loop in tpdd_read() is not enough.
-	ms_to_s $(((fdc_len/3)*2)) ;_sleep $_s
+	ms_to_s $(((fdc_len/3)*2)) ;sleep $_s
 	tpdd_read $fdc_len || return $?
 	((${#rhex[*]}<fdc_len)) && { err_msg+=("Got ${#rhex[*]} of $fdc_len bytes") ; return 1 ; }
 	$quiet || printf "L %02u %02u %04u : %s\n" "$ps" "$ls" "$fdc_len" "${rhex[*]}"
@@ -1705,7 +1715,7 @@ read_smt () {
 # followed by the BASIC EOF character
 slowbyte () {
 	printf '%b' "\x$1" >&3
-	_sleep $s
+	sleep $s
 }
 
 srv_send_loader () {
@@ -1753,13 +1763,13 @@ fonzie_smack () {
 	vecho 2 "${FUNCNAME[0]}($@)"
 	tpdd_drain
 	tpdd_write 4D 31 0D       # M1\r - fdc set mode 1 (switch from fdc to opr)
-	_sleep 0.01
+	sleep 0.01
 	tpdd_drain
 	tpdd_write 5A 5A 08 00 F7 # ZZ 08 - opr switch to fdc
-	_sleep 0.01
+	sleep 0.01
 	tpdd_drain
 	tpdd_write 4D 31 0D       # M1\r - fdc set mode 1 (switch from fdc to opr)
-	_sleep 0.01
+	sleep 0.01
 	tpdd_drain
 	operation_mode=1 bd=
 }
@@ -2094,7 +2104,7 @@ pdd1_boot () {
 
 	# 60 FOR I=1 TO 10:NEXT:CLOSE
 	#   1000 = 2 seconds
-	_sleep 0.02
+	sleep 0.02
 	close_com
 
 	# 70 LOAD "COM:88N1ENN",R
@@ -2179,7 +2189,7 @@ pdd2_boot () {
 
 	# 60 FOR I=1 TO 10:NEXT:CLOSE
 	#   1000 = 2 seconds
-	_sleep 0.02
+	sleep 0.02
 	close_com
 
 	# 70 RUN"COM:98N1ENN
@@ -2249,7 +2259,7 @@ do_cmd () {
 			sum|checksum) calc_cksum $* ;_e=$? ;;
 			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 			boot|bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;;
-			sleep) _sleep $* ;_e=$? ;;
+			sleep) sleep $* ;_e=$? ;;
 			debug|verbose|v) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;echo "Verbose level: $v" ;_e=0 ;;
 			ffs|use_fcb|fcb_filesizes) set_fcb_filesizes $1 ;_e=0 ;;
 			expose) set_expose $1 ;_e=0 ;;
@@ -2355,9 +2365,9 @@ for x in ${!lsl[*]} ;do lsc[${lsl[x]}]=$x ;done ;readonly lsc ;unset x
 parse_compat
 
 # for _sleep()
-readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
-[[ -p $sleep_fifo ]] || mkfifo "$sleep_fifo" || abrt "Error creating sleep fifo \"$sleep_fifo\""
-exec 4<>$sleep_fifo
+#readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
+#[[ -p $sleep_fifo ]] || mkfifo "$sleep_fifo" || abrt "Error creating sleep fifo \"$sleep_fifo\""
+#exec 4<>$sleep_fifo
 
 # tpdd serial port
 for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
