@@ -1,5 +1,5 @@
 # pdd.sh - "bash3" branch
-This is a bash3-compatible crapola version to work in the stock bash on macos without macports/brew/etc.
+This is a bash3-compatible crapola version to work in the stock bash on macos without macports/brew/etc.  
 Current status: Partially converted, not yet working.
 
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in pure\* bash.
