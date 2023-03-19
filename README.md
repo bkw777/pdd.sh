@@ -25,7 +25,9 @@ Things this util can do that not even the commercial TPDD utils can do
 ## Supported OS's
 Any linux, macos/osx, bsd, any cpu architecture.  
 
-Windows... [with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).
+Windows... [with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).  
+Cygwin and MSYS also fail with ```stty: /dev/ttyS4: Permission denied```.  
+http://github.com/bkw777/dlplus works in both cygwin and msys, so the problem is probably fixable, but I just don't know how yet.
 
 OSX: Requires bash from macports or brew. Doesn't work with the stock bash that ships with osx.
 
