@@ -102,6 +102,7 @@ READY_WAIT_MS=5000          # ocmd_ready, fcmd_ready, pdd2_ready
 RI_WAIT_MS=5000             # pdd1_read_id
 RL_WAIT_MS=5000             # fcmd_read_logical
 WI_WAIT_MS=5000             # fcmd_write_id
+SI_WAIT_MS=30000            # fcmd_search_id
 WL_WAIT_MS=5000             # fcmd_write_logical
 SC_WAIT_MS=5000             # pdd2_cache_load
 WC_WAIT_MS=5000             # pdd2_cache_write
@@ -324,11 +325,14 @@ typeset -ra fdc_msg=(
 	[33]='Parameter Invalid, Wrong Type'
 	[50]='Invalid Logical Sector Size Code'
 	[51]='Logical Sector Size Code Above Range'
+	[60]='ID not found'
+	[61]='Search ID Unexpected Parameter'
 	[160]='Disk Not Formatted'
 	[161]='Read Error'
 	[176]='Write-Protected Disk'
 	[193]='Invalid Command'
 	[209]='Disk Not Inserted'
+	[216]='Operation Interrupted'
 )
 
 # FDC condition bit flags
@@ -1181,17 +1185,48 @@ fcmd_format () {
 
 # Sector ID section - See the software manual page 11
 # There is one ID section per physical sector.
-# There are 19 bytes described there, but the leading 5 header bytes and the
-# trailing 2 crc bytes are used by the drive itself. In the 5-byte header,
-# the logical sector size code is written by the format command. Other than
-# that, only the 12 byte reserve section is readable/writable by the user.
+# Ignore the leading 5 header bytes (except the logical size code),
+# and the trailing 2 crc bytes, since they don't exist outside of the drive.
+# A client can neither read nore write them.
+#
+# The LSC byte is readable, but not individually writable. The only control a client
+# has over the LSC byte is the LSC parameter to the FDC_format command, which writes
+# the specified size code on all tracks.
+# 
+# Other than that, only the 12 byte reserve section is readable/writable by the user.
 # The read_id/write_id/search_id functions operate only on that field.
 #
-# The data can be anything. The drive's built-in filesystem
-# (aka Operation-mode) uses only the first byte:
-#   00 - current sector is not used by a file
-#   ** - sector number of next sector in current file
-#   FF - current sector is the last sector in current file
+# The ID data can be anything.
+#
+# The drive's built-in filesystem uses only the first byte:
+#   00 = current sector is not used by a file
+#   ## = sector number of next sector in current file
+#   FF = current sector is the last sector in current file
+
+# Search for sector ID matching $*
+# si <0 to 12 hex pairs of ID data>
+#
+# github.com/bkw777/dlplus/blob/master/ref/search_id_section.txt
+# Drive requires exactly 12 bytes of data, below right-pads with 0x00
+# and truncates to 12 bytes as necessary. So you may ex:
+# "si 04" and it will search for "04 00 00 00 00 00 00 00 00 00 00 00"
+fcmd_search_id () {
+	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==0)) || ocmd_fdc || return 1
+	str_to_shex "${fdc_cmd[search_id]}"
+	tpdd_write ${shex[*]} 0D || return $?
+	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
+	local a=($*) ;while ((${#a[*]}<PDD1_ID_LEN)) do a+=("00") ;done
+	tpdd_write ${a[*]:0:PDD1_ID_LEN} || return $?
+	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	# $fdc_err = success/fail status code
+	# $fdc_res = physical sector number 0-79 if found, 255 if not found
+	# $fdc_len = logical sector size of the indicated physical sector
+	((fdc_err==60)) && return $fdc_err
+	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res} len:${fdc_len}") ;return $fdc_err ; }
+	$quiet || echo "ID found at sector $fdc_res"
+}
 
 # Read sector ID section
 # ri [P] [P...]
@@ -1263,7 +1298,10 @@ pdd1_read_sector () {
 # Write a sector ID section
 # wi P hex_pairs...
 # P : physical sector number 0-79 as plain ascii decimal integer
-# hex-pairs... : 12 hex pairs of sector ID data
+# hex-pairs... : 0 to 12 hex pairs of sector ID data
+# Must always send exactly 12 bytes data,
+# so this fills missing bytes with 00 and strips extras.
+# so you may ex: "wi 79 cc" and it will write "CC 00 00 00 00 00 00 00 00 00 00 00" to sector 79
 fcmd_write_id () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
@@ -1272,7 +1310,8 @@ fcmd_write_id () {
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
-	tpdd_write $* || return $?
+	local a=($*) ;while ((${#a[*]}<PDD1_ID_LEN)) do a+=("00") ;done
+	tpdd_write ${a[*]:0:PDD1_ID_LEN} || return $?
 	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
 	:
@@ -2301,7 +2340,7 @@ do_cmd () {
 			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;_e=$? ;; # format disk no verify
 			#${fdc_cmd[read_id]}|read_id|ri) pdd1_read_id $* ;_e=$? ;; # read id - moved to TPDD1 & TPDD2 below
 			${fdc_cmd[read_sector]}|read_logical|rl) fcmd_read_logical $* ;_e=$? ;; # read one logical sector
-			#${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;_e=$? ;; # search id
+			${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;_e=$? ;; # search id
 			${fdc_cmd[write_id]}|write_id|wi) fcmd_write_id $* ;_e=$? ;; # write id
 			#${fdc_cmd[write_id_nv]}|write_id_nv) fcmd_write_id_nv $* ;_e=$? ;; # write id no verify
 			${fdc_cmd[write_sector]}|write_logical|wl) fcmd_write_logical $* ;_e=$? ;; # write sector

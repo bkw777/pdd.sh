@@ -89,6 +89,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | command | arguments | Description |
 | --- | --- | --- |
 | F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector (default 3). This format does not create a filesystem disk. It just allows reading/writing sectors. |
+| S&#160;\|&#160;si&#160;\|&#160;search_id | 0-12_hex_pairs... | Search all Sector IDs for an exact match. |
 | B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] 12_hex_pairs... | Write the 12-byte Sector ID data. |
 | R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\] | Read one logical sector at address: physical(0-79) logical(1-20). Default physical 0 logical 1 |
 | W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<0-79\>&#160;\<1-20\>&#160;hex_pairs... | Write one logical sector at address: physical(0-79) logical(1-20). |
@@ -237,6 +238,7 @@ You can find a collection of TPDD client loaders at https://github.com/bkw777/dl
 # References
 http://tandy.wiki/TPDD  
 https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/ ([Local copy](https://docs.google.com/viewer?url=https://github.com/bkw777/pdd.sh/raw/main/Tandy_Portable_Disk_Drive_Software_Manual_26-3808S.pdf))  
+https://github.com/bkw777/dlplus/blob/master/ref/search_id_section.txt  
 http://www.bitchin100.com/wiki/index.php?title=Base_Protocol  
 http://www.bitchin100.com/wiki/index.php?title=Desklink/TS-DOS_Directory_Access  
 http://www.bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol  
