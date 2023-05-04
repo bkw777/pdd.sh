@@ -107,8 +107,8 @@ TPDD_WAIT_PERIOD_MS=100
 # 1000 until you stop getting timeouts. Most of the commands with 5
 # seconds (5000) below usually respond much sooner, but any command
 # might also take a long time to respond when the drive has been idle.
-FORMAT_WAIT_MS=105000       # ocmd_format takes just under 100 seconds
-FORMAT_TPDD2_EXTRA_WAIT_MS=10000 # tpdd2 uses the same command but takes longer
+FORMAT1_WAIT_MS=105000      # ocmd_format tpdd1
+FORMAT2_WAIT_MS=115000      # ocmd_format tpdd2
 DELETE_WAIT_MS=30000        # ocmd_delete takes 3 to 20 seconds
 RENAME_WAIT_MS=10000        # pdd2_rename
 OPEN_WAIT_MS=5000           # ocmd_open
@@ -972,9 +972,9 @@ ocmd_ready () {
 # Operation-mode format is essentially "mkfs". It creates a filesystem disk.
 ocmd_format () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	local -i w=$FORMAT_WAIT_MS
+	local -i w=$FORMAT1_WAIT_MS
 	$pdd2 && {
-		((w+=FORMAT_TPDD2_EXTRA_WAIT_MS))
+		w=$FORMAT2_WAIT_MS
 		echo 'Formatting Disk, TPDD2 mode'
 	} || {
 		((operation_mode)) || fcmd_mode 1 || return 1
@@ -1206,7 +1206,7 @@ fcmd_format () {
 	confirm || return $?
 	str_to_shex ${fdc_cmd[format]}$s
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $FORMAT_WAIT_MS 2 || return $?
+	fcmd_read_ret $FORMAT1_WAIT_MS 2 || return $?
 	((fdc_err)) && err_msg+=(", Sector:$fdc_dat")
 	return $fdc_err
 }
