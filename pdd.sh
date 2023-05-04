@@ -13,16 +13,18 @@
 ###############################################################################
 # behavior
 
-# 1 or 2 for TPDD1 or TPDD2
+# 1 or 2 for TPDD1 or TPDD2 mode by default at startup
+# it changes based on autodetection or from various commands
 : ${TPDD_MODEL:=1}
 
 # Use "TS-DOS mystery command" to automatically detect TPDD1 vs TPDD2
 : ${MODEL_DETECTION:=true}
-# do a opr-fdc-opr sequence to joggle the drive into a known state in _init()
+
+# Do an opr>fdc>opr sequence to joggle the drive into a known state in _init()
 : ${FONZIE_SMACK:=true}
 
 # verbose/debug
-# 0/unset=normal, 1=verbose, >1=more verbose, 3=log all tty traffic to files
+# 0/unset=normal, 1=verbose, >1=more verbose
 # DEBUG=1 ./pdd ...
 case "$DEBUG" in
 	false|off|n|no) DEBUG=0 ;;
@@ -30,23 +32,37 @@ case "$DEBUG" in
 esac
 typeset -i v=${DEBUG:-0}
 
-# filename munging and display
-# these can also be invoked with the expose,compat,raw,wp2,floppy commands
 # COMPAT sets default behavior for disk vs local filename conversions and
-# the attribute byte.
-# floppy : 6.2 space-padded names with attribute 'F' - TRS-80 Model 100, clones
+# the attribute byte. Example, in "floppy" compat mode, local filenames are
+# converted to the special fix-length 6.2 space-padded format expected by
+# "Floppy" and all other KC-85-clone TPDD clients (TS-DOS, DSKMGR, TEENY, etc)
+# example: FOO.BA is saved from local to disk as
+# "FOO   .BA               " with attribute "F",
+# and loaded from disk to local as "FOO.BA"
+# This can be changed at run-time with the "compat", "raw", "wp2", "floppy" commands.
+# floppy : 6.2 space-padded names with attribute 'F' - TRS-80 Model 100 & clones
 # wp2    : 8.2 space-padded names with attribute 'F' - TANDY WP-2
 # raw    : 24 byte names with attribute ' '          - Cambridge Z88, CP/M, etc
 : ${COMPAT:=floppy}
-# show non-printing bytes in filenames with inverse video hex or ctrl codes
-: ${EXPOSE:=1}
-# 0 casual / normal filename display
-# 1 shows <32 as n+64 ctrl chars, >126 as "+"
-# 2 shows all bytes <32 >126 as hex pairs
 
-# make lcmd_dirent() get the real file sizes from the FCB
-# The file length provided by dirent() is garbage, but the FCB has the
-# correct size. Works great, but only on real drives. Manual toggle: "ffs".
+# File names can contain non-printing bytes.
+# EXPOSE exposes non-printing bytes in filenames as inverse video ctrl codes or hex.
+# This can be changed at run-time with the "expose" command.
+# 0 casual / normal filename display, non-printing bytes are not printed.
+# 1 shows <32 as n+64, >126 as "+", inverse video (ex: inverse video "@" = ^@ = 0x00)
+# 2 shows all bytes <32 >126 as hex pairs in inverse video
+: ${EXPOSE:=1}
+
+# Real drives give slightly wrong file sizes in their dirent() output.
+# Unknown why, perhaps not counting ^Ms or ^Zs?
+# But the correct file sizes are available on the disk in the FCB table.
+# USE_FCB makes lcmd_dirent() use sector-access commands to read the FCB
+# table and display those file-size values in directory listings.
+# Works great, *but only on real drives*.
+# TPDD emulators aren't really disks, and don't have any FCB sector.
+# However, TPDD emulators give correct file sizes in their dirent() output,
+# and so there is no need to try to read the FCBs in that case.
+# This can be changed at run-time with the "ffs" command.
 : ${USE_FCB:=false} # true|false
 
 # Default rs232 tty device name, with platform differences
@@ -70,10 +86,11 @@ STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port,
-# wait this long (in ms) for a byte to appear before giving up.
+# wait up to this long (in ms) for a byte to appear before giving up.
 # This is not the TPDD read command to read a block of 128 bytes of file
 # data, this is converted from ms to seconds and used with "read -t".
 # It applies to all reads from the drive tty by any command.
+# It's long because the drive can go to sleep and wakes up slowly.
 TTY_READ_TIMEOUT_MS=5000
 
 # Default timout and polling period in tpdd_wait().
@@ -133,9 +150,9 @@ PDD2_IMG_EXT=pdd2
 ###############################################################################
 # operating modes
 typeset -ra mode=(
-	[0]=fdc		# operate a TPDD1 drive in "FDC mode"
-	[1]=opr		# operate a TPDD1 drive "operation mode"
-	[2]=pdd2	# operate a TPDD2 drive ("operation mode" with more commands)
+	[0]=fdc		# operate a TPDD1 drive, in "FDC mode"
+	[1]=opr		# operate a TPDD1 drive, in "Operation mode"
+	[2]=pdd2	# operate a TPDD2 drive
 	[3]=loader	# send an ascii BASIC file and BASIC_EOF out the serial port
 	[4]=server	# vaporware
 )
@@ -524,6 +541,7 @@ spin () {
 
 # scan global $g_x for non-printing bytes
 # and replace them with a displayable rendition
+# hard-coded ansi/vt codes because I don't want to add dependencies or externals
 expose_bytes () {
 	local -i i n ;local t x=
 	for ((i=0;i<${#g_x};i++)) {
@@ -606,7 +624,7 @@ close_com () {
 # write $* hex pairs to com port as binary
 tpdd_write () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	test_com || { err_msg+=("$PORT closed") ;return 1 ; }
+	test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	local x=" $*"
 	printf '%b' "${x// /\\x}" >&3
 }
@@ -615,27 +633,30 @@ tpdd_write () {
 # store each byte as a hex pair in global rhex[]
 #
 # We need to read binary data from the drive. The special problem with handling
-# binary data in shell is that it's not possible to store or retrieve null/0x00
-# bytes in a shell variable. All other values can be handled no problem.
+# binary data in shell is that it's not possible to store or retrieve a 0x00
+# byte in a shell variable. All other byte values can be handled with the right care.
 #
-# But we can *detect* null bytes and we can store the knowledge of them instead.
+# But we can *detect* 0x00 bytes on input and store the knowledge of them,
+# and we can emit them so we can re-create them on output later.
 #
-# LANG=C IFS= read -r -d $'\0' gets us all bytes except 0x00.
+# For reference, this will read and store all bytes except 0x00
+# LANG=C IFS= read -r -d $'\0'
 #
-# To get the 0x00's what we do here is tell read() to treat null as the
-# delimiter, then read one byte at a time for the expected number of bytes (in
-# the case of TPDD, we always know the expected number of bytes, but we could
-# also read until end of data). For each read, the variable holding the data
-# will be empty if we read a 0x00 byte, or if there was no data. For each byte
-# that comes back empty, look at the return value from read() to tell whether
-# the drive sent a 0x00 byte, or if the drive didn't send anything.
+# To get the 0x00s what we do here is tell read() to treat 0x00 as the delimiter,
+# then read one byte at a time for the expected number of bytes.
+# (In the case of TPDD we always know the expected number of bytes, but we could
+# also just read until end of data.) After each read, the variable holding the
+# data will be empty if we read a 0x00 byte or if there was no data at all.
+# For each byte that comes back empty, the return value from read() tells the
+# difference between whether the drive sent a 0x00 byte, or didn't send anything.
 #
 # Thanks to Andrew Ayers in the M100 group on Facebook for help finding the key trick.
 #
-# return value from "read" is crucial to distiguish between a timeout and a null byte
-# $?=0 = we read a non-null byte normally, $x contains a byte
-#    1 = we read a null byte, $x is empty because we ate the null as a delimiter
-# >128 = we timed out, $x is empty because there was no data, not even a null
+# return value from read() is the key to distiguish between null and timeout
+#     0 = received a non-null byte, $x contains a byte
+#     1 = received a null byte, $x is empty because read() ate the null as a delimiter
+# 2-128 = read error, $x is empty because there was no data, not even a null
+#  >128 = timed out, $x is empty because there was no data, not even a null
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local -i i l=$1 ;local x ;rhex=() read_err=0
@@ -694,7 +715,7 @@ tpdd_check () {
 # return once the drive starts sending data
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	test_com || { err_msg+=("$PORT closed") ;return 1 ; }
+	test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	local d=(: spin pbar) s
 	local -i i=-1 n p=$TPDD_WAIT_PERIOD_MS t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
 	ms_to_s $p ;s=$_s
@@ -713,7 +734,7 @@ tpdd_wait () {
 }
 
 tpdd_wait_s () {
-	test_com || { err_msg+=("$PORT closed") ;return 1 ; }
+	test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	until tpdd_check ;do _sleep 0.1 ;done
 }
 
@@ -944,7 +965,7 @@ ocmd_ready () {
 	ocmd_check_err || return $?
 }
 
-# Operation-Mode Format Disk
+# Operation-Mode Format Disk / also TPDD2 Format Disk
 #request: 5A 5A 06 00 ##
 #return : 12 01 ?? ##
 # Operation-mode format is essentially "mkfs". It creates a filesystem disk.
@@ -1076,27 +1097,33 @@ ocmd_write () {
 #
 # fdc-mode transaction format reference
 #
-# send: C [ ] [P[,P]...] CR
+# send: C [ ] [P[,P]] CR
 #
 # C = command letter, ascii letter
-# optional space between command letter and first parameter
-# P = parameter (if any), integer decimal value in ascii numbers
-# ,p = more parameters if any, seperated by commas, ascii decimal numbers
+# [ ] = optional space between command letter and first parameter
+# P = 0, 1, or 2 parameters, integer decimal value in ascii, comma-seperated
 # CR = carriage return
 #
-# recv: 8 bytes as 4 ascii hex pairs representing 4 byte values
+# recv: 8 bytes as 4 ascii hex pairs representing 3 integer values
 #
-#  1st pair is the error status
-#  remaining pairs meaning depends on the command
+#  1st pair is a uint_8 status/error code   ex: 0x30 0x30 = "00" = 0x00 = 0 = success
+#  2nd pair is a uint_8 result/answer data  ex: 0x32 0x44 = "2C" = 0x2C = 45
+#  3rd and 4th pairs are a single big-endian uint_16 length/size or offset/address
+#    ex: 0x30 0x30 0x34 ox30 = "0040" = 0x0040 = 64
 #
-# Some fdc commands have another send-and-receive after that.
+#  The meaning of the data and length fields depends on the command.
+#  For example for the search_id command,
+#    dat=45 means match found at physical sector number 45
+#    len=64 means the disk is formatted with 64-byte logical sector size
+#
+# Some fdc commands have more send-and-receive after that.
 # Receive the first response, if the status is not error, then:
 #
-# send: the data for a sector write
+# send: data (such as for a sector write or ID write)
 # recv: another standard 8-byte response as above
 # or
-# send: single carriage-return
-# recv: data from a sector read
+# send: single carriage-return (telling the drive you are ready to receive)
+# recv: data (such as from a sector read or ID read)
 
 ###############################################################################
 # "FDC Mode" support functions
@@ -1115,9 +1142,9 @@ fcmd_read_ret () {
 	vecho 2 "$z: $x"
 
 	# decode the 8 bytes as
-	fdc_err=0x${x:0:2} # hex pair    uint8  error code
-	fdc_dat=0x${x:2:2} # hex pair    uint8  result data
-	fdc_len=0x${x:4:4} # 2 hex pairs uint16 length or offset
+	fdc_err=0x${x:0:2} # hex pair    uint_8  error/status code
+	fdc_dat=0x${x:2:2} # hex pair    uint_8  result/answer data
+	fdc_len=0x${x:4:4} # 2 hex pairs uint_16 length or offset
 
 	# look up the status/error message for fdc_err
 	x= ;[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
@@ -1189,25 +1216,25 @@ fcmd_format () {
 # and the trailing 2 crc bytes, since they don't exist outside of the drive.
 # A client can neither read nore write them.
 #
-# The LSC byte is readable, but not individually writable. The only control a client
-# has over the LSC byte is the LSC parameter to the FDC_format command, which writes
-# the specified size code on all tracks.
+# The LSC byte is readable, but not individually or arbitrarily writable.
+# The only control a client has over the LSC byte is the LSC parameter to
+# FDC_format, which writes the specified size code to all physical sectors.
 # 
 # Other than that, only the 12 byte reserve section is readable/writable by the user.
 # The read_id/write_id/search_id functions operate only on that field.
 #
 # The ID data can be anything.
 #
-# The drive's built-in filesystem uses only the first byte:
+# The drive's built-in filesystem (aka Operation-mode) uses only the first byte:
 #   00 = current sector is not used by a file
 #   ## = sector number of next sector in current file
 #   FF = current sector is the last sector in current file
 
 # Search for sector ID matching $*
-# si <0 to 12 hex pairs of ID data>
+# si <up to 12 hex pairs of ID data>
 #
 # github.com/bkw777/dlplus/blob/master/ref/search_id_section.txt
-# Drive requires exactly 12 bytes of data, below right-pads with 0x00
+# Drive requires exactly 12 bytes of data. This right-pads with 0x00
 # and truncates to 12 bytes as necessary. So you may ex:
 # "si 04" and it will search for "04 00 00 00 00 00 00 00 00 00 00 00"
 fcmd_search_id () {
@@ -1675,7 +1702,7 @@ read_fcb () {
 	} || {
 		quiet=true pdd1_read_sector 0 || return $?
 	}
-	# split out the 40 FCBS
+	# split out the 40 FCBs
 	for ((n=0;n<PDD_FCBS;n++)) {
 		#vecho 3 "FCB $n : ${rhex[*]:i:FCB_LEN}"
 		fcb_fname[n]="${rhex[*]:i:PDD_FNAME_LEN}" ;((i+=PDD_FNAME_LEN)) ;printf -v fcb_fname[n] '%b' "\x${fcb_fname[n]// /\\x}"
