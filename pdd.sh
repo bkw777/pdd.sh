@@ -2286,7 +2286,7 @@ pdd2_boot () {
 
 do_cmd () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i _i _e _det=256 ;local _a=$@ _c ifs=$IFS
+	local -i _i _e _det=256 ;local _a=$@ _c x ifs=$IFS
 	local IFS=';' ;_a=(${_a}) ;IFS=$ifs quiet=false
 	for ((_i=0;_i<${#_a[@]};_i++)) {
 		eval set ${_a[_i]}
@@ -2312,9 +2312,14 @@ do_cmd () {
 			com_show) lcmd_com_show ;_e=$? ;; # check if port open
 			com_open) lcmd_com_open ;_e=$? ;; # open the port
 			com_close) lcmd_com_close ;_e=$? ;; # close the port
+			com_read) (($#)) && x=tpdd_read || x=tpdd_read_unknown ;$x $* ;_e=$? ;; # read bytes from port
+			com_write) (($#)) && tpdd_write $* ;_e=$? ;; # write bytes to port
+			read_fdc_ret) fcmd_read_ret $* ;_e=$? ;; # read an fdc-mode return msg
+			read_opr_ret) ocmd_read_ret $* ;_e=$? ;; # read an opr-mode return msg
+			send_opr_req) ocmd_send_req $* ;_e=$? ;; # send an opr-mode request msg
+			check_opr_err) ocmd_check_err ;_e=$? ;;  # check ret_dat[] for an opr-mode error code
 			sync|drain) tpdd_drain ;_e=$? ;;
 			sum|checksum) calc_cksum $* ;_e=$? ;;
-			ocmd_check_err) ocmd_check_err ;_e=$? ;;
 			boot|bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
 			debug|verbose|v) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;echo "Verbose level: $v" ;_e=0 ;;
