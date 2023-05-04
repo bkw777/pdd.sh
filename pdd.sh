@@ -62,6 +62,7 @@ typeset -i v=${DEBUG:-0}
 # TPDD emulators aren't really disks, and don't have any FCB sector.
 # However, TPDD emulators give correct file sizes in their dirent() output,
 # and so there is no need to try to read the FCBs in that case.
+# This adds a few seconds to each directory listing.
 # This can be changed at run-time with the "ffs" command.
 : ${USE_FCB:=false} # true|false
 
@@ -640,7 +641,7 @@ tpdd_write () {
 # and we can emit them so we can re-create them on output later.
 #
 # For reference, this will read and store all bytes except 0x00
-# LANG=C IFS= read -r -d $'\0'
+# LANG=C IFS= read -r -d ''
 #
 # To get the 0x00s what we do here is tell read() to treat 0x00 as the delimiter,
 # then read one byte at a time for the expected number of bytes.
@@ -660,9 +661,9 @@ tpdd_write () {
 tpdd_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local -i i l=$1 ;local x ;rhex=() read_err=0
+	((l<1)) && return 1
 	tpdd_wait $2 $3 || return $?
 	vecho 2 -n "$z: l=$l "
-	l=${1:-$SECTOR_DATA_LEN}
 	for ((i=0;i<l;i++)) {
 		tpdd_wait # yes really, before each read, even one byte
 		x=
@@ -671,7 +672,7 @@ tpdd_read () {
 		((read_err)) && break
 		printf -v rhex[i] '%02X' "'$x"
 	}
-	((read_err>1)) && err_msg+=("tty read err:$read_err")
+	((read_err)) && err_msg+=("tty read err:$read_err")
 	vecho 2 "${rhex[*]}"
 	((${#rhex[*]}==l))
 }
