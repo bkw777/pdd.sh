@@ -86,7 +86,7 @@ STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 
 # tty read timeout in ms
 # When issuing the "read" command to read bytes from the serial port,
-# wait up to this long (in ms) for a byte to appear before giving up.
+# wait up to this long (in ms) for the first byte to appear before giving up.
 # This is not the TPDD read command to read a block of 128 bytes of file
 # data, this is converted from ms to seconds and used with "read -t".
 # It applies to all reads from the drive tty by any command.
@@ -179,9 +179,9 @@ typeset -rA opr_fmt=(
 	[req_pdd2_rename]='0D'	# TPDD2
 	[req_unk0E]='0E'	# TPDD2
 	[req_unk0F]='0F'	# TPDD2
-	[req_pdd2_unk10]='10'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_sector_std: ERR_PARAM)
+	[req_pdd2_unk10]='10'	# TPDD2 unk, r: 38 01 36 (90)  (ret_cache_std: ERR_PARAM)
 	[req_pdd2_unk11]='11'	# TPDD2 unk, r: 3A 06 80 13 05 00 10 E1 (36)
-	[req_pdd2_unk12]='12'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_sector_std: ERR_PARAM)
+	[req_pdd2_unk12]='12'	# TPDD2 unk, r: 38 01 36 (90)  (ret_cache_std: ERR_PARAM)
 #	[req_pdd2_unk13]='13'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
 #	[req_pdd2_unk14]='14'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
 #	[req_pdd2_unk15]='15'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
