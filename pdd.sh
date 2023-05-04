@@ -109,7 +109,7 @@ TPDD_WAIT_PERIOD_MS=100
 FORMAT_WAIT_MS=105000       # ocmd_format takes just under 100 seconds
 FORMAT_TPDD2_EXTRA_WAIT_MS=10000 # tpdd2 uses the same command but takes longer
 DELETE_WAIT_MS=30000        # ocmd_delete takes 3 to 20 seconds
-RENAME_WAIT_MS=10000        # ocmd_pdd2_rename
+RENAME_WAIT_MS=10000        # pdd2_rename
 OPEN_WAIT_MS=5000           # ocmd_open
 CLOSE_WAIT_MS=20000         # ocmd_close
 DIRENT_WAIT_MS=10000        # ocmd_dirent
@@ -574,7 +574,7 @@ _init () {
 	vecho 2 "${FUNCNAME[0]}($@)"
 	$did_init && return
 	${FONZIE_SMACK} && fonzie_smack
-	${MODEL_DETECTION} && ocmd_pdd2_unk23
+	${MODEL_DETECTION} && pdd2_unk23
 	did_init=true MODEL_DETECTION=false FONZIE_SMACK=false
 	$pdd2 && {
 			trap '' EXIT
@@ -936,7 +936,7 @@ ocmd_dirent () {
 # TPDD2 gives this response. TPDD1 does not respond.
 # request: 5A 5A 23 00 DC
 # return : 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 2A
-ocmd_pdd2_unk23 () {
+pdd2_unk23 () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	# don't do the normal operation_mode/pdd2 checks, since this is itself
 	# one of the ways we figure that out in the first place
@@ -1039,7 +1039,7 @@ ocmd_delete () {
 # $1 = destination filename
 # request: 5A 5A 0D 1C ##  (0-24 filename, 25 attr)
 # return : 12 01 ?? ##
-ocmd_pdd2_rename () {
+pdd2_rename () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 || { err_msg+=("$z Requires TPDD2") ;return 1 ; }
 	local f="$1" a="$2" r=${opr_fmt[req_pdd2_rename]}
@@ -1225,7 +1225,8 @@ fcmd_format () {
 #
 # The ID data can be anything.
 #
-# The drive's built-in filesystem (aka Operation-mode) uses only the first byte:
+# On a normal filesystem disk (rather than a raw data disk like the Sardine
+# dictionary), the drives built-in filesystem uses this field for one byte:
 #   00 = current sector is not used by a file
 #   ## = sector number of next sector in current file
 #   FF = current sector is the last sector in current file
@@ -2066,7 +2067,7 @@ lcmd_mv () {
 	$pdd2 && { # TPDD2 has a rename function
 		echo "Moving TPDD$bd: $sn ($sa) -> $dn ($da)"
 		ocmd_dirent "$sn" "$sa" ${dirent_cmd[set_name]} || return $?
-		ocmd_pdd2_rename "$dn" "$da" ;return $?
+		pdd2_rename "$dn" "$da" ;return $?
 	} # TPDD1 requires load>rm>save, or edit the FCB
 	lcmd_load "$sn" '' "$sa" r && lcmd_rm "$sn" "$sa" && lcmd_save '' "$dn" "$da"
 }
@@ -2319,7 +2320,7 @@ do_cmd () {
 			debug|verbose|v) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;echo "Verbose level: $v" ;_e=0 ;;
 			ffs|use_fcb|fcb_filesizes) set_fcb_filesizes $1 ;_e=0 ;;
 			expose) set_expose $1 ;_e=0 ;;
-			model|detect|detect_model) ocmd_pdd2_unk23 ;_e=$? ;;
+			model|detect|detect_model) pdd2_unk23 ;_e=$? ;;
 			q|quit|bye|exit) exit ;;
 			'') _e=0 ;;
 		esac
