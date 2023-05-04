@@ -1107,7 +1107,7 @@ ocmd_write () {
 fcmd_read_ret () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
-	local -i i ;local x ;fdc_err= fdc_res= fdc_len=
+	local -i i ;local x ;fdc_err= fdc_dat= fdc_len=
 
 	# read 8 bytes & reconstitute the hex pairs back to the original bytes
 	tpdd_read 8 $* || return $?
@@ -1116,14 +1116,14 @@ fcmd_read_ret () {
 
 	# decode the 8 bytes as
 	fdc_err=0x${x:0:2} # hex pair    uint8  error code
-	fdc_res=0x${x:2:2} # hex pair    uint8  result data
+	fdc_dat=0x${x:2:2} # hex pair    uint8  result data
 	fdc_len=0x${x:4:4} # 2 hex pairs uint16 length or offset
 
 	# look up the status/error message for fdc_err
 	x= ;[[ "${fdc_msg[fdc_err]}" ]] && x="${fdc_msg[fdc_err]}"
 	((fdc_err)) && err_msg+=("${x:-ERROR:${fdc_err}}")
 
-	vecho 2 "$z: err:$fdc_err=\"${fdc_msg[fdc_err]}\" res:$fdc_res len:$fdc_len"
+	vecho 2 "$z: err:$fdc_err=\"${fdc_msg[fdc_err]}\" dat:$fdc_dat len:$fdc_len"
 }
 
 ###############################################################################
@@ -1154,11 +1154,11 @@ fcmd_ready () {
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret $READY_WAIT_MS || return $?
 	((fdc_err)) && return $fdc_err
-	$quiet && { ((fdc_res&0x20)) && err_msg+=('[WP]') || err_msg+=('    ') ;return 0; }
-	((fdc_res&0x40)) && fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-	local -i b ;((fdc_res)) && { # bit flags
-		for b in ${!fdc_cond[@]} ;do ((fdc_res&b)) && echo "${fdc_cond[b]}" ;done ;:
-	} || echo "${fdc_cond[fdc_res]}"
+	$quiet && { ((fdc_dat&0x20)) && err_msg+=('[WP]') || err_msg+=('    ') ;return 0; }
+	((fdc_dat&0x40)) && fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
+	local -i b ;((fdc_dat)) && { # bit flags
+		for b in ${!fdc_cond[@]} ;do ((fdc_dat&b)) && echo "${fdc_cond[b]}" ;done ;:
+	} || echo "${fdc_cond[fdc_dat]}"
 }
 
 # FDC-mode format disk
@@ -1179,7 +1179,7 @@ fcmd_format () {
 	str_to_shex ${fdc_cmd[format]}$s
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret $FORMAT_WAIT_MS 2 || return $?
-	((fdc_err)) && err_msg+=(", Sector:$fdc_res")
+	((fdc_err)) && err_msg+=(", Sector:$fdc_dat")
 	return $fdc_err
 }
 
@@ -1215,17 +1215,17 @@ fcmd_search_id () {
 	((operation_mode==0)) || ocmd_fdc || return 1
 	str_to_shex "${fdc_cmd[search_id]}"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
+	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	local a=($*) ;while ((${#a[*]}<PDD1_ID_LEN)) do a+=("00") ;done
 	tpdd_write ${a[*]:0:PDD1_ID_LEN} || return $?
-	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
+	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	# $fdc_err = success/fail status code
-	# $fdc_res = physical sector number 0-79 if found, 255 if not found
+	# $fdc_dat = physical sector number 0-79 if found, 255 if not found
 	# $fdc_len = logical sector size of the indicated physical sector
 	((fdc_err==60)) && return $fdc_err
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res} len:${fdc_len}") ;return $fdc_err ; }
-	$quiet || echo "ID found at sector $fdc_res"
+	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat} len:${fdc_len}") ;return $fdc_err ; }
+	$quiet || echo "ID found at sector $fdc_dat"
 }
 
 # Read sector ID section
@@ -1241,8 +1241,8 @@ pdd1_read_id () {
 	for i in $* ;do
 		str_to_shex "${fdc_cmd[read_id]}$i"
 		tpdd_write ${shex[*]} 0D || return $?
-		fcmd_read_ret $RI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
-		((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
+		fcmd_read_ret $RI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+		((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 		tpdd_write 0D || return $?
 		while _sleep 0.1 ;do tpdd_check && break ;done # sleep at least once
 		tpdd_read $PDD1_ID_LEN || return $?
@@ -1265,9 +1265,9 @@ fcmd_read_logical () {
 	local -i ps=$1 ls=${2:-1} || return $? ;local x
 	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $RL_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
-	((fdc_res==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
+	fcmd_read_ret $RL_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
+	((fdc_dat==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0D || return $?
 	# tpdd_check() will say there is data available immediately, but if you
 	# read too soon the data will be corrupt or incomplete. Take 2/3 of the
@@ -1308,12 +1308,12 @@ fcmd_write_id () {
 	local -i p=$((10#$1)) ;shift
 	str_to_shex "${fdc_cmd[write_id]}$p"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
+	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	local a=($*) ;while ((${#a[*]}<PDD1_ID_LEN)) do a+=("00") ;done
 	tpdd_write ${a[*]:0:PDD1_ID_LEN} || return $?
-	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
+	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	:
 }
 
@@ -1330,11 +1330,11 @@ fcmd_write_logical () {
 	local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 2
 	str_to_shex "${fdc_cmd[write_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $WL_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
+	fcmd_read_ret $WL_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	tpdd_write $* || return $?
-	fcmd_read_ret $WL_WAIT_MS || { err_msg+=("err:$? res:${fdc_res}") ;return $? ; }
-	((fdc_err)) && { err_msg+=("err:$fdc_err res:${fdc_res}") ;return $fdc_err ; }
+	fcmd_read_ret $WL_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	:
 }
 
@@ -2383,7 +2383,7 @@ do_cmd () {
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-typeset -i _y= bank= operation_mode=1 read_err= fdc_err= fdc_res= fdc_len= _om=99 FNL # allow FEL to be unset or ''
+typeset -i _y= bank= operation_mode=1 read_err= fdc_err= fdc_dat= fdc_len= _om=99 FNL # allow FEL to be unset or ''
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= pdd2=false bd= did_init=false quiet=false ffs=$USE_FCB g_x=
 readonly LANG=C
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
