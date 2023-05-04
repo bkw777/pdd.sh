@@ -91,40 +91,32 @@ STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 # This is not the TPDD read command to read a block of 128 bytes of file
 # data, this is converted from ms to seconds and used with "read -t".
 # It applies to all reads from the drive tty by any command.
-# It's long because the drive can go to sleep and wakes up slowly.
+# It's long because the drive can require time to wake from idle.
 TTY_READ_TIMEOUT_MS=5000
 
-# Default timout and polling period in tpdd_wait().
-# Almost all commands have a timeout allowance for reading the result after
-# issuing a command. tpdd_wait() polls the tty to see if data is available
-# without consuming any, until either data arrives, or the timeout expires.
-# These are the polling period, and the default timeout if not supplied.
-TPDD_WAIT_TIMEOUT_MS=100
-TPDD_WAIT_PERIOD_MS=100
+# Polling period and default timout in tpdd_wait().
+# tpdd_wait() polls the tty for data without consuming any,
+# until either data is available, or the timeout expires.
+TPDD_WAIT_PERIOD_MS=100     # polling interval
+TPDD_WAIT_TIMEOUT_MS=5000   # default timeout when not specified
 
-# Timouts for various commands - unfortunately necessary
+# Timouts for various commands
+# For most commands we need to know some reasonable time to wait for
+# a response from the drive before giving up. For most operations
+# about 5 seconds is enough, and even allows for the drive to wake from idle.
+# That default 5 seconds is provided by TPDD_WAIT_TIMEOUT_MS above.
+# Some commands require a lot more time, and some require a variable
+# amount of time depending on the data or the work being requested.
+# Below are operations that need more than the default TPDD_WAIT_TIMEOUT_MS.
 # If you get timouts on some command, increase the relevant value by
-# 1000 until you stop getting timeouts. Most of the commands with 5
-# seconds (5000) below usually respond much sooner, but any command
-# might also take a long time to respond when the drive has been idle.
+# 1000 until you stop getting timeouts.
 FORMAT1_WAIT_MS=105000      # ocmd_format tpdd1
 FORMAT2_WAIT_MS=115000      # ocmd_format tpdd2
-DELETE_WAIT_MS=30000        # ocmd_delete takes 3 to 20 seconds
+DELETE_WAIT_MS=25000        # ocmd_delete
 RENAME_WAIT_MS=10000        # pdd2_rename
-OPEN_WAIT_MS=5000           # ocmd_open
 CLOSE_WAIT_MS=20000         # ocmd_close
 DIRENT_WAIT_MS=10000        # ocmd_dirent
-READ_WAIT_MS=5000           # ocmd_read
-WRITE_WAIT_MS=5000          # ocmd_write
-READY_WAIT_MS=5000          # ocmd_ready, fcmd_ready, pdd2_ready
-RI_WAIT_MS=5000             # pdd1_read_id
-RL_WAIT_MS=5000             # fcmd_read_logical
-WI_WAIT_MS=5000             # fcmd_write_id
-SI_WAIT_MS=30000            # fcmd_search_id
-WL_WAIT_MS=5000             # fcmd_write_logical
-SC_WAIT_MS=5000             # pdd2_cache_load
-WC_WAIT_MS=5000             # pdd2_cache_write
-RC_WAIT_MS=5000             # pdd2_cache_read
+SEARCHID_WAIT_MS=25000      # fcmd_search_id
 
 # TS-DOS "mystery" command - TPDD2 detection
 # real TPDD2 responds with this immediately
@@ -962,7 +954,7 @@ ocmd_ready () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1 || return 1
 	ocmd_send_req ${opr_fmt[req_status]} || return $?
-	ocmd_read_ret $READY_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	ocmd_check_err || return $?
 }
 
@@ -1006,7 +998,7 @@ ocmd_open () {
 	local r=${opr_fmt[req_open]} m ;printf -v m '%02X' $1
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r $m || return $?	# open the file
-	ocmd_read_ret $OPEN_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
@@ -1063,7 +1055,7 @@ ocmd_read () {
 	local r=${opr_fmt[req_read]}
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r || return $?
-	ocmd_read_ret $READ_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
 	# check if the response was an error
@@ -1088,7 +1080,7 @@ ocmd_write () {
 	local r=${opr_fmt[req_write]}
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r $* || return $?
-	ocmd_read_ret $WRITE_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
@@ -1180,7 +1172,7 @@ fcmd_ready () {
 	((operation_mode==0)) || ocmd_fdc || return 1
 	str_to_shex "${fdc_cmd[condition]}"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $READY_WAIT_MS || return $?
+	fcmd_read_ret || return $?
 	((fdc_err)) && return $fdc_err
 	$quiet && { ((fdc_dat&0x20)) && err_msg+=('[WP]') || err_msg+=('    ') ;return 0; }
 	((fdc_dat&0x40)) && fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
@@ -1244,11 +1236,11 @@ fcmd_search_id () {
 	((operation_mode==0)) || ocmd_fdc || return 1
 	str_to_shex "${fdc_cmd[search_id]}"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	local a=($*) ;while ((${#a[*]}<PDD1_ID_LEN)) do a+=("00") ;done
 	tpdd_write ${a[*]:0:PDD1_ID_LEN} || return $?
-	fcmd_read_ret $SI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	fcmd_read_ret $SEARCHID_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	# $fdc_err = success/fail status code
 	# $fdc_dat = physical sector number 0-79 if found, 255 if not found
 	# $fdc_len = logical sector size of the indicated physical sector
@@ -1270,7 +1262,7 @@ pdd1_read_id () {
 	for i in $* ;do
 		str_to_shex "${fdc_cmd[read_id]}$i"
 		tpdd_write ${shex[*]} 0D || return $?
-		fcmd_read_ret $RI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+		fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 		((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 		tpdd_write 0D || return $?
 		while _sleep 0.1 ;do tpdd_check && break ;done # sleep at least once
@@ -1294,7 +1286,7 @@ fcmd_read_logical () {
 	local -i ps=$1 ls=${2:-1} || return $? ;local x
 	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $RL_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	((fdc_dat==ps)) || { err_msg+=("Unexpected Physical Sector \"$ps\" Returned") ;return 1 ; }
 	tpdd_write 0D || return $?
@@ -1337,11 +1329,11 @@ fcmd_write_id () {
 	local -i p=$((10#$1)) ;shift
 	str_to_shex "${fdc_cmd[write_id]}$p"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	local a=($*) ;while ((${#a[*]}<PDD1_ID_LEN)) do a+=("00") ;done
 	tpdd_write ${a[*]:0:PDD1_ID_LEN} || return $?
-	fcmd_read_ret $WI_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	:
 }
@@ -1359,10 +1351,10 @@ fcmd_write_logical () {
 	local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 2
 	str_to_shex "${fdc_cmd[write_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $WL_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	tpdd_write $* || return $?
-	fcmd_read_ret $WL_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
+	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
 	:
 }
@@ -1469,7 +1461,7 @@ pdd2_ready () {
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
 	local -i i b
 	ocmd_send_req ${opr_fmt[req_condition]} || return $?
-	ocmd_read_ret $READY_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	i=0x${ret_dat[0]}
 	$quiet && { err_msg=() ;((i&0x02)) && err_msg+=('[WP]') || err_msg+=('    ') ;return 0; }
 	((1&0x08)) && fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
@@ -1496,7 +1488,7 @@ pdd2_cache_load () {
 	printf -v x '%02X 00 %02X 00 %02X' $a $t $s
 
 	ocmd_send_req ${opr_fmt[req_cache_load]} $x || return $?
-	ocmd_read_ret $SC_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	ocmd_check_err ;e=$?
 	(($3==0)) && ((e==0x50)) && e= err_msg=() # if not writing, don't treat write-protected disk as error
 	return $e
@@ -1515,7 +1507,7 @@ pdd2_cache_read () {
 	# 00-FC      length
 	printf -v x '%02X %02X %02X %02X' $1 $((($2>>8)&0xFF)) $(($2&0xFF)) $3
 	ocmd_send_req ${opr_fmt[req_cache_read]} $x || return $?
-	ocmd_read_ret $RC_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	#ocmd_check_err || return $? # needs to be taught about ret_cache_std
 
 	# returned data:
@@ -1534,7 +1526,7 @@ pdd2_cache_write () {
 	$pdd2 || { err_msg+=("$z requires TPDD2") ;return 1 ; }
 	printf -v x '%02X %02X %02X' $1 $((($2>>8)&0xFF)) $(($2&0xFF)) ;shift 2
 	ocmd_send_req ${opr_fmt[req_cache_write]} $x $* || return $?
-	ocmd_read_ret $WC_WAIT_MS || return $?
+	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
