@@ -20,7 +20,8 @@
 # Use "TS-DOS mystery command" to automatically detect TPDD1 vs TPDD2
 : ${MODEL_DETECTION:=true}
 
-# Do an opr>fdc>opr sequence to joggle the drive into a known state in _init()
+# Try to joggle the drive from an unknown to a known state in _init()
+# by doing an opr>fdc>opr sequence similar to TS-DOS.
 : ${FONZIE_SMACK:=true}
 
 # verbose/debug
@@ -32,13 +33,13 @@ case "$DEBUG" in
 esac
 typeset -i v=${DEBUG:-0}
 
-# COMPAT sets default behavior for disk vs local filename conversions and
-# the attribute byte. Example, in "floppy" compat mode, local filenames are
-# converted to the special fix-length 6.2 space-padded format expected by
-# "Floppy" and all other KC-85-clone TPDD clients (TS-DOS, DSKMGR, TEENY, etc)
-# example: FOO.BA is saved from local to disk as
-# "FOO   .BA               " with attribute "F",
-# and loaded from disk to local as "FOO.BA"
+# COMPAT sets the default behavior for translating filenames between the
+# on-disk format and the local filesystem format, and the attribute byte.
+# Example, in "floppy" compat mode, local filenames are converted to & from the
+# special fixed-length 6.2 space-padded format written and expected by Floppy
+# and all other KC-85-clone TPDD clients like TS-DOS & TEENY etc.
+# Example: local "FOO.BA" is saved on disk as "FOO   .BA               "
+# with attribute "F", and loaded from disk to local as "FOO.BA"
 # This can be changed at run-time with the "compat", "raw", "wp2", "floppy" commands.
 # floppy : 6.2 space-padded names with attribute 'F' - TRS-80 Model 100 & clones
 # wp2    : 8.2 space-padded names with attribute 'F' - TANDY WP-2
@@ -49,7 +50,7 @@ typeset -i v=${DEBUG:-0}
 # EXPOSE exposes non-printing bytes in filenames as inverse video ctrl codes or hex.
 # This can be changed at run-time with the "expose" command.
 # 0 casual / normal filename display, non-printing bytes are not printed.
-# 1 shows <32 as n+64, >126 as "+", inverse video (ex: inverse video "@" = ^@ = 0x00)
+# 1 shows <32 as n+64, >126 as ".", inverse video (ex: inverse video "@" = ^@ = 0x00)
 # 2 shows all bytes <32 >126 as hex pairs in inverse video
 : ${EXPOSE:=1}
 
@@ -62,9 +63,24 @@ typeset -i v=${DEBUG:-0}
 # TPDD emulators aren't really disks, and don't have any FCB sector.
 # However, TPDD emulators give correct file sizes in their dirent() output,
 # and so there is no need to try to read the FCBs in that case.
-# This adds a few seconds to each directory listing.
+# This also adds a few seconds to each directory listing.
 # This can be changed at run-time with the "ffs" command.
+# Default is off because it only works on real drives and it's slower.
 : ${USE_FCB:=false} # true|false
+
+# TPDD1 drives have two versions of each of the FDC-mode commands that write to disk:
+# FDC Format, Write Sector, Write ID
+# For each of those there is a normal version and a "no-verify" version.
+# WITH_VERIFY sets which version of those commands should be used by local
+# higher level wrapper commands like restore-disk which use those commands internally.
+# The no-verify commands are a little faster, but otherwise there is no reason to use
+# them. This is only provided for completeness because the drive has these commands,
+# and this client aims to provide access to all drive functions.
+# This can be changed at run-time with the "verify" command".
+: ${WITH_VERIFY:=true} # true|false
+
+# Assume "yes" for all confirmation prompts. For scripting.
+: ${YES:=false} # true|false
 
 # Default rs232 tty device name, with platform differences
 # The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
@@ -101,16 +117,18 @@ TPDD_WAIT_PERIOD_MS=100     # polling interval
 TPDD_WAIT_TIMEOUT_MS=5000   # default timeout when not specified
 
 # Timouts for various commands
-# For most commands we need to know some reasonable time to wait for
-# a response from the drive before giving up. For most operations
-# about 5 seconds is enough, and even allows for the drive to wake from idle.
-# That default 5 seconds is provided by TPDD_WAIT_TIMEOUT_MS above.
-# Some commands require a lot more time, and some require a variable
-# amount of time depending on the data or the work being requested.
-# Below are operations that need more than the default TPDD_WAIT_TIMEOUT_MS.
-# If you get timouts on some command, increase the relevant value by
-# 1000 until you stop getting timeouts.
-FORMAT1_WAIT_MS=105000      # ocmd_format tpdd1
+# For most commands we need to know some reasonable time to wait for a response
+# from the drive before giving up. For most operations about 5 seconds is enough,
+# and even allows for the drive to wake from idle. That default 5 seconds for
+# most things is provided by TPDD_WAIT_TIMEOUT_MS above. Some commands require a
+# lot more time, and some require a variable amount of time depending on the data
+# or the work being requested. Below are operations that need more than the
+# default. If you get timouts on some command, increase the relevant value by 1000
+# until you stop getting timeouts. Whatever the longest possible time a given
+# command normally takes, add 5000 to that to allow for the case where the drive
+# also has to wake from sleep first.
+FORMAT1_WAIT_MS=105000      # ocmd_format tpdd1 and fcmd_format
+FORMAT1NV_WAIT_MS=85000     # fcmd_format no-verify
 FORMAT2_WAIT_MS=115000      # ocmd_format tpdd2
 DELETE_WAIT_MS=25000        # ocmd_delete
 RENAME_WAIT_MS=10000        # pdd2_rename
@@ -455,6 +473,7 @@ _sleep () {
 }
 
 confirm  () {
+	$YES && return 0
 	local r=
 	read -p "${@}: Are you sure? (y/N) " r
 	[[ ":${r,,}" == ":y" ]]
@@ -547,7 +566,7 @@ expose_bytes () {
 				;;
 			*)
 				((n<32)) && { printf -v t "%02X" $((n+64)) ;printf -v t "\033[7m%b\033[m" "\x$t" ; }
-				((n>126)) && printf -v t "\033[7m+\033[m"
+				((n>126)) && printf -v t "\033[7m.\033[m"
 				;;
 		esac
 		x+="$t"
@@ -1193,12 +1212,14 @@ fcmd_ready () {
 fcmd_format () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
+	local c=format x= ;local -i w=$FORMAT1_WAIT_MS
+	$WITH_VERIFY || c+=_nv w=$FORMAT1NV_WAIT_MS x=", no verify"
 	typeset -i s=${1:-3}
-	echo "Formatting Disk, TPDD1 \"FDC\" mode, ${lsl[s]:-\"\"}-Byte Logical Sectors"
+	echo "Formatting Disk, TPDD1 \"FDC\" mode, ${lsl[s]:-\"\"}-Byte Logical Sectors$x"
 	confirm || return $?
-	str_to_shex ${fdc_cmd[format]}$s
+	str_to_shex ${fdc_cmd[$c]}$s
 	tpdd_write ${shex[*]} 0D || return $?
-	fcmd_read_ret $FORMAT1_WAIT_MS 2 || return $?
+	fcmd_read_ret $w 2 || return $?
 	((fdc_err)) && err_msg+=(", Sector:$fdc_dat")
 	return $fdc_err
 }
@@ -1254,7 +1275,7 @@ fcmd_search_id () {
 # P : zero or more physical sector numbers 0-79 as plain ascii decimal integer
 # default is sector 0 to mimic the drive's own behavior
 # "all" shows all sector ID's
-pdd1_read_id () {
+fcmd_read_id () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
 	case "$1" in '') set 0 ;; all) set {0..79} ;; esac
@@ -1327,7 +1348,8 @@ fcmd_write_id () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
 	local -i p=$((10#$1)) ;shift
-	str_to_shex "${fdc_cmd[write_id]}$p"
+	local c=write_id ;$WITH_VERIFY || c+=_nv
+	str_to_shex "${fdc_cmd[$c]}$p"
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
@@ -1349,7 +1371,8 @@ fcmd_write_logical () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
 	local -i ps=$((10#$1)) ls=$((10#$2)) ;shift 2
-	str_to_shex "${fdc_cmd[write_sector]}$ps,$ls"
+	local c=write_sector ;$WITH_VERIFY || c+=_nv
+	str_to_shex "${fdc_cmd[$c]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
@@ -1377,7 +1400,7 @@ pdd1_dump_disk () {
 		((${#f})) && pbar $((s+1)) $PDD1_SECTORS "L:-/$n"
 
 		# ID
-		pdd1_read_id $s || return $?
+		fcmd_read_id $s || return $?
 		((n=SECTOR_DATA_LEN/fdc_len))
 		((${#f})) && x+=" ${lsc[fdc_len]} ${rhex[*]}"
 
@@ -1538,7 +1561,7 @@ pdd2_flush_cache () {
 	pdd2_cache_load $1 $2 2 || return $?
 }
 
-# Similar to TPDD1 pdd1_read_id, but just 4 bytes and we don't know the meaning.
+# Similar to TPDD1 fcmd_read_id, but just 4 bytes and we don't know the meaning.
 # pdd2_read_meta [T,S|all] [T,S ...]
 # T = track  0-79
 # S = sector 0-1
@@ -1791,8 +1814,7 @@ srv_send_loader () {
 		} || pbar $((i+1)) $l 'bytes'
 	done
 
-	# Send trailing CR and/or Ctrl-Z, if the file didn't. Don't pbar() just
-	# so the final bytes-sent display still matches the expected file size.
+	# Add trailing ^M and/or ^Z if the file didn't already.
 	case ${fhex[i]} in
 		$BASIC_EOF) : ;;
 		$BASIC_EOL) slowbyte $BASIC_EOF ;;
@@ -1830,7 +1852,23 @@ set_fcb_filesizes () {
 		false|off|no|0) ffs=false ;;
 		'') $ffs && ffs=false || ffs=true ;;
 	esac
-	echo "Get accurate file lengths from FCB: $ffs"
+	echo "Use FCBs for true file sizes: $ffs"
+}
+
+set_verify () {
+	case "$1" in
+		true|on|yes|1) WITH_VERIFY=true ;;
+		false|off|no|0) WITH_VERIFY=false ;;
+	esac
+	echo "fdc_format, write_logical, write_id  WITH_VERIFY=$WITH_VERIFY"
+}
+
+set_yes () {
+	case "$1" in
+		true|on|yes|1) YES=true ;;
+		false|off|no|0) YES=false ;;
+	esac
+	echo "Assume \"yes\" instead of confirming actions: $YES"
 }
 
 set_expose () {
@@ -2035,9 +2073,9 @@ lcmd_save () {
 # lcmd_rm filename [attr]
 lcmd_rm () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	vecho 3 "#=$# @=\"$@\""
 	local a
-	vecho 2 "#=$# @=\"$@\""
-	case $# in # $2 empty distinct from absent
+	case $# in # $2='' is distinct from $2 absent
 		2) a="$2" ;;
 		1) a="$ATTR" ;;
 		*) return 1 ;;
@@ -2082,14 +2120,18 @@ lcmd_cp () {
 lcmd_com_show () {
 	local -i e=
 	lcmd_com_test ;e=$?
-	stty ${stty_f} "${PORT}" -a
+	((v)) && {
+		stty ${stty_f} "${PORT}" -a ; :
+	} || {
+		printf "speed: " ;stty ${stty_f} "${PORT}" speed
+	}
 	return $e
 }
 
 lcmd_com_test () {
 	local -i e=
 	test_com ;e=$?
-	((e)) && echo 'com is closed' || echo 'com is open'
+	((e)) && echo "${PORT} is closed" || echo "${PORT} is open"
 	return $e
 }
 
@@ -2101,6 +2143,11 @@ lcmd_com_open () {
 lcmd_com_close () {
 	close_com
 	lcmd_com_test
+}
+
+lcmd_com_speed () {
+	(($#)) && { BAUD=$1 ;set_stty ; }
+	lcmd_com_show
 }
 
 ###############################################################################
@@ -2298,7 +2345,8 @@ do_cmd () {
 			attr*) ask_attr "$@" ;_e=$? ;;
 			compat) ask_compat "$@" ;_e=$? ;;
 			floppy|wp2|raw) ask_compat "${_c}" ;_e=$? ;;
-			baud|speed) BAUD=$1 ;set_stty ;lcmd_com_show ;_e=$? ;;
+			baud|speed) lcmd_com_speed $* ;_e=$? ;;
+			9600|19200) lcmd_com_speed ${_c} ;_e=$? ;;
 			rts|cts|rtscts) RTSCTS=${1:-true} ;set_stty ;lcmd_com_show ;_e=$? ;;
 			xon*|xoff) XONOFF=${1:-false} ;set_stty ;lcmd_com_show ;_e=$? ;;
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
@@ -2316,7 +2364,9 @@ do_cmd () {
 			boot|bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;;
 			sleep) _sleep $* ;_e=$? ;;
 			debug|verbose|v) ((${#1})) && v=$1 || { ((v)) && v=0 || v=1 ; } ;echo "Verbose level: $v" ;_e=0 ;;
+			batch|yes) set_yes $* ;_e=0 ;;
 			ffs|use_fcb|fcb_filesizes) set_fcb_filesizes $1 ;_e=0 ;;
+			with_verify|verify) set_verify $* ;_e=0 ;;
 			expose) set_expose $1 ;_e=0 ;;
 			model|detect|detect_model) pdd2_unk23 ;_e=$? ;;
 			q|quit|bye|exit) exit ;;
@@ -2363,14 +2413,13 @@ do_cmd () {
 			${fdc_cmd[mode]}|set_mode|mode) fcmd_mode $* ;_e=$? ;; # select operation-mode or fdc-mode
 			${fdc_cmd[condition]}|condition|cond) get_condition ;_e=$? ;; # get disk/drive readiness condition flags
 			${fdc_cmd[format]}|fdc_format|ff) fcmd_format $* ;_e=$? ;; # format disk - selectable sector size
-			#${fdc_cmd[format_nv]}|format_nv) fcmd_format_nv $* ;_e=$? ;; # format disk no verify
-			#${fdc_cmd[read_id]}|read_id|ri) pdd1_read_id $* ;_e=$? ;; # read id - moved to TPDD1 & TPDD2 below
+			${fdc_cmd[format_nv]}|fdc_format_nv|ffnv) WITH_VERIFY=false fcmd_format $* ;_e=$? ;; # format disk no verify
 			${fdc_cmd[read_sector]}|read_logical|rl) fcmd_read_logical $* ;_e=$? ;; # read one logical sector
 			${fdc_cmd[search_id]}|search_id|si) fcmd_search_id $* ;_e=$? ;; # search id
 			${fdc_cmd[write_id]}|write_id|wi) fcmd_write_id $* ;_e=$? ;; # write id
-			#${fdc_cmd[write_id_nv]}|write_id_nv) fcmd_write_id_nv $* ;_e=$? ;; # write id no verify
+			${fdc_cmd[write_id_nv]}|write_id_nv|winv) WITH_VERIFY=false fcmd_write_id $* ;_e=$? ;; # write id no verify
 			${fdc_cmd[write_sector]}|write_logical|wl) fcmd_write_logical $* ;_e=$? ;; # write sector
-			#${fdc_cmd[write_sect_nv]}|write_sector_nv) fcmd_write_sector_nv $* ;_e=$? ;; # write sector no verify
+			${fdc_cmd[write_sector_nv]}|write_logical_nv|wlnv) WITH_VERIFY=false fcmd_write_logical $* ;_e=$? ;; # write sector no verify
 
 	# TPDD2 sector access
 			cache_load) pdd2_cache_load $* ;_e=$? ;;	# load cache to or from disk
@@ -2387,7 +2436,7 @@ do_cmd () {
 			cp|copy) lcmd_cp "$@" ;_e=$? ;;
 
 	# TPDD1 & TPDD2 local/client sector access
-			ri|rh|read_header|read_id|read_meta|${fdc_cmd[read_id]}) $pdd2 && { pdd2_read_meta "$@" ;_e=$? ; } || { pdd1_read_id "$@" ;_e=$? ; } ;;
+			ri|rh|read_header|read_id|read_meta|${fdc_cmd[read_id]}) $pdd2 && { pdd2_read_meta "$@" ;_e=$? ; } || { fcmd_read_id "$@" ;_e=$? ; } ;;
 			rs|read_sector) $pdd2 && { pdd2_read_sector "$@" ;_e=$? ; } || { pdd1_read_sector "$@" ;_e=$? ; } ;;
 			dd|dump_disk) $pdd2 && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;;
 			rd|restore_disk) $pdd2 && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;;
@@ -2397,7 +2446,6 @@ do_cmd () {
 	# other
 			pdd1_boot) pdd1_boot "$@" ;_e=$? ;; # [100|200]
 			pdd2_boot) pdd2_boot "$@" ;_e=$? ;; # [100|200]
-			#*) ${_c} "$@" ;_e=$? ;; # too dangerous
 			*) err_msg+=("Unrecognized command") ;_e=1 ;;
 
 		esac
