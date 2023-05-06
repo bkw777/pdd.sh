@@ -6,9 +6,21 @@
 # http://bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol
 # https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt
 
+
+
 ###############################################################################
 # CONFIG
 #
+
+# Example to hard code a custom default behavior.
+# This would be if you have a TPDD1 or Purple Computing drive
+# with the DIP switches set to 0010, which is FDC mode and 38400 baud.
+# FDC_MODE automatically also sets TPDD_MODEL, MODEL_DETECTION, & FONZIE_SMACK.
+# The fonzie smack and ts-dos mystery need to be supressed because they
+# lock up the drive in this situation.
+#FDC_MODE=true
+#BAUD=38400
+
 
 ###############################################################################
 # behavior
@@ -16,6 +28,16 @@
 # 1 or 2 for TPDD1 or TPDD2 mode by default at startup
 # it changes based on autodetection or from various commands
 : ${TPDD_MODEL:=1}
+
+# It's possible to set dip-switches on TPDD1 so that the drive is in FDC mode
+# by default from power-on. The normal pdd2_unk23() and fonzie_smack() in _init()
+# fails to handle that starting condition properly and locks up the drive.
+# Use "$ FDC_MODE=true pdd ..." to start in fdc mode manually to avoid that.
+typeset -i operation_mode=1
+case "$FDC_MODE" in
+	true|on|yes|y|1) FDC_MODE=true TPDD_MODEL=1 FONZIE_SMACK=false MODEL_DETECTION=false operation_mode=0 ;;
+	*) FDC_MODE=false ;;
+esac
 
 # Use "TS-DOS mystery command" to automatically detect TPDD1 vs TPDD2
 : ${MODEL_DETECTION:=true}
@@ -26,12 +48,11 @@
 
 # verbose/debug
 # 0/unset=normal, 1=verbose, >1=more verbose
-# DEBUG=1 ./pdd ...
+# DEBUG=1 pdd ...
 case "$DEBUG" in
-	false|off|n|no) DEBUG=0 ;;
+	false|off|n|no|"") DEBUG=0 ;;
 	true|on|y|yes|:) DEBUG=1 ;;
 esac
-typeset -i v=${DEBUG:-0}
 
 # COMPAT sets the default behavior for translating filenames between the
 # on-disk format and the local filesystem format, and the attribute byte.
@@ -588,11 +609,12 @@ _init () {
 	${FONZIE_SMACK} && fonzie_smack
 	${MODEL_DETECTION} && pdd2_unk23
 	did_init=true MODEL_DETECTION=false FONZIE_SMACK=false
-	$pdd2 && {
-			trap '' EXIT
-	} || {
-			trap 'fcmd_mode 1' EXIT # leave pdd1 in opr mode
-	}
+	trap '_quit' EXIT
+}
+
+_quit () {
+	# If neither tpdd2 nor forced default FDC-mode, try to leave drive in OPR mode
+	$pdd2 || $FDC_MODE || fcmd_mode 1
 }
 
 ###############################################################################
@@ -614,15 +636,18 @@ test_com () {
 set_stty () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	local b=${1:-${BAUD:-19200}} r= x= ;${RTSCTS:-true} || r='-' ;${XONOFF:-false} || x='-'
-	stty ${stty_f} "${PORT}" $b ${STTY_FLAGS} ${r}crtscts ${x}ixon ${x}ixoff
+	stty ${stty_f} "${PORT}" $b ${STTY_FLAGS} ${r}crtscts ${x}ixon ${x}ixoff || return $?
 	((v>1)) && stty ${stty_f} "${PORT}" -a ;:
 }
 
 open_com () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	test_com && return
+	local -i e=
 	exec 3<>"${PORT}"
-	test_com && set_stty || err_msg+=("Failed to open serial port \"${PORT}\"")
+	test_com && set_stty ;e=$?
+	((e)) && err_msg+=("Failed to open serial port \"${PORT}\"")
+	return $e
 }
 
 close_com () {
@@ -887,7 +912,6 @@ ocmd_dirent () {
 	local -i e i ;local r=${opr_fmt[req_dirent]} x f="$1" a="${2:-00}" m=${3:-${dirent_cmd[get_first]}}
 	drive_err= file_name= file_attr= file_len= free_sectors=
 	((operation_mode)) || fcmd_mode 1 || return 1
-
 	# if tpdd2 bank 1, add 0x40 to opr_fmt[req]
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 
@@ -952,7 +976,7 @@ pdd2_unk23 () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	# don't do the normal operation_mode/pdd2 checks, since this is itself
 	# one of the ways we figure that out in the first place
-	# clear err_msg and don't return error on read err because it's expected
+	# clear err_msg and don't return error on read err because err is expected
 	ret_dat=()
 	ocmd_send_req ${opr_fmt[req_pdd2_unk23]} && ocmd_read_ret ;err_msg=()
 	[[ ":${ret_dat[*]}" == ":${UNK23_RET_DAT[*]}" ]] && {
@@ -1001,6 +1025,7 @@ ocmd_format () {
 ocmd_fdc () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	$pdd2 && { echo "$z requires TPDD1" ;return 1 ; }
+	((operation_mode)) || [[ $1 == "force" ]] || return
 	ocmd_send_req ${opr_fmt[req_fdc]} || return $?
 	operation_mode=0
 	_sleep 0.1
@@ -1827,10 +1852,15 @@ srv_send_loader () {
 ###############################################################################
 # Local Commands
 # high level functions implemented here in the client
+# (vs wrappers for drive firmware functions)
 
 # Unconditional blind send: fdc set mode 1, opr switch to fdc, fdc set mode 1
-# Drain any output. To recover the drive from an unknown / out-of-sync state
-# to a known state. Send without the normal checking if they're valid in context.
+# Drain any output. This is to try to cycle the drive from an unknown initial state
+# to end in a known state. Everywhere else in the program we always want to try to
+# keep track of what state the drive is in, and avoid sending anything to the
+# that it isn't expecting. This is the exception where we specifically want to
+# send this sequence intentionally unilaterally without any normal sanity checking
+# on our end and ignoring anything sent back from the drive along the way.
 fonzie_smack () {
 	vecho 2 "${FUNCNAME[0]}($@)"
 	tpdd_drain
@@ -1976,7 +2006,7 @@ lcmd_ls () {
 
 	echo '-------------------------------------'
 	((${#err_msg[*]})) && return
-	quiet=true get_condition || return $?
+	quiet=true get_condition || return $? ;fcmd_mode 1
 	printf "%-32.32s %4.4s\n" "$((free_sectors*SECTOR_DATA_LEN)) bytes free" "${err_msg[-1]}" ;unset err_msg[-1]
 }
 
@@ -2346,7 +2376,7 @@ do_cmd () {
 			compat) ask_compat "$@" ;_e=$? ;;
 			floppy|wp2|raw) ask_compat "${_c}" ;_e=$? ;;
 			baud|speed) lcmd_com_speed $* ;_e=$? ;;
-			9600|19200) lcmd_com_speed ${_c} ;_e=$? ;;
+			150|300|600|1200|2400|4800|9600|19200|38400|76800) lcmd_com_speed ${_c} ;_e=$? ;;
 			rts|cts|rtscts) RTSCTS=${1:-true} ;set_stty ;lcmd_com_show ;_e=$? ;;
 			xon*|xoff) XONOFF=${1:-false} ;set_stty ;lcmd_com_show ;_e=$? ;;
 			com_test) lcmd_com_test ;_e=$? ;; # check if port open
@@ -2407,7 +2437,7 @@ do_cmd () {
 	# TPDD1 switch between operation-mode and fdc-mode
 			fdc) ocmd_fdc ;_e=$? ;;
 			opr) fcmd_mode 1 ;_e=$? ;;
-			pdd1_reset) pdd1_mode_reset ;_e=$? ;;
+			pdd1_reset|smack) fonzie_smack ;_e=$? ;;
 
 	# TPDD1 sector access - aka "FDC mode" functions.
 			${fdc_cmd[mode]}|set_mode|mode) fcmd_mode $* ;_e=$? ;; # select operation-mode or fdc-mode
@@ -2457,7 +2487,7 @@ do_cmd () {
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-typeset -i _y= bank= operation_mode=1 read_err= fdc_err= fdc_dat= fdc_len= _om=99 FNL # allow FEL to be unset or ''
+typeset -i _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${DEBUG:-0} FNL # allow FEL to be unset
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= pdd2=false bd= did_init=false quiet=false ffs=$USE_FCB g_x=
 readonly LANG=C
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
@@ -2476,7 +2506,7 @@ exec 4<>$sleep_fifo
 for PORT in $1 /dev/$1 ;do [[ -c "$PORT" ]] && break || PORT= ;done
 [[ "$PORT" ]] && shift || get_tpdd_port
 vecho 1 "Using port \"$PORT\""
-open_com || exit $?
+open_com || { e=$? ;printf '%s\n' "${err_msg[*]}" >&2 ;exit $e ; }
 
 # non-interactive mode
 (($#)) && { do_cmd "$@" ;exit $? ; }

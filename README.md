@@ -122,13 +122,25 @@ The intercative mode prompt indicates various aspects of the current operating s
 | floppy\|wp2\|raw | | Shortcut for **compat floppy** , **compat wp2** , **compat raw**  |
 | names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
 | attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
+| expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
 | ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB is a sector access operation that most tpdd servers don't implement. |
-| send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
-| baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600 |
+| baud&#160;\|&#160;speed | \[150\|300\|600\|1200\|2400\|4800\|9600\|19200\|38400\|76800\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600<br>Most platforms don't support 78600 but a few like sparc do. Drive dip-switches must match. |
+| com_test | | check if port open |
+| com_show | | show port status |
+| com_open | | open the port |
+| com_close | | close the port |
+| com_read | \[#\] | read bytes from port - read # bytes if given, or until end of data |
+| com_write | hex pairs... | write bytes to port - for each hex pair, write the corresponding byte to the port |
+| read_fdc_ret | | read an fdc-mode return msg from the port and parse it |
+| read_opr_ret | | read an opr-mode return msg from the port and parse it |
+| send_opr_req | fmt data... | build a valid operation-mode request block and send it to the tpdd<br>fmt = single hex pair for the request format (the command)<br>data... = 0 to 128 hex pairs for the payload data<br>The ZZ preamble, LEN field, and trailing checksum are all calculated and added automatically |
+| check_opr_err | | check ret_dat\[\] for an opr-mode error code  |
+| sync&#160;\|&#160;drain | | flush the port receive buffer |
+| sum&#160;\|&#160;checksum | \<hex pairs...\> | calculate the checksum for the bytes represented by the given hex pairs |
 | debug&#160;\|&#160;v | \[#\] | Debug/Verbose level - With no arguments toggles on/off (0/1), or set specified level<br>0 = verbose off<br>1 = verbose level 1<br>2+ = more verbose |
+| send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
-| expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 
 There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
@@ -136,15 +148,17 @@ There are also a bunch of low level raw/debugging commands not shown here. See d
 Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
-| BAUD | 9600\|19200 | Same as **baud** command above |
+| BAUD | 150\|300\|600\|1200\|2400\|4800\|9600\|19200\|38400\|76800 | Same as **baud** command above |
 | RTSCTS | true\|false | same as **rtscts** command above |
 | DEBUG | # | same as **debug** command above |
 | COMPAT | \[floppy\|wp2\|raw\] | same as **compat** command above |
 | TPDD_MODEL | 1\|2 | (default 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
 | EXPOSE | 0\|1\|2 | same as **expose** command above |
 | USE_FCB | true\|false | same as **ffs** command above |
-| MODEL_DETECTION | true\|false | (default true) Use the "TS-DOS mystery command" to automatically detect if the attached TPDD drive is a TPDD1 or TPDD2 | 
-| FONZIE_SMACK | true\|false | (default true) During \_init(), do (or don't) do the fdc-opr-fdc-opr flip-flop to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state. |
+| FONZIE_SMACK | true\|false | (default true) TPDD1 only. During \_init(), do (or don't do) the fdc-opr-fdc-opr flip-flop to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state. |
+| FDC_MODE | true\|false | (default false) TPDD1 only. Assume the drive is already in FDC-mode by default. This is to make it easier to use the other DIP switch settings on a TPDD1 drive. |
+| WITH_VERIFY | true\|false | (default true) TPDD1 only. Make the high level commands like restore-disk use the no-verify versions of fdc_format, write_logical, & write_id. Not advised. It's just here because the drive has those commands. |
+| YES | true\|false | (default false) Suppress confirmation prompts and assume "yes" for non-interactive scripting. |
 
 Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility. This doesn't really matter since the drive model is automatically detected before any commands that are affected by it. In most cases you can just run "pdd" regardless which type of drive is connected.
 ```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
@@ -228,6 +242,17 @@ Also included is a disk image of the American English dictionary disk for Sardin
 * The drive firmware's directory listing function returns file sizes that are often off by several bytes. The correct filesizes are available on the disk in the FCB. There is a setting, enabled by default, that makes the pdd.sh's dirent() function read the FCB to get filesizes. This makes directory listings and open-file-for-read take an extra second every time, but the displays the correct exact filesizes. This can be turned on/off with the **ffs** command.  
 * Filenames can have non-printing characters in them. There is an option, enabled by default, to expose things like that in filenames (and the attr bytes). When a byte in a filename has an ascii value less than 32, it's displayed as the ctrl code that produces that byte, in inverse video. Bytes with ascii values above 126 are all displayed as just inverse "+". ex: null is ^@ or Ctrl+@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, except it makes the filename field look one character too short. The expose option exposes that hidden byte in the name. This can be toggled with the **expose** command.   
 * The write-protect status of the disk is indicated in the bottom-right corner of the listing with a [WP] if the disk is write-protected.
+
+**Non-Standard DIP Switch Settings**
+Here is an example to use the FDC-mode 38400 baud DIP switch setting on a TPDD1 or Purple Computing drive.  
+To use the drive in that configuration, we need to suppress a few default actions to keep from locking up the drive with incompatible commands during startup.
+* Turn the drive power OFF
+* Set the DIP switches on the bottom of the drive to `1:OFF 2:OFF 3:ON 4:OFF` ([reference](https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive/page/14/mode/1up))
+* Turn the drive power ON
+* Run: `$ FDC_MODE=true BAUD=38400 pdd`
+
+Now use the drive as normal.  
+It's not really any faster. Not the point ;)
 
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
