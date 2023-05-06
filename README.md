@@ -129,7 +129,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | com_show | | show port status |
 | com_open | | open the port |
 | com_close | | close the port |
-| com_read | \[#\] | read bytes from port - read # bytes if given, or until end of data |
+| com_read | \[#\] | read bytes from port - read # bytes if given, or until end of data<br>this is really just a wrapper for an internal low level function so you can do manual hacking.<br>The received bytes just get stored as hex pairs in rhex\[\]<br>You'll need to set verbose 2 or 3 to see them. |
 | com_write | hex pairs... | write bytes to port - for each hex pair, write the corresponding byte to the port |
 | read_fdc_ret | | read an fdc-mode return msg from the port and parse it |
 | read_opr_ret | | read an opr-mode return msg from the port and parse it |
