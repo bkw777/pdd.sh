@@ -6,30 +6,31 @@ It's pure bash except for the following:
 * ```stty``` is needed once at startup to configure the serial port.  
 * ```mkfifo``` is used once at startup for ```_sleep()``` without ```/usr/bin/sleep```.  
 
-That's it. There are no other external commands or dependencies, not even any child forks (no backticks or pipes).
+That's it. There are no other external commands or dependencies, not even any child forks of more bash processes (no backticks, perens, or pipes), and no temp files or here-documents (here-docs create temp files behind the scenes in bash).
 
 There are a lot of commands and options. This is a swiss army knife for the TPDD.  
 It can be used to inspect, copy, restore, repair, or craft TPDD disks in ways that normal client software like TS-DOS or PDD.EXE doesn't provide or allow.
 
 ## Particularly Unique Features  
-Things this util can do that not even the commercial TPDD utils can do  
- - TPDD2 sector data and sector metadata read & write
+Things this util can do that even the commercial TPDD utils can't do  
+ - TPDD2 sector data and sector metadata read & write  
  - Ability to clone "problem" disks, including:  
-   - TPDD1 Utility Disk
-   - TPDD2 Utility Disk
-   - Disk-Power Distribution Disk
+   - TPDD1 Utility Disk  
+   - TPDD2 Utility Disk  
+   - Disk-Power Distribution Disk  
+   - Sardine Dictionary Disk
  - Ability to create disks from downloadable disk image files  
-   - ...and do so without special hardware other than the drive itself (no kryoflux or the like needed, nor a MS-DOS machine old enough to have the right kind of floppy controller, nor a hard-to-find 720K 3.5" drive)  
+ - do so without special hardware other than the drive itself  
  - Work with disks/files formatted for other clients than the KC-85 platform clones
 
 ## Supported OS's
 Any linux, macos/osx, bsd, any cpu architecture.  
 
-Windows... [with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).  
-Cygwin and MSYS also fail with ```stty: /dev/ttyS4: Permission denied```.  
-http://github.com/bkw777/dlplus works in both cygwin and msys, so the problem is probably fixable, but I just don't know how yet.
+Windows... [possibly with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).  
+Cygwin and MSYS also fail with `stty: /dev/ttyS4: Permission denied`.  
+[dlplus](http://github.com/bkw777/dlplus) does work in both cygwin and msys, so the problem is probably fixable, but I just don't know how yet.
 
-OSX: Requires bash from macports or brew. Doesn't work with the stock bash that ships with osx.
+OSX: Requires a newer bash from macports or brew. Does not work with the stock bash that ships with osx/macos (still as of 2023).
 
 ## Installation
 It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions.  
@@ -43,18 +44,18 @@ sudo make install
 ## Usage
 First gather the [hardware](hardware.md)
 
-```pdd [tty_device] [command [args...]] [;commands...]```
+`pdd [tty_device] [command [args...]] [;commands...]`
 
 **tty_device** will be auto-detected in most cases.  
 Failing that, you'll get a list to select from.  
 Or you may specify one as the first argument on the command line.  
 
 With no arguments, it will run in interactive command mode.  
-You get a ```PDD(mode[bank]:names,attr)>``` prompt where you can enter commands.  
+You get a `PDD(mode[bank]:names,attr)>` prompt where you can enter commands.  
 "help" is still not one of them, Sorry.
 
 The intercative mode prompt indicates various aspects of the current operating state:  
-```PDD(mode[bank]:names,attr)>```  
+`PDD(mode[bank]:names,attr)>`  
 <ul>
   <b>mode</b>: The basic operating mode. Affected by <b>pdd1</b>, <b>pdd2</b>, and <b>detect_model</b>.<br>
     <ul>
@@ -70,6 +71,8 @@ The intercative mode prompt indicates various aspects of the current operating s
   <b>names</b>: The format of filenames used to save or load files from the drive. Affected by <b>compat</b> and <b>names</b>.<br>
   <b>attr</b>: The "attribute" byte used to save or load files from the drive. Affected by <b>compat</b> and <b>attr</b>.<br>
 </ul>
+
+This pile of commands is not well organized. Sorry.
 
 **TPDD1/TPDD2 File Access**  
 | command | arguments | description |
@@ -160,92 +163,135 @@ Additionally, some behavior may be modified by setting environment variables.
 | WITH_VERIFY | true\|false | (default true) TPDD1 only. Make the high level commands like restore-disk use the no-verify versions of fdc_format, write_logical, & write_id. Not advised. It's just here because the drive has those commands. |
 | YES | true\|false | (default false) Suppress confirmation prompts and assume "yes" for non-interactive scripting. |
 
-Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility. This doesn't really matter since the drive model is automatically detected before any commands that are affected by it. In most cases you can just run "pdd" regardless which type of drive is connected.
-```make install``` installs the script as ```/usr/local/bin/pdd```, and also installs 2 symlinks named ```pdd1``` and ```pdd2```.  
-Running ```pdd1 some_command``` is equivalent to running ```pdd "1;some_command"```  
-Running ```pdd2 some_command``` is equivalent to running ```pdd "2;some_command"```  
+Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility.  
+`make install` installs the script as `/usr/local/bin/pdd`, and also installs 2 symlinks named `pdd1` and `pdd2`.  
+This isn't usually needed, since the drive model is automatically detected in most cases.
+In most cases you can just run "pdd" regardless which type of drive is connected.
 
-## Examples
-The same commands can be given either on the command line, or at the interactive prompt.  
-Example, to list the directory, where the command is: ```ls```, can be used either of these ways:  
-```$ pdd ls``` or ```PDD(pdd2:6.2(F)> ls```
+Commands may be issued either interactively at the `PDD(...)>` prompt,
+or non-interactively on the command line.
 
-Multiple commands may be given at once, seperated by '**;**' to form a pre-loaded sequence.  
+Example, to list the directory, the command is: `ls`.  
+The `ls` command can be used either of these ways:  
+```
+bkw@fw:~$ pdd
+PDD(opr:6.2,F)> ls
+--------  Directory Listing  --------
+Floppy_SYS               | F |  11475
+SETRAM.BA                | F |    208
+-------------------------------------
+88320 bytes free                 [WP]
+PDD(opr:6.2,F)> q
+bkw@fw:~$ 
+```
 
-**Load a file from the disk**  
-```load DOSNEC.CO```
+```
+bkw@fw:~$ pdd ls
+--------  Directory Listing  --------
+Floppy_SYS               | F |  11475
+SETRAM.BA                | F |    208
+-------------------------------------
+88320 bytes free                 [WP]
+bkw@fw:~$ 
+```
 
-**Load a file from the disk and save to a different local name**  
-```load DOSNEC.CO ts-dos_4.1_nec.co```
+Multiple commands may be given at once, seperated by `;` to form a pre-loaded sequence.  
+If using `;` on the command line, the entire string of commands should be quoted, or
+the spaces and ;s need to be escaped.
+```
+bkw@fw:~$ pdd
+PDD(opr:6.2,F)> ls ;use_fcb ;ls
+--------  Directory Listing  --------
+Floppy_SYS               | F |  11475
+SETRAM.BA                | F |    208
+-------------------------------------
+88320 bytes free                 [WP]
+Use FCBs for true file sizes: true
+--------  Directory Listing  --------
+Floppy_SYS               | F |  11520
+SETRAM.BA                | F |    208
+-------------------------------------
+88320 bytes free                 [WP]
+PDD(opr:6.2,F)> q
+bkw@fw:~$ 
+```
 
-**Save a file to the disk**  
-```save ts-dos_4.1_nec.co DOSNEC.CO```
+The non-interactive equivalent would be
+`$ pdd "ls ;use_fcb ;ls"`
 
-**Save a file to the disk with an empty (space, 0x20) attribute flag**  
-```save ts-dos_4.1_nec.co DOSNEC.CO ' '```
+## Eamples for some individual commands
 
-**Rename a file on a WP-2 disk**  
-Notice that the filename format indicator in the prompt changes from 6.2 to 8.2 with the "wp2" command.  
+### Load a file from the disk
+`load DOSNEC.CO`
+
+give the file a better destination filename locally  
+`load DOSNEC.CO ts-dos_4.1_nec.co`
+
+### Save a file to the disk  
+`save nec_ts-dos_4.1.co`
+
+That would automatically truncate the destination name to "nec_ts.co"   
+But you probably need that to be named "DOSNEC.CO" on the disk in order for Ultimate ROM II to recognize it.  
+`save ts-dos_4.1_nec.co DOSNEC.CO`
+
+### Specify an arbitrary attribute byte
+"Floppy" and all other TPDD client software for TRS-80 Model 100 and clones (TS-DOS, TEENY, etc) all hard-code the value 'F' for attribute for all files every time in all cases, and don't expose the field to the user in any way. You don't see it in directory listings on a 100, and you can't supply some other value to write or search.
+
+But the field is there and the drive doesn't care what's in it, and other platforms may use the field in other ways.
+
+pdd.sh uses 'F' by default also for convenience, but it's only a default, and there are a few different ways to change that.  
+One way is to supply a 3rd argument to the `save` command.  
+This could be for a Cambridge Z88,  
+`save Romcombiner.zip Romcombiner.zip ' '`
+
+### Rename a file on a WP-2 disk
+Notice that the filename format indicator in the prompt changes from 6.2 to 8.2 after the "wp2" command.  
 ```
 PDD(pdd2:6.2(F)> wp2
 PDD(pdd2:8.2(F)> mv CAMEL.CO WP2FORTH.CO
 ```
 
-**Command Lists with ";"**  
-Delete File, then List Directory
-In interactive mode:  
-```PDD(opr:6.2(F)> rm DOSNEC.CO ;ls```  
-In non-interactive mode, quote the list because of the ";"  
-```$ pdd "rm DOSNEC.CO ;ls"```  
-Switch to bank 1 of a TPDD2 disk, Save a file, list directory  
-```$ pdd "bank 1 ;save ts-dos_4.1_nec.co DOSNEC.CO ;ls"```
-
-**Drive/Disk Condition**  
+### Drive/Disk Condition
 ```
 $ pdd condition
 Disk Changed
 Disk Write-Protected
 ```
 
-**Verbose/debug mode**  
-```$ DEBUG=1 pdd ...``` or ```PDD(opr:6.2(F)> v 1```
+### Verbose/debug mode
+`$ DEBUG=1 pdd ...`  
+or  
+`PDD(opr:6.2(F)> v 1`
 
-**More verbose/debug mode**  
-```$ DEBUG=2 pdd ...``` or ```PDD(opr:6.2(F)> v 2```
+### More verbose/debug mode
+`$ DEBUG=2 pdd ...`  
+or  
+`PDD(opr:6.2(F)> v 2`
 
-**Dump an entire TPDD disk to a disk image file**  
-The file format is different for TPDD2 vs TPDD1  
-TPDD1 images files have a .pdd1 extension, TPDD2 image files have .pdd2
-If you don't specify the extension, the drive model is detected and the
-right one added.
-```dd mydisk```
-Creates `midisk.pdd1` or `mydisk.pdd2`
+### Dump an entire disk to a disk image file
+`dd mydisk`
 
-**Restore an entire disk from a disk image file**  
-pdd.sh now reads and writes a binary disk image file format, and it's the same
-format as what dlplus uses. You can use pdd.sh to dump a real disk to a file,
-and then use that file with dlplus. Or you can re-create a real disk from
-a downloadable file.
+Reads the disk in the drive and creates `midisk.pdd1` or `mydisk.pdd2` depending on what kind of drive is connected.
 
-**TPDD1 Utility Disk**  
-```rd disk_images/TPDD1_26-3808_Utility_Disk.pdd1```  
-[(here is a nice label for it)](https://github.com/bkw777/disk_labels)  
+The disk images are the same format as used by [dlplus](github.com/bkw777/dlplus)
 
-**TPDD2 Utility Disk**  
-```rd disk_images/TPDD2_26-3814_Utility_Disk.pdd2```  
-[(here is a nice label for it)](https://github.com/bkw777/disk_labels)
+### Restore an entire disk from a disk image file
+`rd mydisk.pdd1`  
+or  
+`rd mydisk.pdd2`
 
-Also included is a disk image of the American English dictionary disk for Sardine.  
-```rd disk_images/Sardine_American_English.pdd1```
+There are disk images for the original TPDD1 and TPDD2 utility disks in the disk_images folder, and [this repo](https://github.com/bkw777/disk_labels) has nice labels for them that you can print.  
+The Sardine dictionary disk is also in there.
 
-**Directory Listing**  
-* The drive firmware's directory listing function returns file sizes that are often off by several bytes. The correct filesizes are available on the disk in the FCB. There is a setting, not enabled by default, that makes pdd.sh's dirent() function read the FCB to get filesizes. This makes directory listings and open-file-for-read take an extra second every time, but displays the correct exact filesizes. This can be turned on/off with the **ffs** command.  
+### Directory Listings
 
-* Filenames can have non-printing characters in them. There is an option, enabled by default, to expose those bytes in filenames (and in the attr field). When a byte in a filename has an ascii value less than 32, it's displayed as the ctrl code that produces that byte, but in inverse video instead of carot notation so that the character only takes up one space. Bytes with ascii values above 126 are all displayed as just inverse ".". ex: null is ^@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, (except for the fact that it makes the filename field look one character too short). The expose option exposes that hidden byte in the name. This can be toggled with the **expose** command.  
+* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. There is a setting, not enabled by default, that makes pdd.sh's "ls" function read the FCB to get filesizes. This makes "ls" and "load" take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the "use_fcb" command.  
+
+* Filenames can have non-printing characters in them. There is an option, enabled by default, to expose those bytes in filenames (and in the attr field). When a byte in a filename has an ascii value less than 32, it's displayed as the ctrl code that produces that byte, but in inverse video instead of carot notation so that the character only takes up one space. Bytes with ascii values above 126 are all displayed as just inverse ".". ex: null is ^@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, (except for the fact that it makes the filename field look one character too short). The expose option exposes that hidden byte in the name. This can be toggled with the "expose" command.  
 
 * The write-protect status of the disk is indicated in the bottom-right corner of the listing with a [WP] if the disk is write-protected.
 
-**Non-Standard DIP Switch Settings**  
+## Non-Standard DIP Switch Settings
 Here is an example to use the FDC-mode 38400 baud DIP switch setting on a TPDD1 or Purple Computing drive.  
 To use the drive in that configuration, we need to suppress a few default actions to keep from locking up the drive with incompatible commands during startup.  
 * Turn the drive power OFF  
