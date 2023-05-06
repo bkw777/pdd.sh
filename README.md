@@ -254,7 +254,8 @@ To use the drive in that configuration, we need to suppress a few default action
 * Run: `$ FDC_MODE=true BAUD=38400 pdd`
 
 Now use the drive as normal.  
-It's not really any faster. Not the point ;)
+It's not really any faster. Not the point ;)  
+Don't bother trying to use the 78600 setting unless you know you actually have serial hardware and OS that supports it. Most don't. But apparently Linux or Solaris on a Sun Sparc machine does?
 
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
