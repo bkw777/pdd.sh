@@ -124,7 +124,7 @@ The intercative mode prompt indicates various aspects of the current operating s
 | attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
 | expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
 | ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB is a sector access operation that most tpdd servers don't implement. |
-| baud&#160;\|&#160;speed | \[150\|300\|600\|1200\|2400\|4800\|9600\|19200\|38400\|76800\] | Serial port speed. Default is 19200.<br>TPDD1 & TPDD2 run at 19200.<br>FB-100/FDD-19/Purple Computing run at 9600<br>Most platforms don't support 78600 but a few like sparc do. Drive dip-switches must match. |
+| baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>Drives with dip-switches can actually be set for any of 150 300 600 1200 2400 4800 9600 19200 38400 76800<br>and you can actually set any of those speeds if you set the drive dip switches to match.<br>Some Brother/KnitKing drives are hardwired to 9600 with a solder bridge in place of the dip-switches<br>Most platforms serial hardware don't support 78600, but some like Sparc do. |
 | com_test | | check if port open |
 | com_show | | show port status |
 | com_open | | open the port |
@@ -148,7 +148,7 @@ There are also a bunch of low level raw/debugging commands not shown here. See d
 Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
-| BAUD | 150\|300\|600\|1200\|2400\|4800\|9600\|19200\|38400\|76800 | Same as **baud** command above |
+| BAUD | 9600\|19200 | Same as **baud** command above |
 | RTSCTS | true\|false | same as **rtscts** command above |
 | DEBUG | # | same as **debug** command above |
 | COMPAT | \[floppy\|wp2\|raw\] | same as **compat** command above |
