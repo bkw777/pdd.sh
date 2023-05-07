@@ -6,8 +6,6 @@
 # http://bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol
 # https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt
 
-
-
 ###############################################################################
 # CONFIG
 #
@@ -20,7 +18,6 @@
 # lock up the drive in this situation.
 #FDC_MODE=true
 #BAUD=38400
-
 
 ###############################################################################
 # behavior
@@ -111,9 +108,7 @@ case "${OSTYPE,,}" in
 	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.  ;;	# osx
 esac
 
-# stty flags to set the serial port parameters & tty behavior
-# For FB-100, FDD19, Purple Computing, change BAUD to 9600
-# (or remove the solder blob from dip switch position 1)
+# Default serial port settings and tty behavior.
 : ${BAUD:=19200}
 : ${RTSCTS:=true}
 : ${XONOFF:=false}
@@ -131,31 +126,43 @@ STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 # It's long because the drive can require time to wake from idle.
 TTY_READ_TIMEOUT_MS=5000
 
-# Polling period and default timout in tpdd_wait().
-# tpdd_wait() polls the tty for data without consuming any,
-# until either data is available, or the timeout expires.
-TPDD_WAIT_PERIOD_MS=100     # polling interval
-TPDD_WAIT_TIMEOUT_MS=5000   # default timeout when not specified
+# tpdd_wait() polling interval
+TPDD_WAIT_POLL_INTERVAL_MS=100
 
-# Timouts for various commands
-# For most commands we need to know some reasonable time to wait for a response
-# from the drive before giving up. For most operations about 5 seconds is enough,
-# and even allows for the drive to wake from idle. That default 5 seconds for
-# most things is provided by TPDD_WAIT_TIMEOUT_MS above. Some commands require a
-# lot more time, and some require a variable amount of time depending on the data
-# or the work being requested. Below are operations that need more than the
-# default. If you get timouts on some command, increase the relevant value by 1000
-# until you stop getting timeouts. Whatever the longest possible time a given
-# command normally takes, add 5000 to that to allow for the case where the drive
-# also has to wake from sleep first.
-FORMAT1_WAIT_MS=105000      # ocmd_format tpdd1 and fcmd_format
+# tpdd_wait() timeout
+# How long to wait for a response from the drive before giving up.
+#
+# Several operations need longer or shorter timeouts than the default.
+# These need to account for the longest/worst case scenario. Some operations
+# take different amounts of time depending on the data or the disk contents,
+# plus sometimes the drive takes an extra few seconds to wake from sleep.
+#
+# So for example deleting a file might take as little as 3 seconds or as long
+# as 20 depending on the other contents of the disk and the size of the file,
+# plus possibly a few more to wake from sleep first = 25 seconds.
+#
+# unk23 is an opposite case where we need to set a deliberately short timeout
+# because we already know that TPDD1 will never respond, TPDD2 will respond fast,
+# and we don't want to make every TPDD1 hang for 5 seconds on every _init().
+#
+# The 3 different format timeouts instead of one longer one are just for the
+# the progress bar. Format takes so long that we want a percent-done progress
+# indicator. The drive does not send any data during format, and we can't query
+# the drive either, we can poll the tty to see if data is available but
+# otherwise must just sit and wait at least the expected time before even
+# considering giving up. So the progress bar is just an estimate based on
+# elapsed time. If the expected time is too much longer than the actual time,
+# then the job will appear to complete early and look like an error.
+DEFAULT_TIMEOUT_MS=5000
+FORMAT1_WAIT_MS=105000      # ocmd_format on tpdd1 and fcmd_format
 FORMAT1NV_WAIT_MS=85000     # fcmd_format no-verify
-FORMAT2_WAIT_MS=115000      # ocmd_format tpdd2
+FORMAT2_WAIT_MS=115000      # ocmd_format on tpdd2
 DELETE_WAIT_MS=25000        # ocmd_delete
 RENAME_WAIT_MS=10000        # pdd2_rename
 CLOSE_WAIT_MS=20000         # ocmd_close
 DIRENT_WAIT_MS=10000        # ocmd_dirent
 SEARCHID_WAIT_MS=25000      # fcmd_search_id
+UNK23_WAIT_MS=100           # pdd2_unk23
 
 # TS-DOS "mystery" command - TPDD2 detection
 # real TPDD2 responds with this immediately
@@ -745,16 +752,16 @@ tpdd_check () {
 	IFS= read -t 0 -u 3
 }
 
-# wait for data
+# wait for data from the drive
 # tpdd_wait timeout_ms busy_indication
-# _sleep() but periodically check the drive,
+# _sleep() but periodically check the drive for data-available,
 # optionally show either a busy or progress indicator,
 # return once the drive starts sending data
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	local d=(: spin pbar) s
-	local -i i=-1 n p=$TPDD_WAIT_PERIOD_MS t=${1:-$TPDD_WAIT_TIMEOUT_MS} b=$2
+	local -i i=-1 n p=$TPDD_WAIT_POLL_INTERVAL_MS t=${1:-$DEFAULT_TIMEOUT_MS} b=$2
 	ms_to_s $p ;s=$_s
 	((t<p)) && t=p ;n=$(((t+50)/p))
 	((b==1)) && spin +
@@ -974,12 +981,15 @@ ocmd_dirent () {
 # return : 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 2A
 pdd2_unk23 () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	# don't do the normal operation_mode/pdd2 checks, since this is itself
-	# one of the ways we figure that out in the first place
-	# clear err_msg and don't return error on read err because err is expected
+	# This is a TPDD2 command, uses Operation-mode api, but don't do the normal
+	# operation_mode/pdd2 sanity checks, because this is itself one of the ways
+	# that we figure out if we are tpdd1 or tpdd2 in the first place.
+	# Clear err_msg because read() err is expected for every TPDD1. Set a
+	# deliberately short timeout because TPDD2 responds quickly to this one,
+	# and TPDD1 will never respond (will always hang for the full timeout).
 	ret_dat=()
-	ocmd_send_req ${opr_fmt[req_pdd2_unk23]} && ocmd_read_ret ;err_msg=()
-	[[ ":${ret_dat[*]}" == ":${UNK23_RET_DAT[*]}" ]] && {
+	ocmd_send_req ${opr_fmt[req_pdd2_unk23]} && ocmd_read_ret $UNK23_WAIT_MS ;err_msg=()
+	[[ ${ret_dat[*]} == ${UNK23_RET_DAT[*]} ]] && {
 		vecho 1 'Detected TPDD2'
 		pdd2=true operation_mode=2 bd="[$bank]"
 		return 0
