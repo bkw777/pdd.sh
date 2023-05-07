@@ -10,14 +10,21 @@
 # CONFIG
 #
 
-# Example to hard code a custom default behavior.
-# This would be if you have a TPDD1 or Purple Computing drive
-# with the DIP switches set to 0010, which is FDC mode and 38400 baud.
-# FDC_MODE automatically also sets TPDD_MODEL, MODEL_DETECTION, & FONZIE_SMACK.
-# The fonzie smack and ts-dos mystery need to be supressed because they
-# lock up the drive in this situation.
-#FDC_MODE=true
-#BAUD=38400
+# Examples to set different custom default behavior, while still allowing
+# manual override from the command line or parent environment.
+
+# You only have one drive and it is hard-wired to 9600 baud.
+#: ${BAUD:=9600}
+
+# You have the DIP switches set to 0010 (FDC-mode 38400 baud).
+# FDC_MODE=true assumes tpdd1 in fdc-mode, and disables fonzie_smack()
+# and pdd2_unk23() because they lock up the drive in this situation.
+#: ${FDC_MODE:=true}
+#: ${BAUD:=38400}
+
+# You only have a tpdd2 and don't want to do ts-dos mystery model detection.
+#: ${TPDD_MODEL:=2}
+#: ${MODEL_DETECTION:=false}
 
 ###############################################################################
 # behavior
@@ -45,7 +52,7 @@ esac
 
 # verbose/debug
 # 0/unset=normal, 1=verbose, >1=more verbose
-# DEBUG=1 pdd ...
+# convert ""=0, false=0, true=1, >1 accepted as-is and handled later
 case "$DEBUG" in
 	false|off|n|no|"") DEBUG=0 ;;
 	true|on|y|yes|:) DEBUG=1 ;;
@@ -97,7 +104,7 @@ esac
 # This can be changed at run-time with the "verify" command".
 : ${WITH_VERIFY:=true} # true|false
 
-# Assume "yes" for all confirmation prompts. For scripting.
+# Assume "yes" to all confirmation prompts for scripting.
 : ${YES:=false} # true|false
 
 # Default rs232 tty device name, with platform differences
