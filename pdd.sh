@@ -10,38 +10,12 @@
 # CONFIG
 #
 
-# Examples to set different custom default behavior, while still allowing
-# manual override from the command line or parent environment.
-
-# You only have one drive and it is hard-wired to 9600 baud.
-#: ${BAUD:=9600}
-
-# You have the DIP switches set to 0010 (FDC-mode 38400 baud).
-# FDC_MODE=true assumes tpdd1 in fdc-mode, and disables fonzie_smack()
-# and pdd2_unk23() because they lock up the drive in this situation.
-#: ${FDC_MODE:=true}
-#: ${BAUD:=38400}
-
-# You only have a tpdd2 and don't want to do ts-dos mystery model detection.
-#: ${TPDD_MODEL:=2}
-#: ${MODEL_DETECTION:=false}
-
 ###############################################################################
 # behavior
 
 # 1 or 2 for TPDD1 or TPDD2 mode by default at startup
 # it changes based on autodetection or from various commands
 : ${TPDD_MODEL:=1}
-
-# It's possible to set dip-switches on TPDD1 so that the drive is in FDC mode
-# by default from power-on. The normal pdd2_unk23() and fonzie_smack() in _init()
-# fails to handle that starting condition properly and locks up the drive.
-# Use "$ FDC_MODE=true pdd ..." to start in fdc mode manually to avoid that.
-typeset -i operation_mode=1
-case "$FDC_MODE" in
-	true|on|yes|y|1) FDC_MODE=true TPDD_MODEL=1 FONZIE_SMACK=false MODEL_DETECTION=false operation_mode=0 ;;
-	*) FDC_MODE=false ;;
-esac
 
 # Use "TS-DOS mystery command" to automatically detect TPDD1 vs TPDD2
 : ${MODEL_DETECTION:=true}
@@ -121,6 +95,10 @@ esac
 : ${XONOFF:=false}
 STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 
+# filename extensions for disk image files
+PDD1_IMG_EXT=pdd1
+PDD2_IMG_EXT=pdd2
+
 ###############################################################################
 # tunables
 
@@ -171,19 +149,8 @@ DIRENT_WAIT_MS=10000        # ocmd_dirent
 SEARCHID_WAIT_MS=25000      # fcmd_search_id
 UNK23_WAIT_MS=100           # pdd2_unk23
 
-# TS-DOS "mystery" command - TPDD2 detection
-# real TPDD2 responds with this immediately
-# real TPDD1 does not respond
-UNK23_RET_DAT=(41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00)
-# similar but not used by TS-DOS, or anything else seen so far
-#UNK11_RET_DAT=(80 13 05 00 10 E1)
-
 # Per-byte delay in send_loader()
 LOADER_PER_CHAR_MS=8
-
-# extensions for disk image files
-PDD1_IMG_EXT=pdd1
-PDD2_IMG_EXT=pdd2
 
 #
 # CONFIG
@@ -201,6 +168,7 @@ typeset -ra mode=(
 	[2]=pdd2	# operate a TPDD2 drive
 	[3]=loader	# send an ascii BASIC file and BASIC_EOF out the serial port
 	[4]=server	# vaporware
+	[9]=-           # drive mode/model not determined yet
 )
 
 ###############################################################################
@@ -446,6 +414,14 @@ typeset -ra pdd2_cond=(
 ###############################################################################
 # general constants
 
+# TS-DOS "mystery" command - TPDD2 detection
+# real TPDD2 responds with this immediately
+# real TPDD1 does not respond
+typeset -ra UNK23_RET_DAT=(41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00)
+# similar but not used by TS-DOS, or anything else seen so far
+#UNK11_RET_DAT=(80 13 05 00 10 E1)
+
+
 typeset -ri \
 	SECTOR_DATA_LEN=1280 \
 	PDD1_SECTORS=80 \
@@ -563,9 +539,9 @@ file_to_fhex () {
 # Progress indicator
 # pbar part whole [units]
 #   pbar 14 120
-#   [####====================================] 11%
+#   [####....................................] 11%
 #   pbar 14 120 seconds
-#   [####====================================] 11% (14/120 seconds)
+#   [####....................................] 11% (14/120 seconds)
 pbar () {
 	((v)) && return
 	local -i i c p=$1 w=$2 p_len w_len=40 ;local b= s= u=$3
@@ -627,8 +603,7 @@ _init () {
 }
 
 _quit () {
-	# If neither tpdd2 nor forced default FDC-mode, try to leave drive in OPR mode
-	$pdd2 || $FDC_MODE || fcmd_mode 1
+	$pdd2 || fcmd_mode 1
 }
 
 ###############################################################################
@@ -1216,7 +1191,7 @@ fcmd_read_ret () {
 # 0=fdc 1=operation
 fcmd_mode () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	$pdd2 && { err_msg+=("$z requires TPDD1") ;return 1 ; }
+	$pdd2 && { $quiet || err_msg+=("$z requires TPDD1") ;return ; }
 	((operation_mode)) && return
 	(($#)) || return
 	str_to_shex "${fdc_cmd[mode]}$1"
@@ -1871,21 +1846,8 @@ srv_send_loader () {
 # high level functions implemented here in the client
 # (vs wrappers for drive firmware functions)
 
-# Unconditional blind send: fdc set mode 1, opr switch to fdc, fdc set mode 1
-# Drain any output. This is to try to cycle the drive from an unknown initial state
-# to end in a known state. Everywhere else in the program we always want to try to
-# keep track of what state the drive is in, and avoid sending anything to the
-# that it isn't expecting. This is the exception where we specifically want to
-# send this sequence intentionally unilaterally without any normal sanity checking
-# on our end and ignoring anything sent back from the drive along the way.
 fonzie_smack () {
 	vecho 2 "${FUNCNAME[0]}($@)"
-	tpdd_drain
-	tpdd_write 4D 31 0D       # M1\r - fdc set mode 1 (switch from fdc to opr)
-	_sleep 0.01
-	tpdd_drain
-	tpdd_write 5A 5A 08 00 F7 # ZZ 08 - opr switch to fdc
-	_sleep 0.01
 	tpdd_drain
 	tpdd_write 4D 31 0D       # M1\r - fdc set mode 1 (switch from fdc to opr)
 	_sleep 0.01
@@ -2023,7 +1985,7 @@ lcmd_ls () {
 
 	echo '-------------------------------------'
 	((${#err_msg[*]})) && return
-	quiet=true get_condition || return $? ;fcmd_mode 1
+	quiet=true get_condition || return $? ;$pdd2 || quiet=true fcmd_mode 1
 	printf "%-32.32s %4.4s\n" "$((free_sectors*SECTOR_DATA_LEN)) bytes free" "${err_msg[-1]}" ;unset err_msg[-1]
 }
 
@@ -2504,7 +2466,7 @@ do_cmd () {
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-typeset -i _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${DEBUG:-0} FNL # allow FEL to be unset
+typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${DEBUG:-0} FNL # allow FEL to be unset
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= pdd2=false bd= did_init=false quiet=false ffs=$USE_FCB g_x=
 readonly LANG=C
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
