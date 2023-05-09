@@ -19,9 +19,8 @@ Things this util can do that even the commercial TPDD utils can't do
    - TPDD2 Utility Disk  
    - Disk-Power Distribution Disk  
    - Sardine Dictionary Disk
- - Ability to create disks from downloadable disk image files  
- - do so without special hardware other than the drive itself  
- - Work with disks/files formatted for other clients than the KC-85 platform clones
+ - Ability to create disks from downloadable disk image files, without special hardware other than the drive itself  
+ - Work with disks/files formatted for other platforms than the KC-85 clones
 
 ## Supported OS's
 Any linux, macos/osx, bsd, any cpu architecture.  
@@ -159,7 +158,6 @@ Additionally, some behavior may be modified by setting environment variables.
 | EXPOSE | 0\|1\|2 | same as **expose** command above |
 | USE_FCB | true\|false | same as **ffs** command above |
 | FONZIE_SMACK | true\|false | (default true) TPDD1 only. During \_init(), do (or don't do) the fdc-opr-fdc-opr flip-flop to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state. |
-| FDC_MODE | true\|false | (default false) TPDD1 only. Assume the drive is already in FDC-mode by default. This is to make it easier to use the other DIP switch settings on a TPDD1 drive. |
 | WITH_VERIFY | true\|false | (default true) TPDD1 only. Make the high level commands like restore-disk use the no-verify versions of fdc_format, write_logical, & write_id. Not advised. It's just here because the drive has those commands. |
 | YES | true\|false | (default false) Suppress confirmation prompts and assume "yes" for non-interactive scripting. |
 
@@ -293,11 +291,11 @@ The Sardine dictionary disk is also in there.
 
 ## Non-Standard DIP Switch Settings
 Here is an example to use the FDC-mode 38400 baud DIP switch setting on a TPDD1 or Purple Computing drive.  
-To use the drive in that configuration, we need to suppress a few default actions to keep from locking up the drive with incompatible commands during startup.  
+The drive will power-up in FDC-mode by default instead of Operation-mode, but you won't notice a difference because pdd.sh switches the mode as necessary, so all commands work the same as normal.  
 * Turn the drive power OFF  
 * Set the DIP switches on the bottom of the drive to `1:OFF 2:OFF 3:ON 4:OFF` ([reference](https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive/page/14/mode/1up))  
 * Turn the drive power ON  
-* Run: `$ FDC_MODE=true BAUD=38400 pdd`
+* Run: `$ BAUD=38400 pdd`
 
 Now use the drive as normal.  
 It's not really any faster. Not the point ;)  
