@@ -50,3 +50,14 @@ TS-DOS / DeskLink directories
 
 ----
 
+disk tester
+
+stress-test disk to identify old media that's bad or too marginal
+use sector acces to fill every byte with random binary, read back & compare, repeat.
+
+----
+
+disk cleaner
+
+just trigger any ordinary command that spins the disk
+but ignore the error from no disk
