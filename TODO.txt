@@ -32,26 +32,13 @@ point would be to avoid needing 600Kbyte variables (200k for an entire
 tpdd2 disk, X2 from the hex encoding, plus probably at least one more byte
 per array element for a null terminator internal to bash.)
 
+Some routines already do this. lcmd_load() already does this.
+
 ----
 
 Figure out some better more consistent way to manage the overlapping
-flags/states/options currently controlled or affected by
-$ppd2 $MODEL_DETECTION $TPDD_MODEL $FDC_MODE $operation_mode $mode[]
-
-For one thing, seperate and/or clarify these roles more consistently:
-- buitlt-in ultimate fallback defaults
-- user config settings
-- state tracking
-- behavior controlling
-
-----
-
-Disk Info
-
-Examine the disk to report some basic info about it.
-Is it a filesystem disk or a raw data disk or not formatted at all?
-What logical sector size? Probably a single read of the FCB sector
-should answer most of that in one shot.
+flags/states/options/controls currently affecting, or affected by,
+$ppd2 $MODEL_DETECTION $TPDD_MODEL $operation_mode $mode[]
 
 ----
 
