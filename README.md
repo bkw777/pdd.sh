@@ -125,7 +125,7 @@ This pile of commands is not well organized. Sorry.
 | names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
 | attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
 | expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
-| ffs&#160;\|&#160;fcb_filesizes | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB is a sector access operation that most tpdd servers don't implement. |
+| ffs&#160;\|&#160;fcb_flens | true\|false\|on\|off | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB table is a sector access operation that most tpdd servers don't implement. |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>Drives with dip-switches can actually be set for any of 150 300 600 1200 2400 4800 9600 19200 38400 76800<br>and you can actually set any of those speeds if you set the drive dip switches to match.<br>Some Brother/KnitKing drives are hardwired to 9600 with a solder bridge in place of the dip-switches<br>Most platforms don't support 78600, but some like Sparc do. |
 | com_test | | check if port open |
 | com_show | | show port status |
@@ -154,12 +154,11 @@ Additionally, some behavior may be modified by setting environment variables.
 | RTSCTS | true\|false | same as **rtscts** command above |
 | DEBUG | # | same as **debug** command above |
 | COMPAT | \[floppy\|wp2\|raw\] | same as **compat** command above |
-| TPDD_MODEL | 1\|2 | (default 1) Assume the attached TPDD drive is a TPDD1 or TPDD2 by default |
 | EXPOSE | 0\|1\|2 | same as **expose** command above |
-| USE_FCB | true\|false | same as **ffs** command above |
-| FONZIE_SMACK | true\|false | (default true) TPDD1 only. During \_init(), do (or don't do) the fdc-opr-fdc-opr flip-flop to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state. |
-| WITH_VERIFY | true\|false | (default true) TPDD1 only. Make the high level commands like restore-disk use the no-verify versions of fdc_format, write_logical, & write_id. Not advised. It's just here because the drive has those commands. |
-| YES | true\|false | (default false) Suppress confirmation prompts and assume "yes" for non-interactive scripting. |
+| FCB_FLENS | true\|false | same as **ffs** command above |
+| FONZIE_SMACK | true\|false | (default true) TPDD1 only. During \_init(), do (or don't do) an fdc-to-opr command to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state during \_init() |
+| WITH_VERIFY | true\|false | (default true) TPDD1 only. Use the with-verify or the without-verify versions of fdc_format, write_logical, & write_id. |
+| YES | true\|false | (default false) Assume "yes" for all confirmation prompts, for scripting. |
 
 Finally, the name that the script is called by is another way to select between TPDD1 and TPDD2 compatibility.  
 `make install` installs the script as `/usr/local/bin/pdd`, and also installs 2 symlinks named `pdd1` and `pdd2`.  
@@ -169,8 +168,9 @@ In most cases you can just run "pdd" regardless which type of drive is connected
 Commands may be issued either interactively at the `PDD(...)>` prompt,
 or non-interactively on the command line.
 
-Example, to list the directory, the command is: `ls`.  
-The `ls` command can be used either of these ways:  
+Example, to list the directory, the command is `ls`.  
+
+Interactive:  
 ```
 bkw@fw:~$ pdd
 PDD(opr:6.2,F)> ls
@@ -183,6 +183,7 @@ PDD(opr:6.2,F)> q
 bkw@fw:~$ 
 ```
 
+Non-Interactive:  
 ```
 bkw@fw:~$ pdd ls
 --------  Directory Listing  --------
@@ -194,11 +195,9 @@ bkw@fw:~$
 ```
 
 Multiple commands may be given at once, seperated by `;` to form a pre-loaded sequence.  
-If using `;` on the command line, the entire string of commands should be quoted, or
-the spaces and ;s need to be escaped.
 ```
 bkw@fw:~$ pdd
-PDD(opr:6.2,F)> ls ;use_fcb ;ls
+PDD(opr:6.2,F)> ls ;fcb_flens ;ls
 --------  Directory Listing  --------
 Floppy_SYS               | F |  11475
 SETRAM.BA                | F |    208
@@ -214,8 +213,8 @@ PDD(opr:6.2,F)> q
 bkw@fw:~$ 
 ```
 
-The non-interactive equivalent would be
-`$ pdd "ls ;use_fcb ;ls"`
+If using `;` on the command line, they need to be escaped or quoted.
+`$ pdd "ls ;fcb_flens ;ls"`
 
 ## Eamples for some individual commands
 
@@ -283,7 +282,7 @@ The Sardine dictionary disk is also in there.
 
 ### Directory Listings
 
-* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. There is a setting, not enabled by default, that makes pdd.sh's "ls" function read the FCB to get filesizes. This makes "ls" and "load" take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the "use_fcb" command.  
+* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. There is a setting, not enabled by default, that makes pdd.sh's "ls" function read the FCB to get filesizes. This makes "ls" and "load" take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the "ffs" command.  
 
 * Filenames can have non-printing characters in them. There is an option, enabled by default, to expose those bytes in filenames (and in the attr field). When a byte in a filename has an ascii value less than 32, it's displayed as the ctrl code that produces that byte, but in inverse video instead of carot notation so that the character only takes up one space. Bytes with ascii values above 126 are all displayed as just inverse ".". ex: null is ^@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, (except for the fact that it makes the filename field look one character too short). The expose option exposes that hidden byte in the name. This can be toggled with the "expose" command.  
 
@@ -291,14 +290,15 @@ The Sardine dictionary disk is also in there.
 
 ## Non-Standard DIP Switch Settings
 Here is an example to use the FDC-mode 38400 baud DIP switch setting on a TPDD1 or Purple Computing drive.  
-The drive will power-up in FDC-mode by default instead of Operation-mode, but you won't notice a difference because pdd.sh switches the mode as necessary, so all commands work the same as normal.  
+The dip switches not only change the baud rate but also make the drive default to FDC-mode instead of Operation-mode at power-on.  
+pdd.sh switches the drive to Operation-mode automatically regardless what mode the drive starts out in, so the only thing we have to do differently is tell it the baud rate is not the default 19200.  
 * Turn the drive power OFF  
 * Set the DIP switches on the bottom of the drive to `1:OFF 2:OFF 3:ON 4:OFF` ([reference](https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive/page/14/mode/1up))  
 * Turn the drive power ON  
 * Run: `$ BAUD=38400 pdd`
 
 Now use the drive as normal.  
-It's not really any faster. Not the point ;)  
+It's not really any faster.
 
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
