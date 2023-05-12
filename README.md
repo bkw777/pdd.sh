@@ -239,8 +239,10 @@ But the field is there and the drive doesn't care what's in it, and other platfo
 
 pdd.sh uses 'F' by default also for convenience, but it's only a default, and there are a few different ways to change that.  
 One way is to supply a 3rd argument to the `save` command.  
-This example could be for a Cambridge Z88, give a quote-space-quote fir the 3rd arg to explicitly specify a space character for the attribute:  
-`save Romcombiner.zip Romcombiner.zip ' '`
+This example could be for a Cambridge Z88, give a quote-space-quote for the 3rd arg to explicitly specify a space character for the attribute:  
+`save Romcombiner.zip Romcombiner.zip ' '`  
+
+Or change the current default ATTR by using the attr command.
 
 ### Rename a file on a WP-2 disk
 Notice that the filename format indicator in the prompt changes from 6.2 to 8.2 after the "wp2" command.  
