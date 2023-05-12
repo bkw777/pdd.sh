@@ -195,9 +195,10 @@ bkw@fw:~$
 ```
 
 Multiple commands may be given at once, seperated by `;` to form a pre-loaded sequence.  
+(directoy listing ; enable FCB file lengths ; directory listing)  
 ```
 bkw@fw:~$ pdd
-PDD(opr:6.2,F)> ls ;fcb_flens ;ls
+PDD(opr:6.2,F)> ls ;ffs 1;ls
 --------  Directory Listing  --------
 Floppy_SYS               | F |  11475
 SETRAM.BA                | F |    208
@@ -214,7 +215,7 @@ bkw@fw:~$
 ```
 
 If using `;` on the command line, they need to be escaped or quoted.
-`$ pdd "ls ;fcb_flens ;ls"`
+`$ pdd "ls ;ffs 1;ls"`
 
 ## Eamples for some individual commands
 
@@ -238,7 +239,7 @@ But the field is there and the drive doesn't care what's in it, and other platfo
 
 pdd.sh uses 'F' by default also for convenience, but it's only a default, and there are a few different ways to change that.  
 One way is to supply a 3rd argument to the `save` command.  
-This could be for a Cambridge Z88,  
+This example could be for a Cambridge Z88, give a quote-space-quote fir the 3rd arg to explicitly specify a space character for the attribute:  
 `save Romcombiner.zip Romcombiner.zip ' '`
 
 ### Rename a file on a WP-2 disk
@@ -282,7 +283,7 @@ The Sardine dictionary disk is also in there.
 
 ### Directory Listings
 
-* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. There is a setting, not enabled by default, that makes pdd.sh's "ls" function read the FCB to get filesizes. This makes "ls" and "load" take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the "ffs" command.  
+* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. There is a setting, not enabled by default, that makes pdd.sh's "ls" function read the FCB to get filesizes. This makes "ls" and "load" take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the "ffs" command. This only works on real drives. This can't be used with TPDD emulators because this requires using sector-access commands to read sector 0 from the disk. Emulators don't have any actual sector 0 and don't support the sector-access commands.
 
 * Filenames can have non-printing characters in them. There is an option, enabled by default, to expose those bytes in filenames (and in the attr field). When a byte in a filename has an ascii value less than 32, it's displayed as the ctrl code that produces that byte, but in inverse video instead of carot notation so that the character only takes up one space. Bytes with ascii values above 126 are all displayed as just inverse ".". ex: null is ^@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, (except for the fact that it makes the filename field look one character too short). The expose option exposes that hidden byte in the name. This can be toggled with the "expose" command.  
 
