@@ -80,7 +80,7 @@ This pile of commands is not well organized. Sorry.
 | command | arguments | description |
 | --- | --- | --- |
 | ready&#160;\|&#160;status | | Report the drive & disk ready/not-ready status  |
-| D&#160;\|&#160;condition&#160;\|&#160;cond | | Report combination of bit flags for different not-ready conditions |
+| condition&#160;\|&#160;cond | | Report combination of bit flags for different not-ready conditions |
 | b&#160;\|&#160;bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1<br>affects list/load/save/del/copy/ren/read_smt/read_fcb |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
 | rm&#160;\|&#160;del | filename | Delete a file |
