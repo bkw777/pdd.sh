@@ -109,7 +109,7 @@ This pile of commands is not well organized. Sorry.
 **TPDD1/TPDD2 Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| A&#160;\|&#160;ri&#160;\|&#160;read_id | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read the TPDD1 Sector ID Data or TPDD2 metadata field<br>default physical sector 0<br>"all" reads the ID/metadata field from every sector.<br>For TPDD2 the argument may be either track,sector (0-79,0-1) or a single linear sector number 0-159. |
+| ri&#160;\|&#160;read_id | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read the TPDD1 Sector ID Data or TPDD2 metadata field<br>default physical sector 0<br>"all" reads the ID/metadata field from every sector.<br>For TPDD2 the argument may be either track,sector (0-79,0-1) or a single linear sector number 0-159. |
 | rs&#160;\|&#160;read_sector | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector". For TPDD2 there are no logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
