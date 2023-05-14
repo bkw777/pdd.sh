@@ -6,7 +6,8 @@ It's pure bash except for the following:
 * ```stty``` is needed once at startup to configure the serial port.  
 * ```mkfifo``` is used once at startup for ```_sleep()``` without ```/usr/bin/sleep```.  
 
-That's it. There are no other external commands or dependencies, not even any child forks of more bash processes (no backticks, perens, or pipes), and no temp files or here-documents (here-docs create temp files behind the scenes in bash).
+That's it. There are no other external commands or dependencies, not even any child forks of more bash processes (no backticks, perens, or pipes), and no temp files or here-documents (here-docs create temp files behind the scenes in bash).  
+I think the while-loop in help() may create a child bash.
 
 There are a lot of commands and options. This is a swiss army knife for the TPDD.  
 It can be used to inspect, copy, restore, repair, or craft TPDD disks in ways that normal client software like TS-DOS or PDD.EXE doesn't provide or allow.
@@ -51,7 +52,9 @@ Or you may specify one as the first argument on the command line.
 
 With no arguments, it will run in interactive command mode.  
 You get a `PDD(mode[bank]:names,attr)>` prompt where you can enter commands.  
-"help" is still not one of them, Sorry.
+
+"help" lists commands and parameters.
+Only the more common commands are shown by default. To see all commands, set verbose 1.
 
 The intercative mode prompt indicates various aspects of the current operating state:  
 `PDD(mode[bank]:names,attr)>`  
@@ -90,11 +93,11 @@ This pile of commands is not well organized. Sorry.
 **TPDD1-only Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| F&#160;\|&#160;ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector (default 3). This format does not create a filesystem disk. It just allows reading/writing sectors. |
-| S&#160;\|&#160;si&#160;\|&#160;search_id | 0-12_hex_pairs... | Search all Sector IDs for an exact match. |
-| B&#160;\|&#160;wi&#160;\|&#160;write_id | \[0-79\] 12_hex_pairs... | Write the 12-byte Sector ID data. |
-| R&#160;\|&#160;rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\] | Read one logical sector at address: physical(0-79) logical(1-20). Default physical 0 logical 1 |
-| W&#160;\|&#160;wl&#160;\|&#160;write_logical | \<0-79\>&#160;\<1-20\>&#160;hex_pairs... | Write one logical sector at address: physical(0-79) logical(1-20). |
+| ff&#160;\|&#160;fdc_format | \[0-6\] | Format disk with <size_code> sized logical sectors and no "operation-mode" filesystem.<br>size codes: 0=64 1=80 2=128 3=256 4=512 5=1024 6=1280 bytes per logical sector (default 3). This format does not create a filesystem disk. It just allows reading/writing sectors. |
+| si&#160;\|&#160;search_id | 0-12_hex_pairs... | Search all Sector IDs for an exact match. |
+| wi&#160;\|&#160;write_id | \[0-79\] 12_hex_pairs... | Write the 12-byte Sector ID data. |
+| rl&#160;\|&#160;read_logical | \[0-79\]&#160;\[1-20\] | Read one logical sector at address: physical(0-79) logical(1-20). Default physical 0 logical 1 |
+| wl&#160;\|&#160;write_logical | \<0-79\>&#160;\<1-20\>&#160;hex_pairs... | Write one logical sector at address: physical(0-79) logical(1-20). |
 
 **TPDD2-only Sector Access**  
 | command | arguments | Description |
@@ -116,6 +119,7 @@ This pile of commands is not well organized. Sorry.
 **Other**  
 | command | arguments | Description |
 | --- | --- | --- |
+| help&#160;\|&#160;h&#160;\|&#160;? | | show help |
 | 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | model&#160;\|&#160;detect&#160;\|&#160;detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
@@ -301,7 +305,7 @@ pdd.sh switches the drive to Operation-mode automatically regardless what mode t
 * Run: `$ BAUD=38400 pdd`
 
 Now use the drive as normal.  
-It's not really any faster.
+It's not really any faster. The point was just to support all dip switch settings since they exist. And that means getting \_init() working well enough that the app works regardless if the drive is a tpdd1 starting in Operation-mode, a tpdd1 starting in FDC-mode, or a tpdd2. First fonzie_smack() makes sure that we are either a tpdd2, or a tpdd1 in Oeration mode. Then pdd2_unk23() (aka "ts-dos mystery command") detects if the drive is a tpdd1 or tpdd2. At that point we have the drive in a known state and can send commands to it without locking it up.
 
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
