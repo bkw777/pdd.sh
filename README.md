@@ -79,9 +79,9 @@ This pile of commands is not well organized. Sorry.
 **TPDD1/TPDD2 File Access**  
 | command | arguments | description |
 | --- | --- | --- |
-| ready&#160;\|&#160;status | | Report the drive & disk ready/not-ready status  |
-| condition&#160;\|&#160;cond | | Report combination of bit flags for different not-ready conditions |
-| b&#160;\|&#160;bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1<br>affects list/load/save/del/copy/ren/read_smt/read_fcb |
+| ready&#160;\|&#160;status | | Report the drive & disk ready/not-ready status |
+| cond&#160;\|&#160;condition | | Report combination of bit flags for different not-ready conditions |
+| bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1<br>affects list/load/save/del/copy/ren/read_smt/read_fcb |
 | ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
 | rm&#160;\|&#160;del | filename | Delete a file |
 | cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
@@ -102,35 +102,35 @@ This pile of commands is not well organized. Sorry.
 **TPDD2-only Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| cache_load | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache & the disk.<br>mode 0 = load from disk to cache<br>mode 2 = unload cache to disk |
+| cache_load | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache (ram) & the disk (media).<br>mode 0 = load from disk to cache<br>mode 2 = commit cache to disk |
 | cache_read | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's sector cache.<br>mode 0 = main data, 1 = metadata |
 | cache_write | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<data&#160;0-127&#160;hex&#160;pairs...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode: 0 = main data, 1 = metadata |
 
 **TPDD1/TPDD2 Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| read_header&#160;\|&#160;rh | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read the TPDD1 Sector ID Data or TPDD2 metadata field<br>default physical sector 0<br>"all" reads the header from every sector.<br>For TPDD2 the argument may be either "track,sector" (0-79,0-1) or a single linear sector number 0-159. |
-| read_sector&#160;\|&#160;rs | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector", meaning all logical sectors. For TPDD2 there are no logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single physical sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
+| rh&#160;\|&#160;read_header | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read the TPDD1 Sector ID Data or TPDD2 metadata field<br>default physical sector 0<br>"all" reads the header from every sector.<br>For TPDD2 the argument may be either "track,sector" (0-79,0-1) or a single linear sector number 0-159. |
+| rs&#160;\|&#160;read_sector | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector", meaning all logical sectors. For TPDD2 there are no logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single physical sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
-| read_fcb&#160;\|&#160;fcb | | Display the File Control Block list - the underlying data that dirent() uses for the directory list |
-| read_smt&#160;\|&#160;smt | | Display the Space Management Table |
+| fcb&#160;\|&#160;read_fcb | | Display the File Control Block list - the underlying data that dirent() uses for the directory list |
+| smt&#160;\|&#160;read_smt | | Display the Space Management Table |
 
 **Other**  
 | command | arguments | Description |
 | --- | --- | --- |
-| help&#160;\|&#160;h&#160;\|&#160;? | \[command\] | show help |
-| pdd1&#160;\|&#160;1 | | Select TPDD1 mode |
-| pdd2&#160;\|&#160;2 | | Select TPDD2 mode |
+| ?&#160;\|&#160;h&#160;\|&#160;help | \[command\] | show help |
+| pdd1 | | Select TPDD1 mode |
+| pdd2 | | Select TPDD2 mode |
 | detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
 | opr&#160;\|&#160;fdc | | Switch to Operation or FDC mode (TPDD1 only) |
 | compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
 | floppy\|wp2\|raw | | Shortcut for **compat floppy** , **compat wp2** , **compat raw**  |
 | names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
 | attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
-| expose | | Expose non-printable bytes in filenames. Default on. (see the tpdd2 util disk) |
-| ffs&#160;\|&#160;fcb_flens | true\|false | Show accurate file sizes by making ocmd_dirent() always read the FCBs instead of taking the inaccurate file size that the drive firmware dirent() provides.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB table is a sector access operation that most tpdd servers don't implement. |
-| baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>Drives with dip-switches can actually be set for any of 150 300 600 1200 2400 4800 9600 19200 38400 76800<br>and you can actually set any of those speeds if you set the drive dip switches to match.<br>Some Brother/KnitKing drives are hardwired to 9600 with a solder bridge in place of the dip-switches<br>Most platforms don't support 78600, but some like Sparc do. |
+| expose | 0\|1\|2 | Expose non-printable bytes in filenames. Default 1. (see the tpdd2 util disk for an example)<br>0 = off<br>1 = bytes 00-1F in reverse-video "@" to "_", bytes 7F-FF as reverse-video "."<br>This mode exposes all non-printing bytes at least that they exist for the >126 values, and shows the ctrl chars for the <32 values, without altering the display formatting, because the exposed bytes still only occupy a single character space<br>2 = all non-printing bytes displayed as inverse video 00 to 1F and 7F to FF<br>This mode exposes al bytes and shows their actual value, but requires 2 character spaces per byte, which will mess up the ls() display formatting. |
+| ffs&#160;\|&#160;fcb_fsize | true\|false | Show true file sizes by making ocmd_dirent() read the FCB table instead of using the inaccurate file sizes that the drive firmware Directory Entry command returns.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB table is a raw sector access operation that most tpdd servers don't implement. |
+| baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>Drives with dip-switches can actually be set for any of 150 300 600 1200 2400 4800 9600 19200 38400 76800<br>and you can actually set any of those speeds if you set the drive dip switches to match.<br>Some Brother/KnitKing drives are hardwired to 9600 with a solder bridge in place of the dip-switches. |
 | com_test | | check if port open |
 | com_show | | show port status |
 | com_open | | open the port |
@@ -142,24 +142,22 @@ This pile of commands is not well organized. Sorry.
 | send_opr_req | fmt data... | build a valid operation-mode request block and send it to the tpdd<br>fmt = single hex pair for the request format (the command)<br>data... = 0 to 128 hex pairs for the payload data<br>The ZZ preamble, LEN field, and trailing checksum are all calculated and added automatically |
 | check_opr_err | | check ret_dat\[\] for an opr-mode error code  |
 | sync&#160;\|&#160;drain | | flush the port receive buffer |
-| sum&#160;\|&#160;checksum | \<hex pairs...\> | calculate the checksum for the bytes represented by the given hex pairs |
-| debug&#160;\|&#160;v | \[#\] | Debug/Verbose level - With no arguments toggles on/off (0/1), or set specified level<br>0 = verbose off<br>1 = verbose level 1<br>2+ = more verbose |
-| send_loader&#160;\|&#160;bootstrap | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
+| checksum | \<hex pairs...\> | calculate the checksum for the bytes represented by the given hex pairs |
+| v&#160;\|&#160;verbose&#160;\|&#160 | \[#\] | Verbose/Debug level. Default 0. 1 or greater = more verbose.<br>Verbose levels above 0 also exposes more commands in help. |
+| bootstrap&#160;\|&#160;send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
-
-There are also a bunch of low level raw/debugging commands not shown here. See do_cmd() in the script.
 
 Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
 | --- | --- | --- |
 | BAUD | 9600\|19200 | Same as **baud** command above |
 | RTSCTS | true\|false | same as **rtscts** command above |
-| DEBUG | # | same as **debug** command above |
+| VERBOSE | # | same as **verbose** command above |
 | COMPAT | \[floppy\|wp2\|raw\] | same as **compat** command above |
 | EXPOSE | 0\|1\|2 | same as **expose** command above |
-| FCB_FLENS | true\|false | same as **ffs** command above |
+| FCB_FSIZE | true\|false | same as **ffs** command above |
 | FONZIE_SMACK | true\|false | (default true) TPDD1 only. During \_init(), do (or don't do) an fdc-to-opr command to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state during \_init() |
 | WITH_VERIFY | true\|false | (default true) TPDD1 only. Use the with-verify or the without-verify versions of fdc_format, write_logical, & write_id. |
 | YES | true\|false | (default false) Assume "yes" for all confirmation prompts, for scripting. |
@@ -263,12 +261,12 @@ Disk Write-Protected
 ```
 
 ### Verbose/debug mode
-`$ DEBUG=1 pdd ...`  
+`$ VERBOSE=1 pdd ...`  
 or  
 `PDD(opr:6.2(F)> v 1`
 
 ### More verbose/debug mode
-`$ DEBUG=2 pdd ...`  
+`$ VERBOSE=2 pdd ...`  
 or  
 `PDD(opr:6.2(F)> v 2`
 

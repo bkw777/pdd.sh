@@ -116,9 +116,9 @@
 # verbose/debug
 # 0/unset=normal, 1=verbose, >1=more verbose
 # convert ""=0, false=0, true=1, >1 accepted as-is and handled later
-case "$DEBUG" in
-	false|off|n|no|"") DEBUG=0 ;;
-	true|on|y|yes|:) DEBUG=1 ;;
+case "$VERBOSE" in
+	false|off|n|no|"") VERBOSE=0 ;;
+	true|on|y|yes|:) VERBOSE=1 ;;
 esac
 
 # COMPAT sets the default behavior for translating filenames between the
@@ -141,7 +141,7 @@ esac
 # Real drives give slightly wrong file sizes in their dirent() output.
 # Unknown why, perhaps not counting ^Ms or something?
 # But the correct file sizes are available on the disk in the FCB table.
-# FCB_FLENS makes lcmd_dirent() use sector-access commands to read the FCB
+# FCB_FSIZE makes lcmd_dirent() use sector-access commands to read the FCB
 # table and display those file-size values in directory listings.
 # Works great, *but only on real drives*.
 # TPDD emulators aren't really disks, and don't have any FCB sector.
@@ -150,7 +150,7 @@ esac
 # This also adds a few seconds to each directory listing.
 # This can be changed at run-time with the "ffs" command.
 # Default is off because it only works on real drives and it's slower.
-: ${FCB_FLENS:=false} # true|false
+: ${FCB_FSIZE:=false} # true|false
 
 # TPDD1 drives have two versions of each of the FDC-mode commands that write to disk:
 # FDC Format, Write Sector, Write ID, all also have a "no-verify" version.
@@ -165,8 +165,11 @@ esac
 # Assume "yes" to all confirmation prompts for scripting.
 : ${YES:=false} # true|false
 
+# RD_CHECK_MIXED_LSC
+# restore_disk check for mixed logocal size codes
+#
 # When creating a physical TPDD1 disk from a disk image, disks can have
-# different logical size code on different physical sectors, and we can read
+# different logical size codes on different physical sectors, and we can read
 # them and record them all in the disk image, but there is no way to write
 # mixed lsc back to a real disk. This setting tells restore_disk():
 #
@@ -183,7 +186,7 @@ esac
 # This means that although we can't re-create those 80-byte lsc codes,
 # we can just format the whole disk as 64-byte lsc, and outwardly the new
 # disk functions all the same. The only way to even detect the difference
-# is to run "ri all" on both disks. So, for all normal usage, it makes no
+# is to run "rh all" on both disks. So, for all normal usage, it makes no
 # difference and it's fine to just read the LSC from sector 0 and use that
 # to format the disk before restoring the sector data.
 : ${RD_CHECK_MIXED_LSC:=false} # true|false
@@ -1080,7 +1083,7 @@ ocmd_dirent () {
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 
 	# read the FCB table to get the true file lengths
-	$FCB_FLENS && ((m==${dirent_cmd[get_first]} || m==${dirent_cmd[set_name]})) && { quiet=true read_fcb ; _sleep 0.1 ; }
+	$FCB_FSIZE && ((m==${dirent_cmd[get_first]} || m==${dirent_cmd[set_name]})) && { quiet=true read_fcb ; _sleep 0.1 ; }
 
 	# construct the request
 	shex=(00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00)
@@ -1111,7 +1114,7 @@ ocmd_dirent () {
 	printf -v file_attr '%b' "\x${ret_dat[24]}"
 
 	((file_len=0x${ret_dat[25]}*0xFF+0x${ret_dat[26]})) # file length from dirent()
-	$FCB_FLENS && { # file length from FCB
+	$FCB_FSIZE && { # file length from FCB
 		for ((i=0;i<PDD_FCBS;i++)) {
 			[[ ${fcb_fname[i]} == $file_name ]] && [[ ${fcb_attr[i]} == $file_attr ]] && { file_len=${fcb_size[i]} ;break ; }
 		}
@@ -2037,11 +2040,11 @@ fonzie_smack () {
 
 set_fcb_filesizes () {
 	case "$1" in
-		false|off|no|0) FCB_FLENS=false ;;
-		true|on|yes|1) FCB_FLENS=true ;;
-		#'') $FCB_FLENS && FCB_FLENS=false || FCB_FLENS=true ;;
+		false|off|no|0) FCB_FSIZE=false ;;
+		true|on|yes|1) FCB_FSIZE=true ;;
+		#'') $FCB_FSIZE && FCB_FSIZE=false || FCB_FSIZE=true ;;
 	esac
-	echo "Use FCBs for true file sizes: $FCB_FLENS"
+	echo "Use FCBs for true file sizes: $FCB_FSIZE"
 }
 
 set_verify () {
@@ -2221,7 +2224,7 @@ lcmd_load () {
 		# So if p grows past l, don't exit the loop, just update l so that we
 		# don't end with a final display like "100% (23552/23460 bytes)"
 		# Also simplifies the final sanity check.
-		$FCB_FLENS || { ((p>l)) && l=$p ; }
+		$FCB_FSIZE || { ((p>l)) && l=$p ; }
 
 		pbar $p $l 'bytes'
 	done
@@ -2559,25 +2562,25 @@ do_cmd () {
 
 			#c 1 # this comment is used by help()
 
-			exit|bye|quit|q) exit ;;
+			q|quit|exit|bye) exit ;;
 			#h Order Pizza
 
-			help|h|\?) help $* ;_e=$? ;; # [command]
+			\?|h|help) help $* ;_e=$? ;; # [command]
 			#h Display built-in help.
 			#h If command is supplied, shows only the help for that command, if found.
 			#h If verbose = 0, hides the hacky, low-level, and less-common commands.
 			#h If verbose > 0, shows all commands.
 
-			pdd1|1) fonzie_smack ;set_pdd1 ;_e=$? ;;
+			pdd1) fonzie_smack ;set_pdd1 ;_e=$? ;;
 			#h Assume the attached drive is a TPDD1
 
-			pdd2|2) set_pdd2 ;_e=$? ;;
+			pdd2) set_pdd2 ;_e=$? ;;
 			#h Assume the attached drive is a TPDD2
 
-			bank|b) bank $1 ;_e=$? ;; # [n]
+			bank) bank $1 ;_e=$? ;; # [n]
 			#h Switch to bank n (0-1), display current setting.
 
-			compat|c) ask_compat "$@" ;_e=$? ;; # [mode]
+			compat) ask_compat "$@" ;_e=$? ;; # [mode]
 			#h Set filename & attr behavior for compatibility with various other clients.
 			#h mode:
 			#h   floppy   6.2 space-padded filenames    with attr 'F'
@@ -2587,10 +2590,10 @@ do_cmd () {
 
 			#c 2
 
-			names|n) ask_names "$@" ;_e=$? ;; # [format]
+			names) ask_names "$@" ;_e=$? ;; # [format]
 			#h Same as "compat", but only sets the filename part.
 
-			attr|a) ask_attr "$@" ;_e=$? ;; # [attr]
+			attr) ask_attr "$@" ;_e=$? ;; # [attr]
 			#h Set the default attribute byte.
 			#h Single byte, either literal or as a hex pair.
 			#h Presents a menu if not given.
@@ -2613,11 +2616,15 @@ do_cmd () {
 
 			#c 2
 
-			rtscts|r) RTSCTS=${1:-true} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
+			rtscts|hardware_flow) RTSCTS=${1:-true} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
 			#h Enable hardware flow control, display current setting.
 
-			xonxoff|x) XONOFF=${1:-false} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
+			xonoff|xonxoff|software_flow) XONOFF=${1:-false} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
 			#h Enable software flow control, display current setting.
+			#h
+			#h This may be useful for send_loader(), and probably only for that.
+			#h
+			#h The TPDD protocol is full of binary that is not encoded in any way, and so should not work with any of the normal file or sector access commands.
 
 			com_test) lcmd_com_test ;_e=$? ;;
 			#h Check if the serial port is open (always just a yes/no answer)
@@ -2661,13 +2668,13 @@ do_cmd () {
 			drain) tpdd_drain ;_e=$? ;;
 			#h Read and discard all available bytes from the serial port
 
-			checksum|sum) calc_cksum $* ;_e=$? ;; # data
+			checksum) calc_cksum $* ;_e=$? ;; # data
 			#h Calculate the checksum for data using the same method that the TPDD uses
 			#h data: Up to 128 space-seperated hex pairs.
 			#h returns: Bitwise negation of least significant byte of sum of all bytes, returned as a hex pair.
 			#h TPDD checksums include the format, length, and data fields of OPR-mode commands and responses.
 
-			send_loader|bootstrap) srv_send_loader "$@" ;_e=$? ;; # filaname
+			bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;; # filaname
 			#h Send an ascii BASIC file over the serial port slowly enough for BASIC to read.
 			#h The connected device must be a TRS-80 Model 100 or similar, not a TPDD drive.
 			#h In this case unlike all others, we are pretending to be the TPDD drive.
@@ -2677,16 +2684,16 @@ do_cmd () {
 
 			#c 1
 
-			debug|verbose|v) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # n
+			v|verbose|debug) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # n
 			#h Set verbosity level, display current setting.
 
-			batch|yes|y) set_yes $* ;_e=0 ;; # [true|false]
+			y|yes|batch) set_yes $* ;_e=0 ;; # [true|false]
 			#h Set non-interactive mode, display current setting.
 
 			#c 2
 
-			fcb_flens|ffs) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
-			#h Set FCB_FLENS, display current setting.
+			ffs|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
+			#h Set FCB_FSIZE, display current setting.
 			#h Whenever the dirent() command is used to get file info, also read sector 0 and get filesizes from the FCB table, and use those values instead of the values given by the drives normal dirent() function.
 			#h
 			#h TPDD drives return file sizes that are smaller than the actual file sizes in the directory listing.
@@ -2701,8 +2708,20 @@ do_cmd () {
 			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID
 			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
 
-			expose) set_expose $1 ;_e=0 ;; # [true|false]
+			expose) set_expose $1 ;_e=0 ;; # [0-2]
 			#h Set EXPOSE_BYTES mode, display current setting.
+			#h Expose non-printing bytes in filenames and attr.
+			#h
+			#h 0 = off
+			#h
+			#h 1 = 0x00-0x1F displayed as inverse-video "@" to "_", 0x7F-0xFF as inverse-video "."
+			#h This mode allows to expose all bytes without altering the display formatting because each byte still only occupies a single character space.
+			#h The byte values below 32 are identified by their ctrl-character, ie 0x01 is ^A, displayed as inverse-video A.
+			#h
+			#h 2 = All non-printing bytes displayed as inverse-video "00" to "1F" or "7F" to "FF".
+			#h This mode shows the actual value of all bytes, but messes up the display formatting because each non-printing byte requires 2 character spaces.
+			#h
+			#h An example is the the TPDD2 Util disk, which has an 0x01 byte as the first byte of the first filename.
 
 			detect_model) pdd2_unk23 ;_e=$? ;;
 			#h Detect whether the connected drive is a TPDD1 or TPDD2
@@ -2941,13 +2960,13 @@ do_cmd () {
 
 #h
 #h Most commands that take true|false arguments also take yes,no,y,n,1,0,on,off.
-#h A few commands that take numeric threshold values like verbose, also take true,false,yes,no,y,n,on,off in place of 1 & 0.
-
+#h
+#h A few commands that take numeric values for a level or threshold, like verbose and expose, also take true,false,yes,no,y,n,on,off in place of 1 & 0.
 
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${DEBUG:-0} FNL # allow FEL to be unset
+typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${VERBOSE:-0} FNL # allow FEL to be unset
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= bd= did_init=false quiet=false g_x= PDD_MAX_FLEN=$PDD1_MAX_FLEN
 readonly LANG=C
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
