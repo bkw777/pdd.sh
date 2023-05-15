@@ -612,7 +612,7 @@ vecho () {
 
 # not as elegant as I'd like but working
 help () {
-	local a b s="$1" ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} ;local -a f=() l=() ;((w--))
+	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} ;local -a f=() l=() ;((w--))
 	mapfile -t f < $0
 	for ((i=0;i<${#f[*]};i++)) {
 		l=(${f[i]}) ;a="${l[0]}"
