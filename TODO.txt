@@ -1,10 +1,4 @@
 
-usage / help
-
-scan self for specially formatted comments
-
-----
-
 Replace TPDD1 "mv" with one that edits the FCB instead of load>rm>save.
 
 It might not be much faster, because it would still be doing at least one
@@ -33,12 +27,6 @@ tpdd2 disk, X2 from the hex encoding, plus probably at least one more byte
 per array element for a null terminator internal to bash.)
 
 Some routines already do this. lcmd_load() already does this.
-
-----
-
-Figure out some better more consistent way to manage the overlapping
-flags/states/options/controls currently affecting, or affected by,
-$ppd2 $MODEL_DETECTION $TPDD_MODEL $operation_mode $mode[]
 
 ----
 
