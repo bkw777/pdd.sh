@@ -2860,14 +2860,14 @@ do_cmd () {
 			cache_read) pdd2_cache_read $* ;_e=$? ;; # area offset length
 			#h Read from drive cache.
 			#h area: 0=data 1=meta
-			#h offset: 0-1280
-			#h length: 0-1280
+			#h offset: 0-1279
+			#h length: 0-252
 
 			cache_write) pdd2_cache_write $* ;_e=$? ;; # area offset data
 			#h Write to drive cache.
 			#h area: 0=data 1=meta
-			#h offset: 0-1280
-			#h data: space-seperated hex pairs
+			#h offset: 0-1279
+			#h data: 0-127 space-seperated hex pairs
 
 	# TPDD1 & TPDD2 local/client sector access
 
