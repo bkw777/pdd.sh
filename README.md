@@ -109,8 +109,8 @@ This pile of commands is not well organized. Sorry.
 **TPDD1/TPDD2 Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| ri&#160;\|&#160;read_id | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read the TPDD1 Sector ID Data or TPDD2 metadata field<br>default physical sector 0<br>"all" reads the ID/metadata field from every sector.<br>For TPDD2 the argument may be either track,sector (0-79,0-1) or a single linear sector number 0-159. |
-| rs&#160;\|&#160;read_sector | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector". For TPDD2 there are no logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
+| read_header&#160;\|&#160;rh | \[0-79\]&#160;\|&#160;\[0-79,0-1\]&#160;\|&#160;all | Read the TPDD1 Sector ID Data or TPDD2 metadata field<br>default physical sector 0<br>"all" reads the header from every sector.<br>For TPDD2 the argument may be either "track,sector" (0-79,0-1) or a single linear sector number 0-159. |
+| read_sector&#160;\|&#160;rs | \[0-79\] or \[0-79 0-1\] | Read one full 1280-byte sector. For TPDD1 this is one "physical sector", meaning all logical sectors. For TPDD2 there are no logical sectors and this is just a "sector".<br>For TPDD1 the argument is a single physical sector number 0-79<br>For TPDD2 the arguments are track number 0-79 and sector number 0-1 |
 | dd&#160;\|&#160;dump_disk | \[filename\] | Read an entire disk, and write to filename or display on screen |
 | rd&#160;\|&#160;restore_disk | \<filename\> | Restore an entire disk from filename |
 | read_fcb&#160;\|&#160;fcb | | Display the File Control Block list - the underlying data that dirent() uses for the directory list |
@@ -120,8 +120,8 @@ This pile of commands is not well organized. Sorry.
 | command | arguments | Description |
 | --- | --- | --- |
 | help&#160;\|&#160;h&#160;\|&#160;? | \[command\] | show help |
-| 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
-| 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
+| pdd1&#160;\|&#160;1 | | Select TPDD1 mode |
+| pdd2&#160;\|&#160;2 | | Select TPDD2 mode |
 | detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
 | opr&#160;\|&#160;fdc | | Switch to Operation or FDC mode (TPDD1 only) |
 | compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
