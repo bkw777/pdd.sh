@@ -119,7 +119,7 @@ This pile of commands is not well organized. Sorry.
 **Other**  
 | command | arguments | Description |
 | --- | --- | --- |
-| help&#160;\|&#160;h&#160;\|&#160;? | | show help |
+| help&#160;\|&#160;h&#160;\|&#160;? | \[command\] | show help |
 | 1&#160;\|&#160;pdd1 | | Select TPDD1 mode |
 | 2&#160;\|&#160;pdd2 | | Select TPDD2 mode |
 | model&#160;\|&#160;detect&#160;\|&#160;detect_model | | Detects TPDD1 vs TPDD2 connected using the same mystery command as TS-DOS. Sets TPDD1 vs TPDD2 mode based on detection. |
