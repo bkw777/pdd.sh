@@ -143,7 +143,7 @@ This pile of commands is not well organized. Sorry.
 | check_opr_err | | check ret_dat\[\] for an opr-mode error code  |
 | sync&#160;\|&#160;drain | | flush the port receive buffer |
 | checksum | \<hex pairs...\> | calculate the checksum for the bytes represented by the given hex pairs |
-| v&#160;\|&#160;verbose&#160;\|&#160 | \[#\] | Verbose/Debug level. Default 0. 1 or greater = more verbose.<br>Verbose levels above 0 also exposes more commands in help. |
+| v&#160;\|&#160;verbose&#160;\|&#160;debug | \[#\] | Verbose/Debug level. Default 0. 1 or greater = more verbose.<br>Verbose levels above 0 also exposes more commands in help. |
 | bootstrap&#160;\|&#160;send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
