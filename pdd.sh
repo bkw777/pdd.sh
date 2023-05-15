@@ -612,7 +612,7 @@ vecho () {
 
 # not as elegant as I'd like but working
 help () {
-	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} ;local -a f=() l=() ;((w--))
+	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} s=0 ;local -a f=() l=() ;((w--))
 	mapfile -t f < $0
 	for ((i=0;i<${#f[*]};i++)) {
 		l=(${f[i]}) ;a="${l[0]}"
@@ -620,15 +620,17 @@ help () {
 			\#h) a= b="${f[i]}" ;b="${b##*#}" ;b="${b:2}" ;((${#b})) || printf -v b ' ' ;;
 			\#c) c=${l[1]} ;a= b= ;;
 			*\)) ((c)) && ((d>=c)) && {
-					a="${a%%)*}" ;a="${a//\\/}" ;b="${f[i]}"
+					s=0 a="${a%%)*}" ;a="${a//\\/}" ;b="${f[i]}"
+					((${#1})) && [[ "|$a|" =~ "|$1|" ]] && s=1
 					[[ "$b" =~ '#' ]] && b="${b##*#}" || b=
 					printf -v b '\n \033[1m%s\033[m %s' "${a//|/ | }" "${b:1}"
 				} || a= b=
 				;;
 			*) a= b= ;;
 		esac
-		((c)) && ((d<c)) && b=
-		[[ $b == ' ' ]] && { b= ;echo ; }
+		((${#1})) && ((s==0)) && continue
+		((c)) && ((d<c)) && continue
+		[[ $b == ' ' ]] && { echo ; continue ; }
 		while ((${#b})) ;do
 			((c)) && { ((${#a})) && a= || b="    $b" ; }
 			printf '%s\n' "${b:0:$w}"
@@ -2560,7 +2562,7 @@ do_cmd () {
 			exit|bye|quit|q) exit ;;
 			#h Order Pizza
 
-			help|h|\?) help ;_e=$? ;;
+			help|h|\?) help $* ;_e=$? ;;
 			#h This help
 
 			pdd1|1) fonzie_smack ;set_pdd1 ;_e=$? ;;
