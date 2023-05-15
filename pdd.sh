@@ -610,17 +610,17 @@ vecho () {
 	shift ;echo "$@" >&2
 }
 
-# not as elegant as I'd like but working
+# help [cmd]
 help () {
 	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} s=0 ;local -a f=() l=() ;((w--))
 	mapfile -t f < $0
 	for ((i=0;i<${#f[*]};i++)) {
-		l=(${f[i]}) ;a="${l[0]}"
+		l=(${f[i]}) ;a=${l[0]}
 		case "${a}" in
-			\#h) a= b="${f[i]}" ;b="${b##*#}" ;b="${b:2}" ;((${#b})) || printf -v b ' ' ;;
-			\#c) c=${l[1]} ;a= b= ;;
+			\#h) a= b=${f[i]} ;b=${b##*#} ;b=${b:2} ;((${#b})) || b=' ' ;;
+			\#c) a= b= c=${l[1]} ;;
 			*\)) ((c)) && ((d>=c)) && {
-					s=0 a="${a%%)*}" ;a="${a//\\/}" ;b="${f[i]}"
+					s=0 a=${a%%)*} b=${f[i]} ;a=${a//\\/}
 					((${#1})) && [[ "|$a|" =~ "|$1|" ]] && s=1
 					[[ "$b" =~ '#' ]] && b="${b##*#}" || b=
 					printf -v b '\n \033[1m%s\033[m %s' "${a//|/ | }" "${b:1}"
@@ -630,11 +630,11 @@ help () {
 		esac
 		((${#1})) && ((s==0)) && continue
 		((c)) && ((d<c)) && continue
-		[[ $b == ' ' ]] && { echo ; continue ; }
+		[[ $b == ' ' ]] && { echo ;continue ; }
 		while ((${#b})) ;do
-			((c)) && { ((${#a})) && a= || b="    $b" ; }
+			((c)) && ((${#a}==0)) && b="    $b"
 			printf '%s\n' "${b:0:$w}"
-			b="${b:$w}"
+			b=${b:$w}
 		done
 	}
 	((v)) || printf '\nSet verbose 1 or greater to see more commands.\n'
@@ -2562,8 +2562,11 @@ do_cmd () {
 			exit|bye|quit|q) exit ;;
 			#h Order Pizza
 
-			help|h|\?) help $* ;_e=$? ;;
-			#h This help
+			help|h|\?) help $* ;_e=$? ;; # [command]
+			#h Display built-in help.
+			#h If command is supplied, shows only the help for that command, if found.
+			#h If verbose = 0, hides the hacky, low-level, and less-common commands.
+			#h If verbose > 0, shows all commands.
 
 			pdd1|1) fonzie_smack ;set_pdd1 ;_e=$? ;;
 			#h Assume the attached drive is a TPDD1
