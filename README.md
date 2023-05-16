@@ -53,8 +53,9 @@ Or you may specify one as the first argument on the command line.
 With no arguments, it will run in interactive command mode.  
 You get a `PDD(mode[bank]:names,attr)>` prompt where you can enter commands.  
 
-"help" lists commands and parameters.
-Only the more common commands are shown by default. To see all commands, set verbose 1.
+"help" lists commands and parameters.  
+Only the more common commands are shown by default.  
+To see all commands, set verbose 1.
 
 The intercative mode prompt indicates various aspects of the current operating state:  
 `PDD(mode[bank]:names,attr)>`  
@@ -80,10 +81,10 @@ This pile of commands is not well organized. Sorry.
 | command | arguments | description |
 | --- | --- | --- |
 | ready&#160;\|&#160;status | | Report the drive & disk ready/not-ready status |
-| cond&#160;\|&#160;condition | | Report combination of bit flags for different not-ready conditions |
+| cnd&#160;\|&#160;condition | | Report combination of bit flags for different not-ready conditions |
 | bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1<br>affects list/load/save/del/copy/ren/read_smt/read_fcb |
-| ls&#160;\|&#160;list&#160;\|&#160;dir | | Directory listing |
-| rm&#160;\|&#160;del | filename | Delete a file |
+| ls&#160;\|&#160;dir&#160;\|&#160;list | | Directory listing |
+| rm&#160;\|&#160;del&#160;\|&#160;delete | filename | Delete a file |
 | cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
 | mv&#160;\|&#160;ren | src_filename&#160;dest_filename | Rename a file |
 | load | disk_filename&#160;\[local_filename\] | Read a file from the disk |
@@ -136,18 +137,21 @@ This pile of commands is not well organized. Sorry.
 | com_open | | open the port |
 | com_close | | close the port |
 | com_read | \[#\] | read bytes from port - read # bytes if given, or until end of data<br>this is really just a wrapper for an internal low level function so you can do manual hacking.<br>The received bytes just get stored as hex pairs in rhex\[\]<br>You'll need to set verbose 2 or 3 to see them. |
-| com_write | hex pairs... | write bytes to port - for each hex pair, write the corresponding byte to the port |
+| com_write | hex_pairs... | write bytes to port - for each hex pair, write the corresponding byte to the port |
 | read_fdc_ret | | read an fdc-mode return msg from the port and parse it |
 | read_opr_ret | | read an opr-mode return msg from the port and parse it |
 | send_opr_req | fmt data... | build a valid operation-mode request block and send it to the tpdd<br>fmt = single hex pair for the request format (the command)<br>data... = 0 to 128 hex pairs for the payload data<br>The ZZ preamble, LEN field, and trailing checksum are all calculated and added automatically |
 | check_opr_err | | check ret_dat\[\] for an opr-mode error code  |
-| sync&#160;\|&#160;drain | | flush the port receive buffer |
+| drain | | flush the port receive buffer |
 | checksum | \<hex pairs...\> | calculate the checksum for the bytes represented by the given hex pairs |
 | v&#160;\|&#160;verbose&#160;\|&#160;debug | \[#\] | Verbose/Debug level. Default 0. 1 or greater = more verbose.<br>Verbose levels above 0 also exposes more commands in help. |
 | bootstrap&#160;\|&#160;send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
+
+There are even more commands that are mostly low level hacy suff.  
+Set verbose 1 and then run help to see everything.
 
 Additionally, some behavior may be modified by setting environment variables.
 | variable | value | effect |
