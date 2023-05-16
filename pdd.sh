@@ -1111,6 +1111,7 @@ ocmd_fdc () {
 }
 
 # Open File
+# ocmd_open MM
 # request: 5A 5A 01 01 MM ##
 # return : 12 01 ?? ##
 # MM = access mode: 01=write_new, 02=write_append, 03=read
@@ -2631,7 +2632,7 @@ do_cmd () {
 			sleep) _sleep $* ;_e=$? ;; # n
 			#h Sleep for n seconds. n may have up to 3 decimals, so 0.001 is the smallest value.
 
-			with_verify|verify) set_verify $* ;_e=0 ;; # [true|false]
+			verify|with_verify) set_verify $* ;_e=0 ;; # [true|false]
 			#h Set WITH_VERIFY, display current setting.
 			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID
 			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
@@ -2690,27 +2691,29 @@ do_cmd () {
 	# Most of these are low-level, not used directly by a user.
 	# Higher-level commands like ls, load, & save are built out of these.
 
-			dirent) ocmd_dirent "$@" ;_e=$? ;; # filename attr action
-			#h Wrapper for the drive firmwares Directory Entry command
+			_dirent) ocmd_dirent "$@" ;_e=$? ;; # filename attr action
+			#h Wrapper for the drive firmware "Directory Entry" command
 			#h filename: 1-24 bytes plain ascii, quoted if spaces
 			#h attr: 1 byte plain ascii
 			#h action: TPDD1: 0=set_name  1=get_first  2=get_next
-			#h action: TPDD2: add 3=get_prev  4=close
+			#h action: TPDD2: same as TPDD1 plus 3=get_prev  4=close
 
-			open) ocmd_open $* ;_e=$? ;;
-			#h Wrapper for the drive firmwares File Open command
+			_open) ocmd_open $* ;_e=$? ;; # access_mode
+			#h Wrapper for the drive firmware "File Open" command
+			#h access_mode: 01=write_new  02=write_append  03=read
 
-			close) ocmd_close ;_e=$? ;;
-			#h Wrapper for the drive firmwares File Close command
+			_close) ocmd_close ;_e=$? ;;
+			#h Wrapper for the drive firmware "File Close" command
 
-			read) ocmd_read $* ;_e=$? ;;
-			#h Wrapper for the drive firmwares File Read command
+			_read) ocmd_read ;_e=$? ;;
+			#h Wrapper for the drive firmware "File Read" command
 
-			write) ocmd_write $* ;_e=$? ;;
-			#h Wrapper for the drive firmwares File Write command
+			_write) ocmd_write $* ;_e=$? ;; # data
+			#h Wrapper for the drive firmware "File Write" command
+			#h data: 1-128 space-seperated hex pairs
 
-			delete) ocmd_delete ;_e=$? ;;
-			#h Wrapper for the drive firmwares File Delete command
+			_delete) ocmd_delete ;_e=$? ;;
+			#h Wrapper for the drive firmware "File Delete" command
 
 			#c 1
 
@@ -2724,14 +2727,15 @@ do_cmd () {
 
 	# TPDD1 sector access - aka "FDC mode" functions.
 
-			set_mode|mode) fcmd_mode $* ;_e=$? ;;
-			#h Switch drive to OPR-mode or FDC-mode
+			fdc_set_mode) fcmd_mode $* ;_e=$? ;; # operation_mode
+			#h Switch drive from FDC-mode to ___-mode
+			#h operation_mode: 0=FDC (no-op)  1=OPR (switch to OPR mode)
 
-			condition|cond) get_condition ;_e=$? ;;
+			cnd|condition) get_condition ;_e=$? ;;
 			#h Get drive readiness condition flags
 			#h Slightly more info than the "ready" command
 
-			fdc_format|ff) fcmd_format $* ;_e=$? ;; # lsc
+			ff|fdc_format) fcmd_format $* ;_e=$? ;; # lsc
 			#h Format disk without filesystem
 			#h lsc: logical sector size code 0-6
 			#h
@@ -2750,10 +2754,10 @@ do_cmd () {
 			#h 5 = 1024      (1, wastes 256 bytes per physical sector)
 			#h 6 = 1280      (1)
 
-			fdc_format_nv|ffnv) WITH_VERIFY=false fcmd_format $* ;_e=$? ;; # lsc
+			ffnv|fdc_format_nv) WITH_VERIFY=false fcmd_format $* ;_e=$? ;; # lsc
 			#h Same as fdc_format, without verify.
 
-			read_logical|rl) fcmd_read_logical $* ;_e=$? ;; # p l
+			rl|read_logical) fcmd_read_logical $* ;_e=$? ;; # p l
 			#h Read a single logical sector
 			#h p: physical sector, 0-79
 			#h l: logical sector, 1-20
@@ -2761,7 +2765,7 @@ do_cmd () {
 			#h If LSC is 0, l may be 1-20
 			#h If LSC is 6, the only valid l is 1
 
-			search_id|si) fcmd_search_id $* ;_e=$? ;; # data
+			si|search_id) fcmd_search_id $* ;_e=$? ;; # data
 			#h Search for physical sector with ID section that matches.
 			#h data: up to 12 hex pairs
 			#h data is null-padded and/or truncated to exactly 12 bytes
@@ -2769,17 +2773,17 @@ do_cmd () {
 			#h There is no way to search for multiple matches.
 			#h The drive always returns the first match, and there is no command or option to set a different starting point etc)
 
-			write_id|wi) fcmd_write_id $* ;_e=$? ;; # p data
+			wi|write_id) fcmd_write_id $* ;_e=$? ;; # p data
 			#h Write ID
 			#h p: physical sector number, 0-79
 			#h data: up to 12 hex pairs
 			#h Writes data to the ID section of a physical sector
 			#h data is null-padded and/or truncated to exactly 12 bytes
 
-			write_id_nv|winv) WITH_VERIFY=false fcmd_write_id $* ;_e=$? ;; # p data
+			winv|write_id_nv) WITH_VERIFY=false fcmd_write_id $* ;_e=$? ;; # p data
 			#h Same as write_id, without verify
 
-			write_logical|wl) fcmd_write_logical $* ;_e=$? ;; # p l data
+			wl|write_logical) fcmd_write_logical $* ;_e=$? ;; # p l data
 			#h Write Sector - Write a single logical sector within a physical sector.
 			#h p: physical sector, 0-79
 			#h l: logical sector, 1-20
@@ -2794,7 +2798,7 @@ do_cmd () {
 			#h If the specified physical sector has logical size code 6,
 			#h then l must be 1, and data must be 1280 hex pairs.
 
-			write_logical_nv|wlnv) WITH_VERIFY=false fcmd_write_logical $* ;_e=$? ;; # p l data
+			wlnv|write_logical_nv) WITH_VERIFY=false fcmd_write_logical $* ;_e=$? ;; # p l data
 			#h Same as write_logical, without verify
 
 	# TPDD2 sector access
@@ -2819,7 +2823,7 @@ do_cmd () {
 
 	# TPDD1 & TPDD2 local/client sector access
 
-			read_header|rh) ((operation_mode==2)) && { pdd2_read_meta "$@" ;_e=$? ; } || { fcmd_read_id "$@" ;_e=$? ; } ;; # sector(s)
+			rh|read_header) ((operation_mode==2)) && { pdd2_read_meta "$@" ;_e=$? ; } || { fcmd_read_id "$@" ;_e=$? ; } ;; # sector(s)
 			#h Rread & display metadata for one or more sectors.
 			#h sector(s):
 			#h TPDD1: physical_sector (0-79), or space-seperated list, or "all"
@@ -2827,33 +2831,33 @@ do_cmd () {
 			#h TPDD2: track,sector (0-79,0-1), or linear_sector (0-159), or list, or "all"
 			#h   returns: the 4-byte "metadata" for the track,sector
 
-			read_sector|rs) ((operation_mode==2)) && { pdd2_read_sector "$@" ;_e=$? ; } || { pdd1_read_sector "$@" ;_e=$? ; } ;; # TPDD1_physical_sector or TPDD2_track TPDD2_sector
+			rs|read_sector) ((operation_mode==2)) && { pdd2_read_sector "$@" ;_e=$? ; } || { pdd1_read_sector "$@" ;_e=$? ; } ;; # TPDD1_physical_sector or TPDD2_track TPDD2_sector
 			#h Read & display sector main data
 			#h TPDD1_physical_sector: 0-79
 			#h TPDD2_track: 0-79
 			#h TPDD2_sector: 0-1
 
-			read_fcb|fcb) read_fcb ;_e=$? ;;
+			fcb|read_fcb) read_fcb ;_e=$? ;;
 			#h Display the contents of the File Control Block table
 
-			read_smt|smt) read_smt ;_e=$? ;;
+			smt|read_smt) read_smt ;_e=$? ;;
 			#h Display the contents of the Space Management Table
 
 			#c 1
 
-			dump_disk|dd) ((operation_mode==2)) && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;; # dest_img_filename
+			dd|dump_disk) ((operation_mode==2)) && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;; # dest_img_filename
 			#h Clone a physical disk to a disk image file
 
-			restore_disk|rd) ((operation_mode==2)) && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;; # src_img_filename
+			rd|restore_disk) ((operation_mode==2)) && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;; # src_img_filename
 			#h Clone a disk image file to a physical disk
 
 	# TPDD1 & TPDD2 local/client file access
 	# These are used by the user directly
 
-			dir|ls) lcmd_ls "$@" ;_e=$? ;;
+			ls|dir|list) lcmd_ls "$@" ;_e=$? ;;
 			#h List disk directory
 
-			del|rm) lcmd_rm "$@" ;_e=$? ;; # filename [attr]
+			rm|del|delete) lcmd_rm "$@" ;_e=$? ;; # filename [attr]
 			#h Delete filename [attr] from disk
 
 			load) (($#<4)) && lcmd_load "$@" ;_e=$? ;; # src_filename [dest_filename] [attr]
@@ -2862,10 +2866,10 @@ do_cmd () {
 			save) lcmd_save "$@" ;_e=$? ;; # src_filename [dest_filename] [attr]
 			#h Copy a file from disk to local
 
-			rename|ren|mv) lcmd_mv "$@" ;_e=$? ;; # src_filename dest_filename [attr]
+			mv|ren|rename) lcmd_mv "$@" ;_e=$? ;; # src_filename dest_filename [attr]
 			#h Rename a file on-disk
 
-			copy|cp) lcmd_cp "$@" ;_e=$? ;; # src_filename dest_filename [attr]
+			cp|copy) lcmd_cp "$@" ;_e=$? ;; # src_filename dest_filename [attr]
 			#h Copy a file from on-disk to on-disk
 
 			#c 2
