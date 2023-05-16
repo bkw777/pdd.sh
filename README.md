@@ -82,7 +82,7 @@ This pile of commands is not well organized. Sorry.
 | --- | --- | --- |
 | ready&#160;\|&#160;status | | Report the drive & disk ready/not-ready status |
 | cnd&#160;\|&#160;condition | | Report combination of bit flags for different not-ready conditions |
-| bank | \<0-1\> | (TPDD2 only) Select bank 0 or 1<br>affects list/load/save/del/copy/ren/read_smt/read_fcb |
+| bank | \[0-1\] | (TPDD2 only) Switch to bank 0 or 1. Display current bank.<br>affects list/load/save/delete/copy/rename/read_smt/read_fcb |
 | ls&#160;\|&#160;dir&#160;\|&#160;list | | Directory listing |
 | rm&#160;\|&#160;del&#160;\|&#160;delete | filename | Delete a file |
 | cp&#160;\|&#160;copy | src_filename&#160;dest_filename | Copy a file (on-disk to on-disk) |
