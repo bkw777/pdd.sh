@@ -6,103 +6,6 @@
 # http://bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol
 # https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt
 
-# conventions:
-# ocmd_foo() - wrappers & utils for drive firmware "Operation-mode" commands,
-#              also tpdd2 commands that are the same on tpdd1 and tpdd2
-#
-# fcmd_foo() - wrappers & utils for drive firmware "FDC-mode" commands
-#
-# pdd2_foo() - wrappers for tpdd2-only drive firmware commands
-#
-# lcmd_foo() - local commands, often higher-level wrappers for the above,
-#              for example lcmd_ls() does a sequence of many ocmd_dirent().
-#
-# tpdd_foo() - low level drive tty communication
-#
-# set_foo()  - set configurable modes / behavior options etc
-# ask_foo()  - interactively ask user for a choice
-#
-# many internal functions take their input as space-seperated hex pairs on argv
-# most are documented (tersely/barely) in comments just above the function
-#
-# most user-facing functions take their arguments in plain ascii
-#
-# all communication with the drive goes through tpdd_write() and tpdd_read()
-#
-# tpdd_read() returns the data from the drive in the global rhex[]
-# each element is a single hex pair string representing a single byte
-#
-# most things that need to construct data for tpdd_write() or any other
-# function that takes hex-pair args, do it in the global shex[].
-# Same rule as rhex[]. It's a global, but still tpdd_write()
-# only looks at it's argv, does not read shex[] directly.
-#
-# data read from or destined for a local file is usually stored in the global
-# fhex[]. Same rule as rhex[]
-#
-# Operation-mode and pdd2-mode commands are assembled and sent by ocmd_send_req()
-#
-# Operation-mode and pdd2-mode responses are read by ocmd_read_ret(), parsed,
-# and the results are returned in the globals: ret_fmt ret_len ret_dat[] ret_sum
-#
-# FDC-mode commands are assembled and sent by fcmd_send_req()
-#
-# FDC-mode responses are read by fcmd_read_ret(), parsed, and the interpreted
-# results are returned in the globals: fdc_err fdc_dat fdc_len
-#
-# most functions return error messages by adding them to the global array
-# err_msg[], and do_cmd() eventually prints them to the screen.
-# Each element is one complete string message, and multiple messages may
-# accumulate from multiple functions during one do_cmd() iteration.
-#
-# Most of the potentially user-useful variables to optionally modify default
-# behavior are all defined at the top, with ": ${FOO:=foo}" syntax which means
-# the value is set if it's not already set. You may set any of those in the
-# parent environment, on the command line before the script name, or not.
-# So, BAUD will be 19200 by default, or you can run "$ BAUD=9600 pdd"
-# and BAUD will be 9600 instead.
-#
-# The config and defaults etc variables are grouped at the top into two
-# major sections CONFIG and CONSTANTS.
-#
-# The CONFIG section is grouped into two subsections "behavior" and "tunables"
-#
-# * "behavior" are the only settings you might ever normally need to change
-#   in normal usage. Even most of those most people probably never need to touch.
-#
-# * "tunables" are things that should be correct for everyone, but may need to
-#   change if they're simply not good enough yet.
-#   If you need to change any tunables, that should be submitted as a bug on
-#   github and the default value updated for everyone.
-#
-# The CONSTANTS section is all things like the size of a sector or the number
-# of tracks or the meanings of error codes.
-#
-# most functions have a few lines of the same or very similar boilerplate at
-# the top:
-#  * if verbosity is above a threshold, print the function name and args
-#  * store the function name in $z for use in messages
-#  * if the drive is not in the appropriate mode, switch it before proceeding
-#
-# The top level flowchart is just basic setup then loop do_cmd() forever.
-#
-# After starting the do_cmd() loop, there is still some more one-time setup
-# that can't be done blindly at startup, but needs to wait until actually
-# getting any command that couldn't be done without doing _init() first,
-# to allow a chance to give commands which would change what _init() does.
-#
-# help() output comes from scanning the script for specially formatted comments
-#   lines that begin with "#h" are displayed
-#   lines that begin with "#c n" modify the selection & output, used in do_cmd()
-#   #c 0 means
-#          stop doing the things described below
-#   #c 1 means
-#          also scan for case statement lines with ')', even though they don't begin with "#h"
-#          display the keywords before ')' as a command, and the comments after ';;' as the parameters to that command
-#          indent all normal #h lines
-#   #c 2 means
-#          same as c 1 but only if verbose is 2 or higher
-
 ###############################################################################
 # CONFIG
 #
@@ -558,25 +461,28 @@ typeset -ri \
 	PDD2_SECTORS=2 \
 	PDD2_CHUNK_LEN_R=160 \
 	PDD2_CHUNK_LEN_W=80 \
-	PDD2_META_ADDR=32772 \
-	PDD2_MYSTERY_ADDR1=131 \
-	PDD2_MYSTERY_ADDR2=150 \
-	PDD2_META_LEN=4 \
-	SMT_SECTOR=0 \
-	SMT_OFFSET=1240 \
-	SMT_LEN=21 \
-	PDD_FCBS=40 \
-	FCB_LEN=31 \
+	RW_DATA_MAX=128 \
 	PDD1_MAX_FLEN=65534 \
 	PDD2_MAX_FLEN=65535 \
+	PDD2_MYSTERY_ADDR1=131 \
+	PDD2_MYSTERY_ADDR2=150 \
+	PDD2_META_ADDR=32772 \
+	PDD2_META_LEN=4 \
+	SMT_LEN=21 \
+	PDD_FCBS=40 \
 	PDD_FNAME_LEN=24 \
-	RW_DATA_MAX=128
+	FCB_FATTR_LEN=1 \
+	FCB_FSIZE_LEN=2 \
+	FCB_FRESV_LEN=2 \
+	FCB_FHEAD_LEN=1 \
+	FCB_FTAIL_LEN=1
 
 typeset -ri \
 	PDD2_CHUNKS_R=$((SECTOR_DATA_LEN/PDD2_CHUNK_LEN_R)) \
 	PDD2_CHUNKS_W=$((SECTOR_DATA_LEN/PDD2_CHUNK_LEN_W)) \
 	PDD2_SECTORS_D=$((PDD2_TRACKS*PDD2_SECTORS)) \
-	PDD2_RECORD_LEN=$((PDD2_META_LEN+SECTOR_DATA_LEN))
+	PDD2_RECORD_LEN=$((PDD2_META_LEN+SECTOR_DATA_LEN)) \
+	SMT_OFFSET=$(((PDD_FNAME_LEN+FCB_FATTR_LEN+FCB_FSIZE_LEN+FCB_FRESV_LEN+FCB_FHEAD_LEN+FCB_FTAIL_LEN)*PDD_FCBS))
 
 typeset -r \
 	BASIC_EOF='1A' \
@@ -615,12 +521,12 @@ vecho () {
 
 # help [cmd]
 help () {
-	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} s=0 ;local -a f=() l=() ;((w--))
+	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} s=0 x ;local -a f=() l=() ;((w--))
 	mapfile -t f < $0
 	for ((i=0;i<${#f[*]};i++)) {
 		l=(${f[i]}) ;a=${l[0]}
 		case "${a}" in
-			\#h) a= b=${f[i]} ;b=${b##*#} ;b=${b:2} ;((${#b})) || b=' ' ;;
+			\#h) a= b=${f[i]} ;b=${b#*#} ;b=${b:2} ;((${#b})) || b=' ' ;;
 			\#c) a= b= c=${l[1]} ;;
 			*\)) ((c)) && ((d>=c)) && {
 					s=0 a=${a%%)*} b=${f[i]} ;a=${a//\\/}
@@ -636,8 +542,10 @@ help () {
 		[[ $b == ' ' ]] && { echo ;continue ; }
 		while ((${#b})) ;do
 			((c)) && ((${#a}==0)) && b="    $b"
-			printf '%s\n' "${b:0:$w}"
-			b=${b:$w}
+			x=$w ;until [[ "$IFS" =~ "${b:x:1}" || $x -lt 1 ]] ;do ((x--)) ;done
+			((x<1)) && x=$w
+			printf '%s\n' "${b:0:x}"
+			b=${b:x}
 		done
 	}
 	((v)) || printf '\nSet verbose 1 or greater to see more commands.\n'
@@ -1899,20 +1807,19 @@ read_fcb () {
 
 	# legend
 	$quiet || {
-		echo "    ________FCB table_________       a=attr  h=head  t=tail"
-		echo " # : filename                 | a |  size |       |  h |  t"
+		echo "_________________________FCB table_________________________"
+		echo " # : filename                 | a |  size |       | hd | tl"
 		echo "------------------------------+---+-------+-------+----+---"
 	}
 
 	# split out the 40 FCBs
 	for ((n=0;n<PDD_FCBS;n++)) {
-		#vecho 3 "FCB $n : ${rhex[*]:i:FCB_LEN}"
 		fcb_fname[n]="${rhex[*]:i:PDD_FNAME_LEN}" ;((i+=PDD_FNAME_LEN)) ;printf -v fcb_fname[n] '%b' "\x${fcb_fname[n]// /\\x}"
-		fcb_attr[n]="${rhex[*]:i:1}" ;((i++)) ;printf -v fcb_attr[n] '%b' "\x${fcb_attr[n]}"
-		fcb_size[n]="${rhex[*]:i:2}" ;((i+=2)) ;fcb_size[n]=$((0x${fcb_size[n]// /}))
-		fcb_resv[n]="${rhex[*]:i:2}" ;((i+=2))
-		fcb_head[n]="${rhex[*]:i:1}" ;((i++)) ;fcb_head[n]=$((0x${fcb_head[n]}))
-		fcb_tail[n]="${rhex[*]:i:1}" ;((i++)) ;fcb_tail[n]=$((0x${fcb_tail[n]}))
+		fcb_attr[n]="${rhex[*]:i:FCB_FATTR_LEN}" ;((i+=FCB_FATTR_LEN)) ;printf -v fcb_attr[n] '%b' "\x${fcb_attr[n]}"
+		fcb_size[n]="${rhex[*]:i:FCB_FSIZE_LEN}" ;((i+=FCB_FSIZE_LEN)) ;fcb_size[n]=$((0x${fcb_size[n]// /}))
+		fcb_resv[n]="${rhex[*]:i:FCB_FRESV_LEN}" ;((i+=FCB_FRESV_LEN))
+		fcb_head[n]="${rhex[*]:i:FCB_FHEAD_LEN}" ;((i+=FCB_FHEAD_LEN)) ;fcb_head[n]=$((0x${fcb_head[n]}))
+		fcb_tail[n]="${rhex[*]:i:FCB_FTAIL_LEN}" ;((i+=FCB_FTAIL_LEN)) ;fcb_tail[n]=$((0x${fcb_tail[n]}))
 		printf -v d_fname '%-24.24b' "${fcb_fname[n]}"
 		printf -v d_attr '%1.1s' "${fcb_attr[n]}"
 		((EXPOSE)) && {
@@ -1925,31 +1832,43 @@ read_fcb () {
 }
 
 # Read the Space Managment Table
-# track 0 sector 0, bytes 1240-1261
+# SMT is 20+1 bytes immediately following the FCB table.
+#
 # The first 20 bytes are all bit flags, 1 = sector is used.
-# byte  1 bit 8: TPDD1: sector  0 / TPDD2: track  0 sector 0
-# byte  1 bit 7: TPDD1: reserved  / TPDD2: track  0 sector 1
-# byte  1 bit 6: TPDD1: sector  1 / TPDD2: track  1 sector 0
+#         BIT    Meaning on TPDD1       Meaning on TPDD2
+# byte 01 bit 8: physical sector 00  /  track 00 sector 0
+# byte 01 bit 7: reserved            /  track 00 sector 1
+# byte 01 bit 6: physical sector 01  /  track 01 sector 0
+# byte 01 bit 5: reserved            /  track 01 sector 1
 # ...
-# byte 20 bit 1: TPDD1: sector 79 / TPDD2: track 79 sector 0
-# byte 20 bit 0: TPDD1: reserved  / TPDD2: track 79 sector 1
+# byte 20 bit 1: physical sector 79  /  track 79 sector 0
+# byte 20 bit 0: reserved            /  track 79 sector 1
+#
 # byte 21 = total used sectors counter
-# The used counter doesn't seem to match the what the bit flags say.
+#
+# The used-sectors counter doesn't seem to always match what the bit flags add up to.
+#
+# For TPDD2 we read from sector 0 if we are currently in bank 0, and sector 1
+# if we are currently in bank 1, just for academic correctness to follow the
+# FCB table. But the drive seems to maintain identical copies in both sectors.
+# We could probably just always read the sector 0 copy.
 read_smt () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	local x=() s=() ci co f w ;local -i y i= l=
 	# read the 21 bytes
 	((operation_mode==2)) && {
-		pdd2_cache_load 0 $bank 0 || return $?  # $bank doesn't seem to matter
+		echo "____________________________Space Management Table_____________________________"
+		pdd2_cache_load 0 $bank 0 || return $?
 		pdd2_cache_read 0 $SMT_OFFSET $SMT_LEN >/dev/null || return $?
 		x=(${ret_dat[*]:3})
 	} || {
+		echo "__________________Space Management Table___________________"
 		pdd1_read_sector 0 >/dev/null || return $?
 		x=(${rhex[*]:SMT_OFFSET:SMT_LEN})
 	}
 	vecho 1 "SMT${bd}: ${x[*]}"
 	# decode the bit-flags
-	echo "SMT bytes 1-20: bit-flags of used sectors:"
+	echo "Bytes 1-20: bit-flags of used sectors:"
 	f="0x80 0x20 0x08 0x02" w='02'
 	((operation_mode==2)) && f="0x80 0x40 0x20 0x10 0x08 0x04 0x02 0x01" w='03'
 	for ((y=0;y<SMT_LEN-1;y++)) {
@@ -1960,7 +1879,7 @@ read_smt () {
 		done
 	}
 	# byte 21 is a simple number
-	printf "Byte 21: sectors used: %d (%d bytes)\n" "0x${x[y]}" "$((0x${x[y]}*SECTOR_DATA_LEN))"
+	printf "Byte 21: sectors used: %d\n" "0x${x[y]}"
 }
 
 ###############################################################################
@@ -2571,32 +2490,35 @@ do_cmd () {
 			#h If verbose = 0, hides the hacky, low-level, and less-common commands.
 			#h If verbose > 0, shows all commands.
 
+			v|verbose|debug) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # n
+			#h Set verbosity level, display current setting.
+
+			y|yes|batch) set_yes $* ;_e=0 ;; # [true|false]
+			#h Set non-interactive mode, display current setting.
+
+			compat) ask_compat "$@" ;_e=$? ;; # [floppy|wp2|raw]
+			#h Set filename & attr behavior for compatibility with various other clients.
+			#h   floppy: 6.2 space-padded filenames    with attr 'F'
+			#h   wp2   : 8.2 space-padded filenames    with attr 'F'
+			#h   raw   : 24 byte unformatted filenames with attr ' '
+			#h Presents a menu if not given.
+
+			#c 2
+
+			names) ask_names "$@" ;_e=$? ;; # [floppy|wp2|raw]
+			#h Same as "compat", but only sets the filename part.
+
+			attr) ask_attr "$@" ;_e=$? ;; # [b|hh]
+			#h Set the default attribute byte.
+			#h b = any single byte  ex: F
+			#h hh = hex pair representing a byte value  ex: 46
+			#h Presents a menu if not given.
+
 			pdd1) fonzie_smack ;set_pdd1 ;_e=$? ;;
 			#h Assume the attached drive is a TPDD1
 
 			pdd2) set_pdd2 ;_e=$? ;;
 			#h Assume the attached drive is a TPDD2
-
-			bank) bank $1 ;_e=$? ;; # [n]
-			#h Switch to bank n (0-1), display current setting.
-
-			compat) ask_compat "$@" ;_e=$? ;; # [mode]
-			#h Set filename & attr behavior for compatibility with various other clients.
-			#h mode:
-			#h   floppy   6.2 space-padded filenames    with attr 'F'
-			#h   wp2      8.2 space-padded filenames    with attr 'F'
-			#h   raw      24 byte unformatted filenames with attr ' '
-			#h Presents a menu if not specified.
-
-			#c 2
-
-			names) ask_names "$@" ;_e=$? ;; # [format]
-			#h Same as "compat", but only sets the filename part.
-
-			attr) ask_attr "$@" ;_e=$? ;; # [attr]
-			#h Set the default attribute byte.
-			#h Single byte, either literal or as a hex pair.
-			#h Presents a menu if not given.
 
 			#c 1
 
@@ -2604,33 +2526,54 @@ do_cmd () {
 			#h Short for "compat ___"
 			#h ex: "wp2" = "compat wp2"
 
-			baud|speed) lcmd_com_speed $* ;_e=$? ;; # baud_rate
+			baud|speed) lcmd_com_speed $* ;_e=$? ;; # baud
 			#h Set the serial port to the specified baud rate, display current setting.
 			#h TPDD1 has dip switches for:
 			#h 150 300 600 1200 2400 4800 9600 19200 38400 76800
 			#h TPDD2 is 19200 only
-			# 76800: http://cholla.mmto.org/esp8266/weird_baud/
+			#h 76800 probably won't be usable because we rely on the stty utility to configure the serial port hardware, and that only supports a limited set of standard rates on linux on common platforms.
+			#h It may work on some platforms like linux on sparc.
+			#  c code to set 76800 on linux http://cholla.mmto.org/esp8266/weird_baud/
+			#  It would take some experimenting to see if it would be possible to use that here.
+			#  Can we use stty to set the other parameters without losing a custom baud rate previously set up by baud.c ?
+
 			150|300|600|1200|2400|4800|9600|19200|38400|76800) lcmd_com_speed ${_c} ;_e=$? ;;
 			#h Short for "baud ___"
 			#h ex: "9600" = "baud 9600"
 
+			ffs|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
+			#h Set FCB_FSIZE, display current setting.
+			#h Whenever the dirent() command is used to get file info, also read sector 0 and get filesizes from the FCB table, and use those values instead of the values given by the drives normal dirent() function.
+			#h
+			#h TPDD drives return file sizes that are smaller than the actual file sizes in the directory listing.
+			#h However the true filesizes are available on the disk in the FCB table.
+			#h
+			#h Makes the "ls" command take longer to complete, and is only usable on a real drive.
+			#h TPDD emulators are not actually disks, and don't have any FCB or sector 0 to read, nor support the necessary sector-access commands.
+			#h However TPDD emulators return the true filesizes in their normal dirent() responses, and so you don't need this with an emulator anyway.
+
+			bank) bank $1 ;_e=$? ;; # [0|1]
+			#h Switch to bank # if given.
+			#h Display current setting.
+
 			#c 2
 
 			rtscts|hardware_flow) RTSCTS=${1:-true} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
-			#h Enable hardware flow control, display current setting.
+			#h Enable hardware flow control.
+			#h Display current setting.
 
 			xonoff|xonxoff|software_flow) XONOFF=${1:-false} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
-			#h Enable software flow control, display current setting.
-			#h
-			#h This may be useful for send_loader(), and probably only for that.
-			#h
-			#h The TPDD protocol is full of binary that is not encoded in any way, and so should not work with any of the normal file or sector access commands.
+			#h Enable software flow control.
+			#h Display current setting.
+			#h This is only potentially useful for send_loader().
+			#h The TPDD protocol is full of binary data that is not encoded in any way.
 
 			com_test) lcmd_com_test ;_e=$? ;;
-			#h Check if the serial port is open (always just a yes/no answer)
+			#h Check if the serial port is open
 
 			com_show) lcmd_com_show ;_e=$? ;;
-			#h Display the serial port settings (displays more detail depending on verbose setting)
+			#h Display the serial port parameters
+			#h higher verbose settings show more info
 
 			com_open) lcmd_com_open ;_e=$? ;;
 			#h Open the serial port
@@ -2645,31 +2588,37 @@ do_cmd () {
 			#h Write data to serial port
 			#h data: space-seperated hex pairs
 
-			read_fdc_ret) fcmd_read_ret $* ;_e=$? ;; # [timeout [busy]]
+			read_fdc_ret) fcmd_read_ret $* ;_e=$? ;; # [timeout_ms] [busy_indicator]
 			#h Read an FDC-mode return message (after sending some FDC-mode command)
-			#h timeout: ms to allow before giving up waiting for data from the drive
-			#h   default 5000
-			#h busy:
+			#h timeout_ms: max time in ms to wait for data from the drive
+			#h             default 5000
+			#h busy_indicator:
 			#h  1 = display a spinner while waiting
 			#h  2 = display a percent-done progress bar while waiting
 
-			read_opr_ret) ocmd_read_ret $* ;_e=$? ;; # [timeout [busy]]
+			read_opr_ret) ocmd_read_ret $* ;_e=$? ;; # [timeout_ms] [busy_indicator]
 			#h Read an OPR-mode return message (after sending some OPR-mode command)
+			#h timeout_ms: max time in ms to wait for data from the drive
+			#h             default 5000
+			#h busy_indicator:
+			#h  1 = display a spinner while waiting
+			#h  2 = display a percent-done progress bar while waiting
 
 			send_opr_req) ocmd_send_req $* ;_e=$? ;; # fmt data
 			#h Send an OPR-mode command
-			#h fmt: single hex pair for an OPR-mode command code (aka "Operation-mode request format" in the software manual)
+			#h fmt: single hex pair for an TPDD1 Operation-mode or TPDD2 "request format"
 			#h data: space-seperated hex pairs for the payload data
-			#h The "ZZ" preamble, length, and checksum parts of an OPR-mode command are calculated and added automatically
+			#h The "ZZ" preamble, length, and checksum bytes are calculated and added automatically
 
 			check_opr_err) ocmd_check_err ;_e=$? ;;
-			#h Check ret_dat[] (filled by a previous read_opr_ret) for an OPR-mode error code
+			#h Check ret_dat[] for an OPR-mode error code
+			#h ret_dat[] must be filled by a previous read_opr_ret
 
 			drain) tpdd_drain ;_e=$? ;;
 			#h Read and discard all available bytes from the serial port
 
 			checksum) calc_cksum $* ;_e=$? ;; # data
-			#h Calculate the checksum for data using the same method that the TPDD uses
+			#h Calculate the checksum for the given data, using the same method that the TPDD uses.
 			#h data: Up to 128 space-seperated hex pairs.
 			#h returns: Bitwise negation of least significant byte of sum of all bytes, returned as a hex pair.
 			#h TPDD checksums include the format, length, and data fields of OPR-mode commands and responses.
@@ -2681,27 +2630,6 @@ do_cmd () {
 
 			sleep) _sleep $* ;_e=$? ;; # n
 			#h Sleep for n seconds. n may have up to 3 decimals, so 0.001 is the smallest value.
-
-			#c 1
-
-			v|verbose|debug) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # n
-			#h Set verbosity level, display current setting.
-
-			y|yes|batch) set_yes $* ;_e=0 ;; # [true|false]
-			#h Set non-interactive mode, display current setting.
-
-			#c 2
-
-			ffs|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
-			#h Set FCB_FSIZE, display current setting.
-			#h Whenever the dirent() command is used to get file info, also read sector 0 and get filesizes from the FCB table, and use those values instead of the values given by the drives normal dirent() function.
-			#h
-			#h TPDD drives return file sizes that are smaller than the actual file sizes in the directory listing.
-			#h However the true filesizes are available on the disk in the FCB table.
-			#h
-			#h Makes the "ls" command take longer to complete, and is only usable on a real drive.
-			#h TPDD emulators are not actually disks, and don't have any FCB or sector 0 to read, nor support the necessary sector-access commands.
-			#h However TPDD emulators return the true filesizes in their normal dirent() responses, and so you don't need this with an emulator anyway.
 
 			with_verify|verify) set_verify $* ;_e=0 ;; # [true|false]
 			#h Set WITH_VERIFY, display current setting.
@@ -2743,12 +2671,24 @@ do_cmd () {
 		$did_init || _init
 		_e=0
 
-	# TPDD1 & TPDD2 file access
-	# Most of these are low-level, not used directly by a user.
-	# Higher-level commands like ls, load, & save are built out of these.
 		case ${_c} in
 
 			#c 2
+
+	# TPDD1 switch between operation-mode and fdc-mode
+
+			fdc) ocmd_fdc ;_e=$? ;;
+			#h Switch a TPDD1 drive from OPR-mode to FDC-mode
+
+			opr) fcmd_mode 1 ;_e=$? ;;
+			#h Switch a TPDD1 drive from FDC-mode to OPR-mode
+
+			pdd1_reset|smack) fonzie_smack ;_e=$? ;;
+			#h Send the FDC-mode command to switch a TPDD1 drive to OPR-mode while ignoring any errors or other responses.
+
+	# TPDD1 & TPDD2 file access
+	# Most of these are low-level, not used directly by a user.
+	# Higher-level commands like ls, load, & save are built out of these.
 
 			dirent) ocmd_dirent "$@" ;_e=$? ;; # filename attr action
 			#h Wrapper for the drive firmwares Directory Entry command
@@ -2780,18 +2720,7 @@ do_cmd () {
 			ready|status) ocmd_ready ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;;
 			#h Report basic drive ready / not ready
 
-	# TPDD1 switch between operation-mode and fdc-mode
-
-			fdc) ocmd_fdc ;_e=$? ;;
-			#h Switch a TPDD1 drive from OPR-mode to FDC-mode
-
-			opr) fcmd_mode 1 ;_e=$? ;;
-			#h Switch a TPDD1 drive from FDC-mode to OPR-mode
-
 			#c 2
-
-			pdd1_reset|smack) fonzie_smack ;_e=$? ;;
-			#h Send the FDC-mode command to switch a TPDD1 drive to OPR-mode while ignoring any errors or other responses.
 
 	# TPDD1 sector access - aka "FDC mode" functions.
 
@@ -2904,22 +2833,22 @@ do_cmd () {
 			#h TPDD2_track: 0-79
 			#h TPDD2_sector: 0-1
 
-			dump_disk|dd) ((operation_mode==2)) && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;; # dest_img_filename
-			#h Clone a physical disk to a disk image file
-
-			restore_disk|rd) ((operation_mode==2)) && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;; # src_img_filename
-			#h Clone a disk image file to a physical disk
-
 			read_fcb|fcb) read_fcb ;_e=$? ;;
 			#h Display the contents of the File Control Block table
 
 			read_smt|smt) read_smt ;_e=$? ;;
 			#h Display the contents of the Space Management Table
 
+			#c 1
+
+			dump_disk|dd) ((operation_mode==2)) && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;; # dest_img_filename
+			#h Clone a physical disk to a disk image file
+
+			restore_disk|rd) ((operation_mode==2)) && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;; # src_img_filename
+			#h Clone a disk image file to a physical disk
+
 	# TPDD1 & TPDD2 local/client file access
 	# These are used by the user directly
-
-			#c 1
 
 			dir|ls) lcmd_ls "$@" ;_e=$? ;;
 			#h List disk directory
