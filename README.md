@@ -129,8 +129,8 @@ This pile of commands is not well organized. Sorry.
 | floppy\|wp2\|raw | | Shortcut for **compat floppy** , **compat wp2** , **compat raw**  |
 | names | \[floppy\|wp2\|raw\] | Just the filenames part of **compat**. With no args presents a menu. |
 | attr | \[*b*\|*hh*\] | Just the attribute part of **compat**. Takes a single byte, either directly or as a hex pair. With no args presents a menu. |
-| expose | 0\|1\|2 | Expose non-printable bytes in filenames. Default 1. (see the tpdd2 util disk for an example)<br>0 = off<br>1 = bytes 00-1F in reverse-video "@" to "_", bytes 7F-FF as reverse-video "."<br>This mode exposes all non-printing bytes at least that they exist for the >126 values, and shows the ctrl chars for the <32 values, without altering the display formatting, because the exposed bytes still only occupy a single character space<br>2 = all non-printing bytes displayed as inverse video 00 to 1F and 7F to FF<br>This mode exposes al bytes and shows their actual value, but requires 2 character spaces per byte, which will mess up the ls() display formatting. |
-| ffs&#160;\|&#160;fcb_fsize | true\|false | Show true file sizes by making ocmd_dirent() read the FCB table instead of using the inaccurate file sizes that the drive firmware Directory Entry command returns.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB table is a raw sector access operation that most tpdd servers don't implement. |
+| eb&#160;\|&#160;expose&#160;\|&#160;expose_binary | 0\|1\|2 | Expose non-printable binary bytes in filenames. Default 1. (see the tpdd2 util disk for an example)<br>0 = off<br>1 = bytes 00-1F in reverse-video "@" to "_", bytes 7F-FF as reverse-video "."<br>This mode exposes all non-printing bytes at least that they exist for the >126 values, and shows the ctrl chars for the <32 values, without altering the display formatting, because the exposed bytes still only occupy a single character space<br>2 = all non-printing bytes displayed as inverse video 00 to 1F and 7F to FF<br>This mode exposes al bytes and shows their actual value, but requires 2 character spaces per byte, which will mess up the ls() display formatting. |
+| ffs&#160;\|&#160;ffsize&#160;\|&#160;fcb_fsize | true\|false | Show true file sizes by making ocmd_dirent() read the FCB table instead of using the inaccurate file sizes that the drive firmware Directory Entry command returns.<br>Default off. Affects **ls** and **load**<br>Works on real drives but does not work on most drive emulators, because reading the FCB table is a raw sector access operation that most tpdd servers don't implement. |
 | baud&#160;\|&#160;speed | \[9600\|19200\] | Serial port speed. Default is 19200.<br>Drives with dip-switches can actually be set for any of 150 300 600 1200 2400 4800 9600 19200 38400 76800<br>and you can actually set any of those speeds if you set the drive dip switches to match.<br>Some Brother/KnitKing drives are hardwired to 9600 with a solder bridge in place of the dip-switches. |
 | com_test | | check if port open |
 | com_show | | show port status |
@@ -162,8 +162,8 @@ Additionally, some behavior may be modified by setting environment variables.
 | RTSCTS | true\|false | same as **rtscts** command above |
 | VERBOSE | # | same as **verbose** command above |
 | COMPAT | \[floppy\|wp2\|raw\] | same as **compat** command above |
-| EXPOSE | 0\|1\|2 | same as **expose** command above |
-| FCB_FSIZE | true\|false | same as **ffs** command above |
+| EXPOSE_BINARY | 0\|1\|2 | same as **expose** command above |
+| FCB_FSIZE | true\|false | same as **ffsize** command above |
 | FONZIE_SMACK | true\|false | (default true) TPDD1 only. During \_init(), do (or don't do) an fdc-to-opr command to try to joggle the drive from an unknown/out-of-sync state to a known/in-sync state during \_init() |
 | WITH_VERIFY | true\|false | (default true) TPDD1 only. Use the with-verify or the without-verify versions of fdc_format, write_logical, & write_id. |
 | YES | true\|false | (default false) Assume "yes" for all confirmation prompts, for scripting. |

@@ -13,85 +13,73 @@
 ###############################################################################
 # behavior
 
-# Joggle the drive from an unknown to a known state in _init().
-: ${FONZIE_SMACK:=true}
-
 # verbose/debug
-# 0/unset=normal, 1=verbose, >1=more verbose
-# convert ""=0, false=0, true=1, >1 accepted as-is and handled later
-case "$VERBOSE" in
+case "${VERBOSE:=$DEBUG}" in
 	false|off|n|no|"") VERBOSE=0 ;;
 	true|on|y|yes|:) VERBOSE=1 ;;
 esac
 
-# COMPAT sets the default behavior for translating filenames between the
-# on-disk format and the local filesystem format.
-# Set COMPAT to match the type of machine you are trading disks with.
-# floppy : 6.2 space-padded, attr 'F' - TRS-80 Model 100 & clones
-# wp2    : 8.2 space-padded, attr 'F' - TANDY WP-2
-# raw    : 24 unformatted, attr ' '   - Cambridge Z88, CP/M, other etc
+# see "help compat"
 : ${COMPAT:=floppy}
 
-# File names on the disk can contain non-printing control/binary bytes.
-# See the TPDD2 util disk for an example. (0x01 in first filename)
-# EXPOSE exposes non-printing bytes in filenames as inverse video ctrl codes or hex.
-# This can be changed at run-time with the "expose" command.
-# 0 casual / normal filename display, non-printing bytes are not printed.
-# 1 shows <32 as n+64, >126 as ".", inverse video (ex: inverse video "@" = ^@ = 0x00)
-# 2 shows all bytes <32 >126 as hex pairs in inverse video
-: ${EXPOSE:=1}
+# see "help expose"
+: ${EXPOSE_BINARY:=1}
 
-# Real drives give slightly wrong file sizes in their dirent() output.
-# Unknown why, perhaps not counting ^Ms or something?
-# But the correct file sizes are available on the disk in the FCB table.
-# FCB_FSIZE makes lcmd_dirent() use sector-access commands to read the FCB
-# table and display those file-size values in directory listings.
-# Works great, *but only on real drives*.
-# TPDD emulators aren't really disks, and don't have any FCB sector.
-# However, TPDD emulators give correct file sizes in their dirent() output,
-# and so there is no need to try to read the FCBs in that case.
-# This also adds a few seconds to each directory listing.
-# This can be changed at run-time with the "ffs" command.
-# Default is off because it only works on real drives and it's slower.
+# see "help ffsize"
+# Default off because it only works on real drives and it's slower.
+# TODO: fail gracefully on emulators so this can be enabled by default.
 : ${FCB_FSIZE:=false} # true|false
 
-# TPDD1 drives have two versions of each of the FDC-mode commands that write to disk:
-# FDC Format, Write Sector, Write ID, all also have a "no-verify" version.
-# WITH_VERIFY sets which version of those commands should be used by commands
-# that use them internally like restore-disk, etc. The no-verify commands are
-# a little faster, but otherwise there is no reason to use them. This option
-# is only provided for completeness because the drive has these commands,
-# and this client aims to provide access to all drive functions.
-# This can be changed at run-time with the "verify" command".
+# see "help verify"
 : ${WITH_VERIFY:=true} # true|false
 
 # Assume "yes" to all confirmation prompts for scripting.
 : ${YES:=false} # true|false
 
+# Joggle the drive from an unknown to a known state in _init().
+: ${FONZIE_SMACK:=true} # true|false
+
 # RD_CHECK_MIXED_LSC
-# restore_disk check for mixed logocal size codes
+# make restore_disk() check for mixed logical sector size codes
 #
-# When creating a physical TPDD1 disk from a disk image, disks can have
-# different logical size codes on different physical sectors, and we can read
-# them and record them all in the disk image, but there is no way to write
-# mixed lsc back to a real disk. This setting tells restore_disk():
-#
-# true = if all sectors in the disk image don't have the same lsc, then abort
-#        because we can't reproduce that disk 100% identically.
+# true = if all sectors in the disk image don't have the same lsc, then
+#        abort because we can't reproduce that disk 100% identically.
 #
 # false = just format the disk using the lsc from sector 0
 #
-# The most common case is a normal filesystem disk formatted with the opr-mode
-# format command, the same as what Floppy and TS-DOS does. The opr-format
-# command creates a new blank disk with 64-byte lsc on sector 0 and 80-byte
-# on all the rest. And then as files get written and sectors get occupied,
-# any occupied sectors get changed to 64-byte too.
-# This means that although we can't re-create those 80-byte lsc codes,
-# we can just format the whole disk as 64-byte lsc, and outwardly the new
-# disk functions all the same. The only way to even detect the difference
-# is to run "rh all" on both disks. So, for all normal usage, it makes no
-# difference and it's fine to just read the LSC from sector 0 and use that
-# to format the disk before restoring the sector data.
+# TODO: more specific sanity check to allow the OPR format to pass:
+# Allow mixed LSC in the specific case that each physical sector has
+# either lsc 0, or lsc 1 with all 00 data.
+#
+# It's generally fine not to worry about this because the main example
+# of mixed-lsc is how the normal opr-format command (the one that creates
+# a filesystem disk, not the fdc-format that just makes raw data sectors)
+# happens to work this way:
+# * The new blank format has LCS 0 (64-bytes) on sector 0,
+#   and LSC 1 (80-bytes) on all others.
+# * As sectors get used by files, the drive firmware changes them to LSC 0
+#   also (and never changes them back, even when you delete files).
+#
+# That means any sector with any data in it has LSC 0,
+# and the only sectors with LSC 1 have only all 00s for data.
+#
+# We can safely re-create that disk with LSC 0 on all sectors because of 3 facts:
+# * All sectors that anyone could have to read or write, had LSC 0 originally.
+# * All sectors that originally had LSC 1, happen to only have all 00's for data,
+#   and we don't have to write them, they are already all 00s from the format.
+# * When the drive firmware later wants to write file data to one of those
+#   sectors, it would have changed it to LSC 0 itself anyway, and it doesn't
+#   care if it's already been changed to LSC 0.
+#
+# There never ends up being a case where the "wrong" LSC breaks anything.
+# The drive never tries to read or write 80 bytes of data at some n*80 offset,
+# but instead only gets 64 bytes of data at some n*64 offset from the wrong LSC.
+#
+# It's theoretically possible for there to be other formes of mixed LSC disks,
+# and if there are, we could clone such disks to disk images, and dlplus2 could
+# emulate them, but if we tried to restore one to a physcal disk it would be
+# broken. But since you can't create a disk like that with the drive itself in
+# the first place, hopefully there simply are no such disks out there.
 : ${RD_CHECK_MIXED_LSC:=false} # true|false
 
 # Default rs232 tty device name, with platform differences
@@ -528,7 +516,8 @@ help () {
 		case "${a}" in
 			\#h) a= b=${f[i]} ;b=${b#*#} ;b=${b:2} ;((${#b})) || b=' ' ;;
 			\#c) a= b= c=${l[1]} ;;
-			*\)) ((c)) && ((d>=c)) && {
+			\#*) a= b= ;;
+			*\)) ((c)) && ((d>=c || ${#1})) && {
 					s=0 a=${a%%)*} b=${f[i]} ;a=${a//\\/}
 					((${#1})) && [[ "|$a|" =~ "|$1|" ]] && s=1
 					[[ "$b" =~ '#' ]] && b="${b##*#}" || b=
@@ -538,7 +527,7 @@ help () {
 			*) a= b= ;;
 		esac
 		((${#1})) && ((s==0)) && continue
-		((c)) && ((d<c)) && continue
+		((c)) && ((d<c)) && ((s==0)) && continue
 		[[ $b == ' ' ]] && { echo ;continue ; }
 		while ((${#b})) ;do
 			((c)) && ((${#a}==0)) && b="    $b"
@@ -643,7 +632,7 @@ expose_bytes () {
 	for ((i=0;i<${#g_x};i++)) {
 		t="${g_x:i:1}"
 		printf -v n "%u" "'$t"
-		case $EXPOSE in
+		case $EXPOSE_BINARY in
 			2)
 				((n>0&&n<32||n>126)) && printf -v t "\033[7m%02X\033[m" $n
 				((n)) || t=' '
@@ -1866,7 +1855,7 @@ read_fcb () {
 		fcb_tail[n]="${rhex[*]:i:FCB_FTAIL_LEN}" ;((i+=FCB_FTAIL_LEN)) ;fcb_tail[n]=$((0x${fcb_tail[n]}))
 		printf -v d_fname '%-24.24b' "${fcb_fname[n]}"
 		printf -v d_attr '%1.1s' "${fcb_attr[n]}"
-		((EXPOSE)) && {
+		((EXPOSE_BINARY)) && {
 			g_x="$d_fname" ;expose_bytes ;d_fname="$g_x"
 			g_x="$d_attr" ;expose_bytes ;d_attr="$g_x"
 		}
@@ -2029,16 +2018,16 @@ set_yes () {
 }
 
 set_expose () {
-	local -i e=$EXPOSE
+	local -i e=$EXPOSE_BINARY
 	case "$1" in
 		false|off|no) e=0 ;;
 		true|on|yes) e=1 ;;
 		0|1|2) e=$1 ;;
 		#'') ((e)) && e=0 || e=1 ;;
 	esac
-	EXPOSE=$e
+	EXPOSE_BINARY=$e
 	echo -n 'Expose non-printable bytes in filenames: '
-	((EXPOSE)) && echo 'Enabled' || echo 'Disabled'
+	((EXPOSE_BINARY)) && echo 'Enabled' || echo 'Disabled'
 }
 
 get_condition () {
@@ -2122,7 +2111,7 @@ lcmd_ls () {
 		printf -v d_fname '%-24.24b' "$file_name"
 		printf -v d_attr '%1.1s' "$file_attr"
 
-		((EXPOSE)) && {
+		((EXPOSE_BINARY)) && {
 			g_x="$d_fname" ;expose_bytes ;d_fname="$g_x"
 			g_x="$d_attr" ;expose_bytes ;d_attr="$g_x"
 		}
@@ -2539,32 +2528,21 @@ do_cmd () {
 
 			y|yes|batch) set_yes $* ;_e=0 ;; # [true|false]
 			#h Set non-interactive mode, display current setting.
+			#h Assume "y" for all confirmation prompts. Use for scripting.
 
 			compat) ask_compat "$@" ;_e=$? ;; # [floppy|wp2|raw]
-			#h Set filename & attr behavior for compatibility with various other clients.
+			#h Set filename & attr to match the type of machine you are trading disks with.
+			#h
 			#h   floppy: 6.2 space-padded filenames    with attr 'F'
+			#h           TRS-80 Model 100 & clones
+			#h
 			#h   wp2   : 8.2 space-padded filenames    with attr 'F'
+			#h           TANDY WP-2
+			#h
 			#h   raw   : 24 byte unformatted filenames with attr ' '
+			#h           Cambridge Z88, CP/M, others?
+			#h
 			#h Presents a menu if not given.
-
-			#c 2
-
-			names) ask_names "$@" ;_e=$? ;; # [floppy|wp2|raw]
-			#h Same as "compat", but only sets the filename part.
-
-			attr) ask_attr "$@" ;_e=$? ;; # [b|hh]
-			#h Set the default attribute byte.
-			#h b = any single byte  ex: F
-			#h hh = hex pair representing a byte value  ex: 46
-			#h Presents a menu if not given.
-
-			pdd1) fonzie_smack ;set_pdd1 ;_e=$? ;;
-			#h Assume the attached drive is a TPDD1
-
-			pdd2) set_pdd2 ;_e=$? ;;
-			#h Assume the attached drive is a TPDD2
-
-			#c 1
 
 			floppy|wp2|raw) ask_compat "${_c}" ;_e=$? ;;
 			#h Short for "compat ___"
@@ -2585,22 +2563,59 @@ do_cmd () {
 			#h Short for "baud ___"
 			#h ex: "9600" = "baud 9600"
 
-			ffs|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
-			#h Set FCB_FSIZE, display current setting.
-			#h Whenever the dirent() command is used to get file info, also read sector 0 and get filesizes from the FCB table, and use those values instead of the values given by the drives normal dirent() function.
-			#h
-			#h TPDD drives return file sizes that are smaller than the actual file sizes in the directory listing.
-			#h However the true filesizes are available on the disk in the FCB table.
-			#h
-			#h Makes the "ls" command take longer to complete, and is only usable on a real drive.
-			#h TPDD emulators are not actually disks, and don't have any FCB or sector 0 to read, nor support the necessary sector-access commands.
-			#h However TPDD emulators return the true filesizes in their normal dirent() responses, and so you don't need this with an emulator anyway.
+			bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;; # filaname
+			#h Send an ascii BASIC file over the serial port slowly enough for BASIC to read.
+			#h The connected device must be a TRS-80 Model 100 or similar, not a TPDD drive.
+			#h In this case, we are pretending to BE the TPDD drive.
+
+			ffs|ffsize|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
+			#h Set FCB_FSIZE mode, display current setting.
+			#h Get true filesizes for "ls" and "load" by reading the FCB table ourselves and ignoring the filesizes from the drives dirent() function.
 
 			bank) bank $1 ;_e=$? ;; # [0|1]
-			#h Switch to bank # if given.
-			#h Display current setting.
+			#h Switch to bank 0 or 1 on a TPDD2, display current setting.
+
+			ll) lcmd_ll $* ;_e=$? ;;
+			#h Local Directory List, no filesizes.
+			#h Faster/cheaper than lls.
+
+			#llm) lcmd_llm $* ;_e=$? ;;
+			lls) lcmd_lls $* ;_e=$? ;;
+			#h Local Directory List, with filesizes.
 
 			#c 2
+
+			eb|expose|expose_binary) set_expose $1 ;_e=0 ;; # [0-2]
+			#h Set EXPOSE_BINARY mode, display current setting.
+			#h Expose non-printable binary bytes in filenames and attr.
+			#h
+			#h 0 = off
+			#h
+			#h 1 = display 0x00 to 0x1F as inverse-video "@" to "_"
+			#h     display 0x7F to 0xFF as inverse-video "."
+			#h     ex: 0x01 = "^A", displayed as inverse-video "A"
+			#h     This mode allows to expose all bytes without altering the display formatting because each byte still only occupies a single character space.
+			#h
+			#h 2 = All non-printing bytes displayed as inverse-video hex pair.
+			#h     ex: 0xB5 displayed as inverse-video "B5"
+			#h     This mode shows the actual value of all bytes, but messes up the display formatting because each non-printing byte requires 2 character spaces.
+			#h
+			#h An example is the the TPDD2 Util disk, which has an 0x01 byte as the first byte of the first filename.
+
+			names) ask_names "$@" ;_e=$? ;; # [floppy|wp2|raw]
+			#h Same as "compat", but only the filename format, does not change attr.
+
+			attr) ask_attr "$@" ;_e=$? ;; # [b|hh]
+			#h Set the default attribute byte.
+			#h b = any single byte  ex: F
+			#h hh = hex pair representing a byte value  ex: 46
+			#h Presents a menu if not given.
+
+			pdd1) fonzie_smack ;set_pdd1 ;_e=$? ;;
+			#h Assume the attached drive is a TPDD1
+
+			pdd2) set_pdd2 ;_e=$? ;;
+			#h Assume the attached drive is a TPDD2
 
 			rtscts|hardware_flow) RTSCTS=${1:-true} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
 			#h Enable hardware flow control.
@@ -2611,6 +2626,11 @@ do_cmd () {
 			#h Display current setting.
 			#h This is only potentially useful for send_loader().
 			#h The TPDD protocol is full of binary data that is not encoded in any way.
+
+			verify|with_verify) set_verify $* ;_e=0 ;; # [true|false]
+			#h Set WITH_VERIFY, display current setting.
+			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID
+			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
 
 			com_test) lcmd_com_test ;_e=$? ;;
 			#h Check if the serial port is open
@@ -2667,33 +2687,8 @@ do_cmd () {
 			#h returns: Bitwise negation of least significant byte of sum of all bytes, returned as a hex pair.
 			#h TPDD checksums include the format, length, and data fields of OPR-mode commands and responses.
 
-			bootstrap|send_loader) srv_send_loader "$@" ;_e=$? ;; # filaname
-			#h Send an ascii BASIC file over the serial port slowly enough for BASIC to read.
-			#h The connected device must be a TRS-80 Model 100 or similar, not a TPDD drive.
-			#h In this case unlike all others, we are pretending to be the TPDD drive.
-
 			sleep) _sleep $* ;_e=$? ;; # n
 			#h Sleep for n seconds. n may have up to 3 decimals, so 0.001 is the smallest value.
-
-			verify|with_verify) set_verify $* ;_e=0 ;; # [true|false]
-			#h Set WITH_VERIFY, display current setting.
-			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID
-			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
-
-			expose) set_expose $1 ;_e=0 ;; # [0-2]
-			#h Set EXPOSE_BYTES mode, display current setting.
-			#h Expose non-printing bytes in filenames and attr.
-			#h
-			#h 0 = off
-			#h
-			#h 1 = 0x00-0x1F displayed as inverse-video "@" to "_", 0x7F-0xFF as inverse-video "."
-			#h This mode allows to expose all bytes without altering the display formatting because each byte still only occupies a single character space.
-			#h The byte values below 32 are identified by their ctrl-character, ie 0x01 is ^A, displayed as inverse-video A.
-			#h
-			#h 2 = All non-printing bytes displayed as inverse-video "00" to "1F" or "7F" to "FF".
-			#h This mode shows the actual value of all bytes, but messes up the display formatting because each non-printing byte requires 2 character spaces.
-			#h
-			#h An example is the the TPDD2 Util disk, which has an 0x01 byte as the first byte of the first filename.
 
 			detect_model) pdd2_unk23 ;_e=$? ;;
 			#h Detect whether the connected drive is a TPDD1 or TPDD2
@@ -2740,23 +2735,39 @@ do_cmd () {
 			#h attr: 1 byte plain ascii
 			#h action: TPDD1: 0=set_name  1=get_first  2=get_next
 			#h action: TPDD2: same as TPDD1 plus 3=get_prev  4=close
+			#h
+			#h set_name sets the filename which subsequent open/read/write/close/delete will operate on.
+			#h get_first, get_next, get_prev are used to build directory listings.
 
 			_open) ocmd_open $* ;_e=$? ;; # access_mode
 			#h Wrapper for the drive firmware "File Open" command
-			#h access_mode: 01=write_new  02=write_append  03=read
+			#h access_mode:
+			#h   01 = write_new
+			#h   02 = write_append
+			#h   03 = read
+			#h
+			#h Operates on filename previously set by _dirent(set_name)
 
 			_close) ocmd_close ;_e=$? ;;
 			#h Wrapper for the drive firmware "File Close" command
+			#h
+			#h Operates on filename previously set by _dirent(set_name)
 
 			_read) ocmd_read ;_e=$? ;;
 			#h Wrapper for the drive firmware "File Read" command
+			#h
+			#h Operates on filename previously set by _dirent(set_name)
 
 			_write) ocmd_write $* ;_e=$? ;; # data
 			#h Wrapper for the drive firmware "File Write" command
 			#h data: 1-128 space-seperated hex pairs
+			#h
+			#h Operates on filename previously set by _dirent(set_name)
 
 			_delete) ocmd_delete ;_e=$? ;;
 			#h Wrapper for the drive firmware "File Delete" command
+			#h
+			#h Operates on filename previously set by _dirent(set_name)
 
 			#c 1
 
@@ -2914,14 +2925,6 @@ do_cmd () {
 
 			cp|copy) lcmd_cp "$@" ;_e=$? ;; # src_filename dest_filename [attr]
 			#h Copy a file from on-disk to on-disk
-
-			ll) lcmd_ll $* ;_e=$? ;;
-			#h Local Directory List, no filesizes.
-			#h Faster/cheaper than lls.
-
-			#llm) lcmd_llm $* ;_e=$? ;;
-			lls) lcmd_lls $* ;_e=$? ;;
-			#h Local Directory List, with filesizes.
 
 			#c 2
 
