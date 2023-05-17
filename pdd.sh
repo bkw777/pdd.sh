@@ -668,12 +668,33 @@ parse_compat () {
 
 # List the files in the local directory without /bin/ls
 # gross way to get file sizes but ok for tpdd-sized files
+#
+# Based on mapfile(). Fast(ish) but risk of eating all ram.
+# mapfile() reads entire file into ram, then we walk the array
+#lcmd_llm () {
+#	local -i p b e ;local -a a ;local f
+#	echo "_________Local Directory Listing_________"
+#	for f in * ;do
+#		IFS= mapfile -d '' -n 0 a < "$f"
+#		b=0 ;for ((p=0;p<${#a[*]};p++)) { e=${#a[p]} ;((b+=e+1)) } ;((e)) && ((b--))
+#		[[ -d $f ]] && f+='/'
+#		printf '%-32s %8d\n' "$f" $b
+#	done
+#}
+#
+# Based on read(). Slightly slower but little risk of eating all ram.
+# (would require a multi-gig file without any nulls)
+# read() only reads until the next null into ram at any given time.
+# This is probably the best balance between speed and ram.
+# Maybe we could even use read -n and the exit value to handle the
+# multi-gig-no-nulls case later.
 lcmd_lls () {
-	local -i p b e ;local -a a ;local f
+	local -i b ;local f x
 	echo "_________Local Directory Listing_________"
 	for f in * ;do
-		IFS= mapfile -d '' -n 0 a < "$f"
-		b=0 ;for ((p=0;p<${#a[*]};p++)) { e=${#a[p]} ;((b+=e+1)) } ;((e)) && ((b--))
+		b=0 x=
+		[[ -f $f ]] && while IFS= read -d '' -r -s x ;do ((b+=${#x}+1)) ;done <"$f"
+		((b+=${#x}))
 		[[ -d $f ]] && f+='/'
 		printf '%-32s %8d\n' "$f" $b
 	done
@@ -687,7 +708,6 @@ lcmd_ll () {
 		echo "$f"
 	done
 }
-
 
 _init () {
 	vecho 2 "${FUNCNAME[0]}($@)"
@@ -2897,14 +2917,11 @@ do_cmd () {
 
 			ll) lcmd_ll $* ;_e=$? ;;
 			#h Local Directory List, no filesizes.
-			#h This is vastly safer and cheaper than lls.
+			#h Faster/cheaper than lls.
 
+			#llm) lcmd_llm $* ;_e=$? ;;
 			lls) lcmd_lls $* ;_e=$? ;;
 			#h Local Directory List, with filesizes.
-			#h
-			#h Shows filesizes, but it has to read the entire files into ram to count the bytes just to avoid running /bin/ls.
-			#h This is fine for any directory with only TPDD-sized files, even a lot of them, even whole TPDD2 disk images.
-			#h But this will suck hard if there happens to be any multi-gig files in the directory!
 
 			#c 2
 

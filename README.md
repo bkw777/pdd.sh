@@ -149,7 +149,7 @@ This pile of commands is not well organized. Sorry.
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | ll | | List the files in the current local working directory (not on the disk). Like "ls" but doesn't run /bin/ls. |
-| lls | | **ll** with filesizes added. Uses a pretty terrible brute-force way to get the filesizes without running /bin/ls. Still fine for any amount of tpdd-sized files, but will suck hard in a directory with any multi-gig files! ;) |
+| lls | | **ll** with filesizes added. |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 
 There are even more commands that are mostly low level hacy suff.  
