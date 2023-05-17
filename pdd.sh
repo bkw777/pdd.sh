@@ -673,30 +673,30 @@ parse_compat () {
 # mapfile() reads entire file into ram, then we walk the array
 #lcmd_llm () {
 #	local -i p b e ;local -a a ;local f
-#	echo "_________Local Directory Listing_________"
+#	echo "__________Local Directory Listing__________"
 #	for f in * ;do
-#		IFS= mapfile -d '' -n 0 a < "$f"
+#		IFS= mapfile -d '' a < "$f"
 #		b=0 ;for ((p=0;p<${#a[*]};p++)) { e=${#a[p]} ;((b+=e+1)) } ;((e)) && ((b--))
 #		[[ -d $f ]] && f+='/'
-#		printf '%-32s %8d\n' "$f" $b
+#		printf '%-32s %12d\n' "$f" $b
 #	done
 #}
 #
-# Based on read(). Slightly slower but little risk of eating all ram.
-# (would require a multi-gig file without any nulls)
+# Based on read(). Even faster and no risk of eating all ram.
 # read() only reads until the next null into ram at any given time.
-# This is probably the best balance between speed and ram.
-# Maybe we could even use read -n and the exit value to handle the
-# multi-gig-no-nulls case later.
+# The reads are slightly slower than mapfile if we read the same 100%,
+# but with reads we can abort mid way and never need to read more than
+# 64k per file, because tpdd can't use them anyway.
 lcmd_lls () {
-	local -i b ;local f x
-	echo "_________Local Directory Listing_________"
+	local -i b ;local f x s
+	echo "________Local Directory Listing________"
 	for f in * ;do
-		b=0 x=
-		[[ -f $f ]] && while IFS= read -d '' -r -s x ;do ((b+=${#x}+1)) ;done <"$f"
+		b=0 x= 
+		[[ -f $f ]] && while IFS= read -d '' -r -s x ;do ((b+=${#x}+1)) ;((b>PDD_MAX_FLEN)) && break ;done <"$f"
 		((b+=${#x}))
-		[[ -d $f ]] && f+='/'
-		printf '%-32s %8d\n' "$f" $b
+		((b>PDD_MAX_FLEN)) && s='>64k' || s=$b
+		[[ -d $f ]] && f+=/ s=
+		printf '%-32s %6s\n' "$f" $s
 	done
 }
 
