@@ -598,14 +598,14 @@ un_tpdd_file_name () {
 
 # Read a local file into hex pairs stored in fhex[]
 file_to_fhex () {
-	vecho 2 "${FUNCNAME[0]}($@)"
+	$quiet || vecho 2 "${FUNCNAME[0]}($@)"
 	local -i i= m=${2:-$PDD_MAX_FLEN} ;local x ;fhex=()
-	[[ -r $1 ]] || { err_msg+=("\"$1\" not found or not readable") ;return 1 ; }
+	[[ -r $1 ]] || { $quiet || err_msg+=("\"$1\" not found or not readable") ;return 1 ; }
 	while IFS= read -d '' -r -n 1 x ;do
 		printf -v fhex[i++] '%02X' "'$x"
-		((m)) && ((i>m)) && { err_msg+=("\"$1\" exceeds $PDD_MAX_FLEN bytes") fhex=() i=-1 ;break ; }
+		((m)) && ((i>m)) && { $quiet || err_msg+=("\"$1\" exceeds $PDD_MAX_FLEN bytes") ;fhex=() i=-1 ;break ; }
 	done <"$1"
-	vecho 2 "${#fhex[*]} bytes"
+	$quiet || vecho 2 "${#fhex[*]} bytes"
 	((i>-1))
 }
 
@@ -665,6 +665,29 @@ parse_compat () {
 	FNL="${a[0]}" FEL="${a[1]}" FAH="${a[2]}"
 	printf -v ATTR "%b" "\x$FAH"
 }
+
+# List the files in the local directory without /bin/ls
+# gross way to get file sizes but ok for tpdd-sized files
+lcmd_lls () {
+	local -i p b e ;local -a a ;local f
+	echo "_________Local Directory Listing_________"
+	for f in * ;do
+		IFS= mapfile -d '' -n 0 a < "$f"
+		b=0 ;for ((p=0;p<${#a[*]};p++)) { e=${#a[p]} ;((b+=e+1)) } ;((e)) && ((b--))
+		[[ -d $f ]] && f+='/'
+		printf '%-32s %8d\n' "$f" $b
+	done
+}
+
+lcmd_ll () {
+	local f
+	echo "__________Local Directory Listing__________"
+	for f in * ;do
+		[[ -d $f ]] && f+='/'
+		echo "$f"
+	done
+}
+
 
 _init () {
 	vecho 2 "${FUNCNAME[0]}($@)"
@@ -2871,6 +2894,17 @@ do_cmd () {
 
 			cp|copy) lcmd_cp "$@" ;_e=$? ;; # src_filename dest_filename [attr]
 			#h Copy a file from on-disk to on-disk
+
+			ll) lcmd_ll $* ;_e=$? ;;
+			#h Local Directory List, no filesizes.
+			#h This is vastly safer and cheaper than lls.
+
+			lls) lcmd_lls $* ;_e=$? ;;
+			#h Local Directory List, with filesizes.
+			#h
+			#h Shows filesizes, but it has to read the entire files into ram to count the bytes just to avoid running /bin/ls.
+			#h This is fine for any directory with only TPDD-sized files, even a lot of them, even whole TPDD2 disk images.
+			#h But this will suck hard if there happens to be any multi-gig files in the directory!
 
 			#c 2
 

@@ -1,3 +1,18 @@
+TODOs
+
+change tpdd_read() and file_to_shex() to read in chunks by delimiter (null)
+instead of one byte at a time.
+
+lcmd_lls() has an example of using mapfile to get the entire file into ram
+in one shot. That creates an array where each element has a random sized chunk
+of data, and the only missing bytes are one 0x00 per element.
+
+To reconstruct the file, concat each element plus one 0x00
+after each chunk, except for the final chunk look at the size of the final
+chunk to determine if a final null should be added or not.
+if size>0 then don't add the null
+
+----
 
 Replace TPDD1 "mv" with one that edits the FCB instead of load>rm>save.
 
