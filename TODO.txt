@@ -59,7 +59,49 @@ use sector acces to fill every byte with random binary, read back & compare, rep
 
 ----
 
-disk cleaner
+Figure out a way to work on windows
 
-just trigger any ordinary command that spins the disk
-but ignore the error from no disk
+possible workaround:
+cmd /c mode COM6 baud=19200
+
+https://stackoverflow.com/questions/42260492/cygwin-serial-port-listed-under-dev-but-stty-reports-invalid-argument
+
+Or, since dlplus works, maybe some other app that's already available in cygwin like minicom or even uucp?
+If all else fails, maybe we can include a tiny c program to build and run on the fly? Or even an encoded binary?
+Another similar question the user claimed that python worked fine, just bash/stty failed, so maybe a python one-liner with no file just a commandline?
+
+----
+
+undelete()
+
+When the drive deletes a file, it only edits the FCB and SMT. It leaves behind all the data and the sector chain pointers in the ID sections.
+
+* Scan the FCB to get a list of all used head & tail sectors.
+* Scan all ID's
+* Walk all occupied sector chains from heads to tails to block out all occupied sectors that are actually mentioned in the FCB
+* Out of the remaining unaccounted sectors, reconstruct any chains.
+
+For each reconstructed chain:
+* Note the head and tail sector
+* Fabricate or ask a filename and attr. Assume a name with a filename pattern and attr according to the current COMPAT mode.
+* For the total file size, a few possible answers:
+  - if compat raw, ask user: end at end of tail sector, or last non-null byte, or user-supplied total file size.
+  - if compat wp2, investigate wp-2 file formats
+  - if compat floppy, .BA and .DO end at Ctrl-Z, .CO 6-byte header has length
+* Write FCB and update SMT
+
+----
+
+FCB editor
+
+----
+
+SMT editor
+
+----
+
+ID editor
+
+----
+
+sector editor
