@@ -26,61 +26,21 @@ esac
 : ${EXPOSE_BINARY:=1}
 
 # see "help ffsize"
-# Default off because it only works on real drives and it's slower.
-# TODO: fail gracefully on emulators so this can be enabled by default.
+# default off because it only works on real drives and it's slower
+# TODO: fail gracefully on emulators so this can be enabled by default
 : ${FCB_FSIZE:=false} # true|false
 
 # see "help verify"
 : ${WITH_VERIFY:=true} # true|false
 
-# Assume "yes" to all confirmation prompts for scripting.
+# assume "yes" to all confirmation prompts for scripting
 : ${YES:=false} # true|false
 
-# Joggle the drive from an unknown to a known state in _init().
+# joggle the drive from an unknown to a known state in _init()
 : ${FONZIE_SMACK:=true} # true|false
 
-# RD_CHECK_MIXED_LSC
-# make restore_disk() check for mixed logical sector size codes
-#
-# true = if all sectors in the disk image don't have the same lsc, then
-#        abort because we can't reproduce that disk 100% identically.
-#
-# false = just format the disk using the lsc from sector 0
-#
-# TODO: more specific sanity check to allow the OPR format to pass:
-# Allow mixed LSC in the specific case that each physical sector has
-# either lsc 0, or lsc 1 with all 00 data.
-#
-# It's generally fine not to worry about this because the main example
-# of mixed-lsc is how the normal opr-format command (the one that creates
-# a filesystem disk, not the fdc-format that just makes raw data sectors)
-# happens to work this way:
-# * The new blank format has LCS 0 (64-bytes) on sector 0,
-#   and LSC 1 (80-bytes) on all others.
-# * As sectors get used by files, the drive firmware changes them to LSC 0
-#   also (and never changes them back, even when you delete files).
-#
-# That means any sector with any data in it has LSC 0,
-# and the only sectors with LSC 1 have only all 00s for data.
-#
-# We can safely re-create that disk with LSC 0 on all sectors because of 3 facts:
-# * All sectors that anyone could have to read or write, had LSC 0 originally.
-# * All sectors that originally had LSC 1, happen to only have all 00's for data,
-#   and we don't have to write them, they are already all 00s from the format.
-# * When the drive firmware later wants to write file data to one of those
-#   sectors, it would have changed it to LSC 0 itself anyway, and it doesn't
-#   care if it's already been changed to LSC 0.
-#
-# There never ends up being a case where the "wrong" LSC breaks anything.
-# The drive never tries to read or write 80 bytes of data at some n*80 offset,
-# but instead only gets 64 bytes of data at some n*64 offset from the wrong LSC.
-#
-# It's theoretically possible for there to be other formes of mixed LSC disks,
-# and if there are, we could clone such disks to disk images, and dlplus2 could
-# emulate them, but if we tried to restore one to a physcal disk it would be
-# broken. But since you can't create a disk like that with the drive itself in
-# the first place, hopefully there simply are no such disks out there.
-: ${RD_CHECK_MIXED_LSC:=false} # true|false
+# see pdd1_restore_disk()
+: ${PDD1_RD_CHECK_MIXED_LSC:=true} # true|false
 
 # Default rs232 tty device name, with platform differences
 # The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
@@ -99,6 +59,12 @@ STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 # filename extensions for disk image files
 PDD1_IMG_EXT=pdd1
 PDD2_IMG_EXT=pdd2
+
+# terminal emulation
+typeset -r \
+	tstandout='\e[1m' \
+	tinverse='\e[7m' \
+	tclear='\e[m'
 
 ###############################################################################
 # tunables
@@ -384,13 +350,13 @@ typeset -ra fdc_cond=(
 
 # FDC Format Disk Logical Sector Size Codes
 typeset -ra lsl=(
-	[00]=64
-	[01]=80
-	[02]=128
-	[03]=256
-	[04]=512
-	[05]=1024
-	[06]=1280
+	[0]=64
+	[1]=80
+	[2]=128
+	[3]=256
+	[4]=512
+	[5]=1024
+	[6]=1280
 )
 
 ###############################################################################
@@ -521,7 +487,7 @@ help () {
 					s=0 a=${a%%)*} b=${f[i]} ;a=${a//\\/}
 					((${#1})) && [[ "|$a|" =~ "|$1|" ]] && s=1
 					[[ "$b" =~ '#' ]] && b="${b##*#}" || b=
-					printf -v b '\n \033[1m%s\033[m %s' "${a//|/ | }" "${b:1}"
+					printf -v b '\n %b%s%b %s' "$tstandout" "${a//|/ | }" "$tclear" "${b:1}"
 				} || a= b=
 				;;
 			*) a= b= ;;
@@ -626,20 +592,19 @@ spin () {
 
 # scan global $g_x for non-printing bytes
 # and replace them with a displayable rendition
-# hard-coded ansi/vt codes because I don't want to add dependencies or externals
 expose_bytes () {
 	local -i i n ;local t x=
 	for ((i=0;i<${#g_x};i++)) {
 		t="${g_x:i:1}"
-		printf -v n "%u" "'$t"
+		printf -v n '%u' "'$t"
 		case $EXPOSE_BINARY in
 			2)
-				((n>0&&n<32||n>126)) && printf -v t "\033[7m%02X\033[m" $n
+				((n>0&&n<32||n>126)) && printf -v t '%b%02X%b' "$tinverse" $n "$tclear"
 				((n)) || t=' '
 				;;
 			*)
-				((n<32)) && { printf -v t "%02X" $((n+64)) ;printf -v t "\033[7m%b\033[m" "\x$t" ; }
-				((n>126)) && printf -v t "\033[7m.\033[m"
+				((n<32)) && { printf -v t '%02X' $((n+64)) ;printf -v t '%b%b%b' "$tinverse" "\x$t" "$tclear" ; }
+				((n>126)) && printf -v t '%b.%b' "$tinverse" "$tclear"
 				;;
 		esac
 		x+="$t"
@@ -1568,7 +1533,7 @@ pdd1_dump_disk () {
 # 1280 bytes : DATA
 pdd1_restore_disk () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local f=$1 x b ;local -i p= s l n lc rl
+	local f=$1 x b ;local -i p s l n lc rl
 	((rl=1+PDD1_ID_LEN+SECTOR_DATA_LEN)) # img file record length
 	[[ -e $f ]] || [[ ${f##*.} == ${PDD1_IMG_EXT} ]] || f+=".${PDD1_IMG_EXT}"
 	echo "Restoring Disk from File: \"$f\""
@@ -1578,20 +1543,51 @@ pdd1_restore_disk () {
 	file_to_fhex "$f" 0 || return $?
 
 	# Get the logical sector size code from the file
-	lc=${fhex[0]} # logical size code from the 1st record
+	lc=0x${fhex[0]} # logical size code from the 1st record
 	ll=${lsl[lc]} # length in bytes for that size code
 
-	# Abort if all records don't have the same lsc because we can't re-create
-	# them 100%, or just use the lsc from first record and ignore the rest.
-	${RD_CHECK_MIXED_LSC} && for ((s=0;s<PDD1_SECTORS;s++)) {
-		((${fhex[rl*s]}==lc)) || { err_msg+=('Mixed Logical Sector Sizes') ; return 1 ; }
+	# Sanity check for a disk image that can't be re-created in a drive.
+	# We can only create disks with one of two possible forms:
+	# 1 - All physicals sectors have the same LSC as each other.
+	# or
+	# 2 - Physical sector 0 has LSC 0
+	#     AND other physical sectors have LSC 0 or 1
+	#     AND any physical sector with LSC 1 has all 0x00 ID and DATA
+	#
+	# The 2nd case is the OPR-format (a normal filesystem disk), and in
+	# that case it's ok to format the disk with all LSC 0.
+	#
+	# OPR-format creates a new blank disk where sector 0 has LSC 0, and all
+	# other sectors have LSC 1. Then, as sectors get used by files, any time
+	# a sector is touched, it is changed to LSC 0, and never changed back
+	# even after deleting files. All sectors with data will be LSC 0 on the
+	# original disk and so be compatible with the new disk, and the drive
+	# doesn't care if a sector is already LSC 0 before it touches it.
+	${PDD1_RD_CHECK_MIXED_LSC} && for ((s=0;s<PDD1_SECTORS;s++)) {
+		((p=rl*s))
+
+		# size codes all match
+		((${fhex[p]}==lc)) && continue
+
+		# sector 0 has LSC 0
+		# AND current sector has LSC 1
+		# AND current sector has all 0x00 ID & DATA
+		((lc==0)) && ((0x${fhex[p]}==1)) && {
+			x=${fhex[*]:p+1:rl-1} ;x=${x//[ 0]/}
+			((${#x})) || continue
+		}
+
+		# anything else is a problem
+		err_msg+=('Mixed Logical Sector Sizes')
+		return 1
 	}
 
-	# FDC-format the disk with logical size code from file
+	# FDC-format the disk with logical size code from file sector 0
 	fcmd_format $lc || return $?
 
 	# Write the sectors
 	((n=SECTOR_DATA_LEN/ll)) # number of logical sectors per physical
+	p=0
 	echo "Writing Disk"
 	for ((s=0;s<PDD1_SECTORS;s++)) {
 
@@ -1599,14 +1595,14 @@ pdd1_restore_disk () {
 		((p++))
 
 		# ID
-		pbar $((s+1)) $PDD1_SECTORS "L:0/$n"
+		pbar $((s+1)) $PDD1_SECTORS "ID"
 		b=${fhex[*]:p:PDD1_ID_LEN} ;x=$b ;x=${x//[ 0]/}
 		((${#x})) && { fcmd_write_id $s $b || return $? ; }
 		((p+=PDD1_ID_LEN))
 
 		# DATA
 		for ((l=1;l<=n;l++)) {
-			pbar $((s+1)) $PDD1_SECTORS "L:$l/$n"
+			pbar $((s+1)) $PDD1_SECTORS "LS:$l/$n"
 			b=${fhex[*]:p:ll} ;x=$b ;x=${x//[ 0]/}
 			((${#x})) && { fcmd_write_logical $s $l $b || return $? ; }
 			((p+=ll))
@@ -1887,7 +1883,7 @@ read_fcb () {
 # We could probably just always read the sector 0 copy.
 read_smt () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	local x=() s=() ci co f w ;local -i y i= l=
+	local x=() s=() ci co f ;local -i y i= l= w
 	# read the 21 bytes
 	((operation_mode==2)) && {
 		echo "____________________________Space Management Table_____________________________"
@@ -1902,17 +1898,17 @@ read_smt () {
 	vecho 1 "SMT${bd}: ${x[*]}"
 	# decode the bit-flags
 	echo "Bytes 1-20: bit-flags of used sectors:"
-	f="0x80 0x20 0x08 0x02" w='02'
-	((operation_mode==2)) && f="0x80 0x40 0x20 0x10 0x08 0x04 0x02 0x01" w='03'
+	i=0 f="0x80 0x20 0x08 0x02" w=2
+	((operation_mode==2)) && f="0x80 0x40 0x20 0x10 0x08 0x04 0x02 0x01" w=3
 	for ((y=0;y<SMT_LEN-1;y++)) {
 		for b in $f ;do
-			ci= co= ;((0x${x[y]}&b)) && ci="\e[7m" co="\e[m"
-			printf "%b%${w}u%b" "$ci" $((i++)) "$co"
-			((++l<20)) && printf ' ' || { printf "\n" ;l=0 ; }
+			ci= co= ;((0x${x[y]}&b)) && ci=$tinverse co=$tclear
+			printf '%b%*.*u%b' "$ci" $w $w $((i++)) "$co"
+			((++l<20)) && printf ' ' || { printf '\n' ;l=0 ; }
 		done
 	}
 	# byte 21 is a simple number
-	printf "Byte 21: sectors used: %d\n" "0x${x[y]}"
+	printf 'Byte 21: sectors used: %d\n' "0x${x[y]}"
 }
 
 ###############################################################################
