@@ -14,10 +14,7 @@
 # behavior
 
 # verbose/debug
-case "${VERBOSE:=$DEBUG}" in
-	false|off|n|no|"") VERBOSE=0 ;;
-	true|on|y|yes|:) VERBOSE=1 ;;
-esac
+: ${VERBOSE:=${DEBUG:-0}}
 
 # see "help compat"
 : ${COMPAT:=floppy}
@@ -42,19 +39,19 @@ esac
 # see pdd1_restore_disk()
 : ${PDD1_RD_CHECK_MIXED_LSC:=true} # true|false
 
-# Default rs232 tty device name, with platform differences
-# The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
-			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB	# linux
-case "${OSTYPE,,}" in
-	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;	# *bsd
-	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.  ;;	# osx
-esac
-
-# Default serial port settings and tty behavior.
+# Serial port device & parameters
 : ${BAUD:=19200}
 : ${RTSCTS:=true}
 : ${XONOFF:=false}
-STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
+TPDD_TTY_PREFIX=ttyS
+stty_f="-f"
+STTY_FLAGS='pass8 raw cread clocal -echo time 1 min 1'
+case "${OSTYPE,,}" in
+	linux)		stty_f="-F" TPDD_TTY_PREFIX=ttyUSB ;; # linux
+	*bsd*)		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;; # *bsd
+	darwin*)	stty_f="-f" TPDD_TTY_PREFIX=cu. ;; # osx
+	cygwin|msys)	stty_f="-F" STTY_FLAGS='pass8 clocal -echo time 1 min 1' ;; # cygwin or msys
+esac
 
 # filename extensions for disk image files
 PDD1_IMG_EXT=pdd1
@@ -2006,22 +2003,31 @@ set_verify () {
 
 set_yes () {
 	case "$1" in
-		false|off|no|0) YES=false ;;
-		true|on|yes|1) YES=true ;;
+		false|off|no|n|0) YES=false ;;
+		true|on|yes|y|1) YES=true ;;
 		#'') $YES && YES=false || YES=true ;;
 	esac
 	echo "Assume \"yes\" instead of confirming actions: $YES"
 }
 
-set_expose () {
-	local -i e=$EXPOSE_BINARY
+set_verbose () {
 	case "$1" in
-		false|off|no) e=0 ;;
-		true|on|yes) e=1 ;;
-		0|1|2) e=$1 ;;
-		#'') ((e)) && e=0 || e=1 ;;
+		false|off|no|n) v=0 ;;
+		true|on|yes|y) v=1 ;;
+		#'') ((v)) && v=0 || v=1 ;;
+		*) v=$1 ;;
 	esac
-	EXPOSE_BINARY=$e
+	((v>5)) && set -x || set +x
+	$quiet || echo "Verbose level: $v"
+}
+
+set_expose () {
+	case "$1" in
+		false|off|no|n) EXPOSE_BINARY=0 ;;
+		true|on|yes|y) EXPOSE_BINARY=1 ;;
+		0|1|2) EXPOSE_BINARY=$1 ;;
+		#'') ((EXPOSE_BINARY)) && EXPOSE_BINARY=0 || EXPOSE_BINARY=1 ;;
+	esac
 	echo -n 'Expose non-printable bytes in filenames: '
 	((EXPOSE_BINARY)) && echo 'Enabled' || echo 'Disabled'
 }
@@ -2519,7 +2525,7 @@ do_cmd () {
 			#h If verbose = 0, hides the hacky, low-level, and less-common commands.
 			#h If verbose > 0, shows all commands.
 
-			v|verbose|debug) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # n
+			v|verbose|debug) set_verbose $* ;_e=0 ;; # n
 			#h Set verbosity level, display current setting.
 
 			y|yes|batch) set_yes $* ;_e=0 ;; # [true|false]
@@ -2949,9 +2955,10 @@ do_cmd () {
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${VERBOSE:-0} FNL # allow FEL to be unset
+typeset -i v= operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 FNL # allow FEL to be unset
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= bd= did_init=false quiet=false g_x= PDD_MAX_FLEN=$PDD1_MAX_FLEN
 readonly LANG=C
+quiet=true set_verbose $VERBOSE
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
 for x in ${!opr_fmt[*]} ;do [[ $x =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done
 for x in ${!lsl[*]} ;do lsc[${lsl[x]}]=$x ;done ;readonly lsc ;unset x
