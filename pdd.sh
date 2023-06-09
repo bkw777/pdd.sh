@@ -2046,22 +2046,6 @@ ask_compat () {
 	done
 }
 
-# set the filename format without changing anything else
-ask_names () {
-	local x m=() a="$ATTR" PS3="On-disk filename format: "
-	((${#1})) && parse_compat $1 || {
-		for COMPAT in ${!compat[@]} ;do
-			parse_compat ;ATTR="$a" ;printf -v x "%8s: %d" "$COMPAT" "$FNL"
-			((FNL<PDD_FNAME_LEN)) && x+=".$FEL"
-			m+=("$x")
-		done
-		select x in "${m[@]}" ;do x="${x%:*}"
-			parse_compat "${x// /}" && break || continue
-		done
-	}
-	[[ $ATTR != $a ]] && ATTR="$a" COMPAT="none"
-}
-
 set_attr () {
 	case ${#1} in
 		1) ATTR="$1" ;printf -v FAH "%02X" "'$ATTR" 2>&- >&- || return 1 ;;
@@ -2597,9 +2581,6 @@ do_cmd () {
 			#h     This mode shows the actual value of all bytes, but messes up the display formatting because each non-printing byte requires 2 character spaces.
 			#h
 			#h An example is the the TPDD2 Util disk, which has an 0x01 byte as the first byte of the first filename.
-
-			names) ask_names "$@" ;_e=$? ;; # [floppy|wp2|raw]
-			#h Same as "compat", but only the filename format, does not change attr.
 
 			attr) ask_attr "$@" ;_e=$? ;; # [b|hh]
 			#h Set the default attribute byte.
