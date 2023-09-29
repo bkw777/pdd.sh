@@ -29,9 +29,9 @@ If you can find one, the simplest is a single DE9F to DB25F straight-through ada
 [Startech AT925FF](https://www.amazon.com/dp/B00066HJCA/)  
 [Pan Pacific AD-D25F9F-A](https://www.jensentools.com/pan-pacific-ad-d25f9f-a-serial-adapter-db-9f-to-db-25f/p/502-600)
 
-You may possibly get lucky on ebay but be careful and make sure you're getting 9-female to 25-female, straight-through NOT null-modem. Also make sure the 9-pin side has screws not nuts. Nuts would get in the way with the nuts on the usb-serial adapter or motherboard com port and you wouldn't be able to plug it in. Most random 9-25 adapters you find will not work.
+You may possibly get lucky on ebay but be careful and make sure you're getting female to female, and straight-through NOT null-modem. Also make sure the 9-pin side has screws not nuts. Nuts would get in the way with the nuts on the usb-serial adapter or motherboard com port and you wouldn't be able to plug it in. Most random 9-25 adapters you find will not work.
 
-If you can get one of those adapters, skip the rest of this file. No other adapters needed.
+If you can get one of those adapters, that's it, skip the rest of this file.
 
 ----
 
