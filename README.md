@@ -240,19 +240,19 @@ But you probably need that to be named "DOSNEC.CO" on the disk in order for Ulti
 `save ts-dos_4.1_nec.co DOSNEC.CO`
 
 ### Specify an arbitrary attribute byte
-"Floppy" and all other TPDD client software for TRS-80 Model 100 and clones (TS-DOS, TEENY, etc) all hard-code the value 'F' for attribute for all files every time in all cases, and don't expose the field to the user in any way. You don't see it in directory listings on a 100, and you can't supply some other value to write or search.
+"Floppy" and all other TPDD client software for TRS-80 Model 100 and clones (TS-DOS, TEENY, etc) all hard-code the value 'F' for attribute for all files every time in all cases. Meaning they always write "F" when writing a file and always ask for "F" when reading a file, essentially NO-OPing the field, and don't expose the field to the user in any way. You don't see it in directory listings on a 100, and you can't supply some other value to write or search.
 
-But the field is there and the drive doesn't care what's in it, and other platforms may use the field in other ways.
+But the field is there, and the drive doesn't care what's in it except that your commands must match the disk the same as for the filename, and other platforms may use the field in other ways.
 
-pdd.sh uses 'F' by default also for convenience, but it's only a default, and there are a few different ways to change that.  
+pdd.sh uses 'F' by default also for convenience, but in our case it's only a default, and there are a few different ways to change or override that.  
 One way is to supply a 3rd argument to the `save` command.  
-This example could be for a Cambridge Z88, give a quote-space-quote for the 3rd arg to explicitly specify a space character for the attribute:  
+This example could be for a Cambridge Z88, give a quote-space-quote for the 3rd arg to explicitly specify a space character for the attribute byte:  
 `save Romcombiner.zip Romcombiner.zip ' '`  
 
-Or change the current default ATTR by using the attr command.
+Or change the current default `ATTR` value by using the `attr` command.
 
 ### Rename a file on a WP-2 disk
-Notice that the filename format indicator in the prompt changes from 6.2 to 8.2 after the "wp2" command.  
+Notice also that the filename format indicator in the prompt changed from 6.2 to 8.2 after the `wp2` command.  
 ```
 PDD(pdd2:6.2(F)> wp2
 PDD(pdd2:8.2(F)> mv CAMEL.CO WP2FORTH.CO
@@ -292,11 +292,11 @@ The Sardine dictionary disk is also in there.
 
 ### Directory Listings
 
-* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. The "fcb_flens" setting, not enabled by default, makes the "dirent()" function read the FCB to get filesizes. This makes "ls" and "load" take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the "ffs" command. This only works on real drives. This can't be used with TPDD emulators because this requires using sector-access commands to read sector 0 from the disk. Emulators don't have any actual sector 0 and don't support the sector-access commands.
+* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. The `fcb_flens` setting, not enabled by default, makes the "dirent()" function read the FCB to get filesizes. This makes `ls` and `load` take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the `ffs` command. This only works on real drives. This can't be used with TPDD emulators because this requires using sector-access commands to read sector 0 from the disk. Emulators don't have any actual sector 0 and don't support the sector-access commands, but TPDD emulators also don't report the wrong file sizes in their dirent() responses, and so you don't need any better value in that case anyway. (dlplus is a TPDD emulator and does support raw sector access to disk image files, but this doesn't apply to ordinary files shared from a directory)
 
-* Filenames can have non-printing characters in them. The "expose" option, enabled by default, exposes those bytes in filenames (and in the attr field). When a byte in a filename has an ascii value of 0-32, it's displayed as the assosciated ctrl code, but in inverse video instead of carot notation so that the character only takes up one space. Bytes with ascii values above 126 are all displayed as just inverse ".". ex: null is ^@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, (except for the fact that it makes the filename field look one character too short). The expose option exposes that hidden byte in the name. This can be toggled with the "expose" command.  
+* Filenames can have non-printing characters in them. The `expose` option, enabled by default, exposes those bytes in filenames (and in the attr field). When a byte in a filename has an ascii value of 0-32, it's displayed as the assosciated ctrl code, but in inverse video instead of carot notation so that the character only takes up one space. Bytes with ascii values above 126 are all displayed as just inverse ".". ex: null is ^@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, (except for the fact that it makes the filename field look one character too short). The `expose` option exposes that hidden byte in the name. This can be toggled with the `expose` command.  
 
-* The write-protect status of the disk is indicated in the bottom-right corner of the listing with a [WP] if the disk is write-protected.
+* The write-protect status of the disk is indicated in the bottom-right corner of the listing with a `[WP]`if the disk is write-protected.
 
 ## Non-Standard DIP Switch Settings
 Here is an example to use the FDC-mode 38400 baud DIP switch setting on a TPDD1 or Purple Computing drive.  
