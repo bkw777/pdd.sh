@@ -21,32 +21,35 @@ If you had an old IBM XT or AT clone with a 25 pin serial port, that would be 25
 
 Most desktop/server motherboards that have any com ports, and most usb-serial adapters, have 9-pin male DTE ports. So for those you need a 9f-25m adapter and a 25f-25f gender-changer.
 
-Assuming you have a motherboard or usb-serial adapter with a 9-pin male connector, here's what you need...
+Assuming you have a motherboard com port or usb-serial adapter with a 9-pin male connector, here's what you need...
 
 ----
 
-If you can find one, the simplest is a single DE9F to DB25F straight-through adapter. These are NOT common, but here is one.  
-https://www.jensentools.com/pan-pacific-ad-d25f9f-a-serial-adapter-db-9f-to-db-25f/p/502-600
+If you can find one, the simplest is a single DE9F to DB25F straight-through adapter. These are not too common, but here are a couple.  
+[Startech AT925FF](https://www.amazon.com/dp/B00066HJCA/)  
+[Pan Pacific AD-D25F9F-A](https://www.jensentools.com/pan-pacific-ad-d25f9f-a-serial-adapter-db-9f-to-db-25f/p/502-600)
 
-You may possibly get lucky on ebay but be careful and make sure you're getting 9-female to 25-female, straight-through NOT null-modem. Also make sure the 9-pin side has screws not nuts. Nuts would get in the way with the nuts on the usb-serial adapter or motherboard com port and you wouldn't be able to plug it in. Most 9-25 adapters you find will turn out not to be right.
+You may possibly get lucky on ebay but be careful and make sure you're getting 9-female to 25-female, straight-through NOT null-modem. Also make sure the 9-pin side has screws not nuts. Nuts would get in the way with the nuts on the usb-serial adapter or motherboard com port and you wouldn't be able to plug it in. Most random 9-25 adapters you find will not work.
 
-As long as that link still works or if you can find the same thing elsewhere, then that single adapter does the whole job, and you can skip the rest of this file.
+If you can get one of those adapters, skip the rest of this file. No other adapters needed.
 
 ----
 
-Otherwise, it's probably easier to find a combination of one of each of the following  
+Alternatively, if you can't find one of the adapters above, it may be easier to find a combination of one of each of the following  
 * 9 pin female to 25 pin male adapter or cable, straight through or "modem", NOT null-modem  
 * 25 pin female to 25 pin female gender-changer, also straight through not null-modem
+
+For the 9-25 part, any one of these 3 examples works:
 
 You may already have a DE9F to DB25M adapter like this. It may even have come with your usb-serial adapter.  
 https://www.amazon.com/dp/B00066HOWK
 
-You may already have a DE9F to DB25M "modem" cable like this. They come with external modems.  
+Or you may already have a DE9F to DB25M "modem" cable like this. They come with external modems.  
 https://www.amazon.com/dp/B002I9XYCC
 
 Yet another option is there are some usb-serial adapters that have a male 25 pin connector.  
 https://www.amazon.com/dp/B01AT2FTOU  
-note this one has FTDI chip, don't get Prolific if you can avoid it
+note this one has an FTDI chip, don't get Prolific if you can avoid it
 
 ----
 
