@@ -3,6 +3,7 @@
 # Brian K. White - b.kenyon.w@gmail.com
 #h github.com/bkw777/pdd.sh
 # https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive
+# https://archive.org/details/tpdd-2-service-manual
 # http://bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol
 # https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt
 
@@ -95,8 +96,8 @@ TPDD_WAIT_POLL_INTERVAL_MS=100
 # as 20 depending on the other contents of the disk and the size of the file,
 # plus possibly a few more to wake up first = allow 25 seconds to be safe.
 #
-# unk23 is an opposite case where we need to set a deliberately short timeout
-# because TPDD2 will always respond fast, and TPDD1 will never respond,
+# pdd2_version is an opposite case where we need to set a deliberately short
+# timeout because TPDD2 will always respond fast, and TPDD1 will never respond,
 # and we don't want to make every TPDD1 hang for 5 seconds on every _init().
 #
 # The 3 different format timeouts instead of 1 longer one are just for the
@@ -116,7 +117,8 @@ RENAME_WAIT_MS=10000        # pdd2_rename
 CLOSE_WAIT_MS=20000         # ocmd_close
 DIRENT_WAIT_MS=10000        # ocmd_dirent
 SEARCHID_WAIT_MS=25000      # fcmd_search_id
-UNK23_WAIT_MS=100           # pdd2_unk23
+PDD2_VERSION_WAIT_MS=100    # pdd2_version
+PDD2_SYSINFO_WAIT_MS=100    # pdd2_sysinfo
 
 # Per-byte delay in send_loader()
 LOADER_PER_CHAR_MS=8
@@ -155,129 +157,88 @@ typeset -rA opr_fmt=(
 	[req_format]='06'
 	[req_status]='07'
 	[req_fdc]='08'
-	[req_seek]='09'	# TPDD2
-	[req_tell]='0A'	# TPDD2
-	[req_set_ext]='0B'	# TPDD2
-	[req_condition]='0C'	# TPDD2
+	[req_seek]='09'			# NADSBox extension
+	[req_tell]='0A'			# ??? (probably also NADSBox)
+	[req_set_ext]='0B'		# ??? (probably also NADSBox)
+	[req_pdd2_condition]='0C'	# TPDD2
 	[req_pdd2_rename]='0D'	# TPDD2
-	[req_unk0E]='0E'	# TPDD2
-	[req_unk0F]='0F'	# TPDD2
-	[req_pdd2_unk10]='10'	# TPDD2 unk, r: 38 01 36 (90)  (ret_cache_std: ERR_PARAM)
-	[req_pdd2_unk11]='11'	# TPDD2 unk, r: 3A 06 80 13 05 00 10 E1 (36)
-	[req_pdd2_unk12]='12'	# TPDD2 unk, r: 38 01 36 (90)  (ret_cache_std: ERR_PARAM)
-#	[req_pdd2_unk13]='13'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
-#	[req_pdd2_unk14]='14'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
-#	[req_pdd2_unk15]='15'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
-#	[req_pdd2_unk16]='16'	# TPDD2 unk, r: 
-#	[req_pdd2_unk17]='17'	# TPDD2 unk, r: 
-#	[req_pdd2_unk18]='18'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk19]='19'	# TPDD2 unk, r: 
-#	[req_pdd2_unk20]='20'	# TPDD2 unk, r: 
-#	[req_pdd2_unk21]='21'	# TPDD2 unk, r: 
-#	[req_pdd2_unk22]='22'	# TPDD2 unk, r: 
-	[req_pdd2_unk23]='23'	# TPDD2 unk, r: 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 (2A)
-	[req_cache_load]='30'	# TPDD2
-	[req_cache_write]='31'	# TPDD2
-	[req_cache_read]='32'	# TPDD2
-	[req_pdd2_unk33]='33'	# TPDD2 unk, r: 3A 06 80 13 05 00 10 E1 (36)
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='35'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='36'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='37'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='38'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='39'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
-#	[req_pdd2_unk34]='34'	# TPDD2 unk, r:
+	[req_unk0E]='0E'		# ???
+	# these are undocumented, but the drive at least responds sanely,
+	# like with a valid response packet with a parameter out of range error etc
+	[req_unk0F]='0F'		# TPDD2 unk, r: ret_pdd2_std2
+	[req_pdd2_unk10]='10'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_std2: ERR_PARAM)
+	[req_pdd2_undoc11]='11'	# TPDD2 undocumented synonym for req_pdd2_sysinfo
+	[req_pdd2_unk12]='12'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_std2: ERR_PARAM)
+	[req_pdd2_unk13]='13'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
+	[req_pdd2_unk14]='14'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
+	[req_pdd2_unk15]='15'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
+	[req_pdd2_version]='23'	# TPDD2 r: 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 (2A)
+	[req_pdd2_cache]='30'	# TPDD2
+	[req_pdd2_mem_write]='31'	# TPDD2
+	[req_pdd2_mem_read]='32'	# TPDD2
+	[req_pdd2_sysinfo]='33'	# TPDD2 r: 3A 06 80 13 05 00 10 E1 (36)
+	[req_pdd2_exec]='34'	# TPDD2 exec: load cpu registers A & X and jump to address
+
+# 0x47 is undocumented, but PAKDOS uses it.
+# TPDD1 responds the same as 0x07 drive status.
+# TPDD2 ignores it.
+# With every directory listing, PAKDOS tries 0x47 first,
+# and only if 0x47 is ignored, then does 0x07.
+	[req_undoc47]='47'		# TPDD1: undocumented synonym for drive_status TPDD2: no response
+
 	# returns
 	[ret_read]='10'
 	[ret_dirent]='11'
 	[ret_std]='12'	# error open close delete status write pdd2_unk13 pdd2_unk14 pdd2_unk15
-	[ret_pdd2_unk23]='14'	# TPDD2 unk23 - "TS-DOS mystery" tpdd2 DETECTION
-	[ret_condition]='15'	# TPDD2
-	[ret_cache_std]='38'	# TPDD2 cache_load cache_write unk10 unk12
-	[ret_cache_read]='39'	# TPDD2
-	[ret_pdd2_unk11]='3A'	# TPDD2 unk11 unk33
+	[ret_pdd2_version]='14'	# TPDD2 pdd2_version
+	[ret_pdd2_condition]='15'	# TPDD2
+	[ret_pdd2_std2]='38'	# TPDD2 cache mem_write unk0F unk10 unk12
+	[ret_pdd2_mem_read]='39'	# TPDD2
+	[ret_pdd2_sysinfo]='3A'	# TPDD2 pdd2_sysinfo
+	[ret_pdd2_exec]='3B'	# TPDD2 pdd2_exec
 )
 
 # Operation Mode Error Codes
 typeset -rA opr_msg=(
 	[00]='Operation Complete'
+	# File
 	[10]='File Not Found'
 	[11]='File Exists'
-	[30]='Command Parameter or Sequence Error'
+	# Sequence
+	[30]='Missing Filename'
 	[31]='Directory Search Error'
 	[35]='Bank Error'
 	[36]='Parameter Error'
 	[37]='Open Format Mismatch'
 	[3F]='End of File'
+	# Disk I/O
 	[40]='No Start Mark'
-	[41]='ID CRC Check Error'
+	[41]='ID CRC Error'
 	[42]='Sector Length Error'
-	[43]='Read Error 3'
 	[44]='Format Verify Error'
 	[45]='Disk Not Formatted'
 	[46]='Format Interruption'
 	[47]='Erase Offset Error'
-	[48]='Read Error 8'
-	[49]='DATA CRC Check Error'
+	[49]='DATA CRC Error'
 	[4A]='Sector Number Error'
 	[4B]='Read Data Timeout'
-	[4C]='Read Error C'
 	[4D]='Sector Number Error'
-	[4E]='Read Error E'
-	[4F]='Read Error F'
+	# Protect
 	[50]='Write-Protected Disk'
-	[5E]='Disk Not Formatted'
-	[60]='Disk Full or Max File Size Exceeded or Directory Full' # TPDD2 'Directory Full'
+	[5E]='Disk Not Formatted' # Really just "No SMT"
+	[5F]='Write-Protected TPDD1 Disk'
+	# File Territory
+	[60]='Directory Full'
 	[61]='Disk Full'
 	[6E]='File Too Long'
-	[70]='No Disk'
-	[71]='Disk Not Inserted or Disk Change Error' # TPDD2 'Disk Change Error'
-	[72]='Disk Insertion Error 2'
-	[73]='Disk Insertion Error 3'
-	[74]='Disk Insertion Error 4'
-	[75]='Disk Insertion Error 5'
-	[76]='Disk Insertion Error 6'
-	[77]='Disk Insertion Error 7'
-	[78]='Disk Insertion Error 8'
-	[79]='Disk Insertion Error 9'
-	[7A]='Disk Insertion Error A'
-	[7B]='Disk Insertion Error B'
-	[7C]='Disk Insertion Error C'
-	[7D]='Disk Insertion Error D'
-	[7E]='Disk Insertion Error E'
-	[7F]='Disk Insertion Error F'
-	[80]='Hardware Fault 0'
-	[81]='Hardware Fault 1'
-	[82]='Hardware Fault 2'
-	[83]='Defective Disk (power-cycle to clear error)'
-	[84]='Hardware Fault 4'
-	[85]='Hardware Fault 5'
-	[86]='Hardware Fault 6'
-	[87]='Hardware Fault 7'
-	[88]='Hardware Fault 8'
-	[89]='Hardware Fault 9'
-	[8A]='Hardware Fault A'
-	[8B]='Hardware Fault B'
-	[8C]='Hardware Fault C'
-	[8D]='Hardware Fault D'
-	[8E]='Hardware Fault E'
-	[8F]='Hardware Fault F'
+	# Disk Condition
+	[70]='Disk Not Inserted'
+	[71]='Disk Change Error'
+	# Sensor
+	[80]='No Index Signal'
+	[81]='Abnormal Track 0 Signal'
+	[82]='Abnormal Index Signal'
+	[83]='Defective Disk (power-cycle to clear error)' # not in the manual but you can get the actual error
 )
 
 # Directory Entry Search Forms
@@ -286,7 +247,7 @@ typeset -rA dirent_cmd=(
 	[get_first]=1
 	[get_next]=2
 	[get_prev]=3	# TPDD2
-	[close]=4	# TPDD2
+	[close]=4		# TPDD2
 )
 
 # File Open Access Modes
@@ -380,28 +341,37 @@ typeset -ra pdd2_cond=(
 	[0x80]='Unknown condition bit 7'
 )
 
+# version and sysinfo values
+typeset -ra cpu_codes=(
+	[0x10]='HD6301'
+)
+typeset -ra model_codes=(
+	[0xE1]='Tandy Portable Disk Drive 2'
+)
+
+
 ###############################################################################
 # general constants
 
-# "Unknown" commands 0x11, 0x23, 0x33 each return a certain string of bytes
-# from a TPDD2, and do nothing on a TPDD1. 0x11 and 0x33 return the same
-# data as each other. 0x23 is used by TS-DOS to detect TPDD2.
-# These are just the payload data part of the OPR/PDD2 return packet,
-# without the format, length, or checksum bytes.
-typeset -ra \
-	UNK11_RET_DAT=(80 13 05 00 10 E1) \
-	UNK23_RET_DAT=(41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00)
-	# UNK33_RET_DAT same as UNK11_RET_DAT
+# Data returned by req_pdd2_version and req_pdd2_sysinfo
+# Just the payload data field without format, length, or checksum bytes.
+# This is "canned" static data that all TPDD2 drives return the same.
+# The TPDD2 service manual does document the data and it could theoretically
+# change if any drives with other firmware versions were ever sold, but
+# it seems none ever were, and so "all" drives return this exact data.
+#typeset -ra \
+#	PDD2_VERSION_DAT=(41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00) \
+#	PDD2_SYSINFO_DAT=(80 13 05 00 10 E1)
 
 # PDD2_CHUNK_LEN_R
-# read_cache() can read any arbitrary length from 0 to 252 bytes,
-# at any arbitrary offset within the 1280-byte cache.
+# pdd2_mem_read() can read any arbitrary length from 0 to 252 bytes,
+# at any arbitrary offset within the 1280-byte sector_cache.
 # The largest possible read that divides 1280 evenly is 160 bytes.
-# pdd2_read_sector() and pdd2_dump_disk() read in 8 160-byte chunks,
+# So pdd2_read_sector() and pdd2_dump_disk() read in 8 160-byte chunks,
 # but could do 6 mixed-size transactions like 5*252+20 or 5*206+250.
 
 # PDD2_CHUNK_LEN_W
-# write_cache() can write any arbitrary length from 0 to 127 bytes,
+# pdd2_mem_write() can write any arbitrary length from 0 to 127 bytes,
 # at any arbitrary offset within the 1280-byte cache.
 # The largest possible write that divides 1280 evenly is 80 bytes.
 # pdd2_write_sector() and pdd2_restore_disk() write in 16 80-byte chunks,
@@ -429,7 +399,12 @@ typeset -ri \
 	FCB_FSIZE_LEN=2 \
 	FCB_FRESV_LEN=2 \
 	FCB_FHEAD_LEN=1 \
-	FCB_FTAIL_LEN=1
+	FCB_FTAIL_LEN=1 \
+	CACHE_LOAD=0 \
+	CACHE_COMMIT=1 \
+	CACHE_COMMIT_VERIFY=2 \
+	MEM_CACHE=0 \
+	MEM_CPU=1
 
 typeset -ri \
 	PDD2_CHUNKS_R=$((SECTOR_DATA_LEN/PDD2_CHUNK_LEN_R)) \
@@ -670,7 +645,7 @@ _init () {
 	trap '_quit' EXIT
 	((operation_mode==9)) || return
 	fonzie_smack # ensure we can not be tpdd1 in fdc-mode, so we can send opr-mode or tpdd2 commands without locking up
-	pdd2_unk23   # determine which we are, tpdd1 in opr-mode, or tpdd2
+	pdd2_version # determine which we are, tpdd1 in opr-mode, or tpdd2
 	:
 }
 
@@ -1038,31 +1013,6 @@ ocmd_dirent () {
 
 	# If doing get_first, get_next, get_prev, filename[0]=00 means no more files. 
 	((0x${ret_dat[0]}))
-}
-
-# TS-DOS mystery TPDD2 detection - some versions of TS-DOS send this
-# TPDD2 gives this response. TPDD1 does not respond.
-# request: 5A 5A 23 00 DC
-# return : 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 2A
-pdd2_unk23 () {
-	vecho 3 "${FUNCNAME[0]}($@)"
-	# This is a TPDD2 command, uses Operation-mode api, but we don't want do the
-	# usual operation_mode/pdd2 sanity checks, because this is itself one of the
-	# ways that we figure out if the drive is tpdd1 or tpdd2 in the first place.
-	# Clear err_msg because read() err is expected for every TPDD1. Set a
-	# deliberately short timeout because TPDD2 responds quickly to this command,
-	# and TPDD1 will never respond (will always hang for the full timeout).
-	ret_dat=()
-	ocmd_send_req ${opr_fmt[req_pdd2_unk23]} && ocmd_read_ret $UNK23_WAIT_MS ;err_msg=()
-	[[ ${ret_dat[*]} == ${UNK23_RET_DAT[*]} ]] && {
-		vecho 1 'Detected TPDD2'
-		set_pdd2
-		return 0
-	} || {
-		vecho 1 'Detected TPDD1'
-		set_pdd1
-		return 1
-	}
 }
 
 # Get Drive Status
@@ -1615,13 +1565,108 @@ pdd1_restore_disk () {
 ###############################################################################
 # TPDD2
 
+# TPDD2 responds, TPDD1 does not respond.
+# Some versions of TS-DOS use this to detect TPDD2 vs TPDD1.
+# request: 5A 5A 23 00 DC
+# return : 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 2A
+pdd2_version () {
+	vecho 3 "${FUNCNAME[0]}($@)"
+	# This is a TPDD2 command, uses Operation-mode api, but we don't want do the
+	# usual operation_mode/pdd2 sanity checks, because this is itself one of the
+	# ways that we figure out if the drive is tpdd1 or tpdd2 in the first place.
+	# Clear err_msg because read() err is expected for every TPDD1. Set a
+	# deliberately short timeout because TPDD2 responds quickly to this command,
+	# and TPDD1 will never respond (will always hang for the full timeout).
+	ret_dat=()
+	ocmd_send_req ${opr_fmt[req_pdd2_version]} && ocmd_read_ret $PDD2_VERSION_WAIT_MS ;err_msg=()
+
+	local -i mc=0x${ret_dat[11]:-00}
+
+	((v)) && {
+		local ms=${model_codes[mc]}
+		[[ ${ms} ]] || ms="Unknown Model Code \"$mc\""
+		printf '\n'
+		printf    'System Version\n'
+		printf -- '---------------------------------------------------\n'
+		printf    'System Version:    %u\n' 0x${ret_dat[0]:-00}${ret_dat[1]:-00}
+		printf    'Sides:             %u\n' 0x${ret_dat[2]:-00}
+		printf    'Tracks:            %u\n' 0x${ret_dat[3]:-00}${ret_dat[4]:-00}
+		printf    'Sector Length:     %u\n' 0x${ret_dat[5]:-00}${ret_dat[6]:-00}
+		printf    'Sectors per Track: %u\n' 0x${ret_dat[7]:-00}
+		printf    'Directory Entries: %u\n' 0x${ret_dat[8]:-00}${ret_dat[9]:-00}
+		printf    'Max Open Files:    %u\n' $((0x${ret_dat[10]:-00}+1))
+		printf    'Model:             %s\n' "$ms"
+		printf    'reserved 0:        %u\n' 0x${ret_dat[12]:-00}
+		printf    'reserved 1:        %u\n' 0x${ret_dat[13]:-00}
+		printf    'reserved 2:        %u\n' 0x${ret_dat[14]:-00}
+		printf '\n'
+	}
+
+	((mc==225)) && {
+		vecho 1 'Detected TPDD2'
+		set_pdd2
+		return 0
+	} || {
+		vecho 1 'Detected TPDD1'
+		set_pdd1
+		return 1
+	}
+}
+
+# TPDD2 responds, TPDD1 does not respond.
+# request: 5A 5A 33 00 ck
+# return: 38 06 80 13 05 00 10 E1 ck
+pdd2_sysinfo () {
+	vecho 3 "${FUNCNAME[0]}($@)"
+	# This is a TPDD2 command, uses Operation-mode api, but we don't want do the
+	# usual operation_mode/pdd2 sanity checks, because this is itself one of the
+	# things that we can use figure out if the drive is tpdd1 or tpdd2 in the first place.
+	# Clear err_msg because read() err is expected for every TPDD1. Set a
+	# deliberately short timeout because TPDD2 responds quickly to this command,
+	# and TPDD1 will never respond (will always hang for the full timeout).
+	ret_dat=()
+	ocmd_send_req ${opr_fmt[req_pdd2_sysinfo]} && ocmd_read_ret $PDD2_SYSINFO_WAIT_MS ;err_msg=()
+
+	local -i mc=0x${ret_dat[5]:-00}
+
+	((v)) && {
+		local -i cc=0x${ret_dat[4]:-00}
+		local cs=${cpu_codes[cc]}
+		[[ ${cs} ]] || cs="Unknown CPU Code \"$cc\""
+
+		local ms=${model_codes[mc]}
+		[[ ${ms} ]] || ms="Unknown Model Code \"$mc\""
+
+		printf '\n'
+		printf    'System Information\n'
+		printf -- '---------------------------------------------------\n'
+		printf    'Sector Cache Start:  %u\n' 0x${ret_dat[0]:-00}${ret_dat[1]:-00}
+		printf    'Sector Cache Length: %u\n' 0x${ret_dat[2]:-00}${ret_dat[3]:-00}
+		printf    'CPU:                 %s\n' "$cs"
+		printf    'Model:               %s\n' "$ms"
+		printf '\n'
+	}
+
+	((mc==225)) && {
+		vecho 1 'Detected TPDD2'
+		set_pdd2
+		return 0
+	} || {
+		vecho 1 'Detected TPDD1'
+		set_pdd1
+		return 1
+	}
+}
+
+
+
 # TPDD2 Get Drive Status
 # request: 5A 5A 0C 00 ##
 # return : 15 01 ?? ##
 pdd2_ready () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local -i i b
-	ocmd_send_req ${opr_fmt[req_condition]} || return $?
+	ocmd_send_req ${opr_fmt[req_pdd2_condition]} || return $?
 	ocmd_read_ret || return $?
 	i=0x${ret_dat[0]}
 	$quiet && { err_msg=() ;((i&0x02)) && err_msg+=('[WP]') || err_msg+=('    ') ;return 0; }
@@ -1631,69 +1676,73 @@ pdd2_ready () {
 	} || echo "${pdd2_cond[i]}"
 }
 
-# TPDD2 copy sector between disk and cache
-# pdd2_cache_load track sector mode
-# pdd2_cache_load 0-79 0-1 0|2
-# mode: 0=load (cache<disk) 2=unload (cache>disk)
-pdd2_cache_load () {
+# TPDD2 copy sector data between disk and cache
+# pdd2_cache track sector action
+# pdd2_cache 0-79 0-1 0-2
+# action: 0=load (cache<disk) 1=commit (cache>disk) 2=commit+verify
+pdd2_cache () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local x ;local -i t=$1 s=$2 a=$3 e
 
 	# 5-byte request data
-	# 00|02 action 0=load 2=unload
-	# 00    unknown
-	# 00-4F track
-	# 00    unknown
+	# 00-02 action 0=load 1=commit 2=commit+verify
+	# 00    track number msb (always 00)
+	# 00-4F track number lsb
+	# 00    side (always 00)
 	# 00-01 sector
 	printf -v x '%02X 00 %02X 00 %02X' $a $t $s
 
-	ocmd_send_req ${opr_fmt[req_cache_load]} $x || return $?
+	ocmd_send_req ${opr_fmt[req_pdd2_cache]} $x || return $?
 	ocmd_read_ret || return $?
 	ocmd_check_err ;e=$?
 	(($3==0)) && ((e==0x50)) && e= err_msg=() # if not writing, don't treat write-protected disk as error
 	return $e
 }
 
-# TPDD2 read from cache
-# pdd2_cache_read area offset length
-pdd2_cache_read () {
+# TPDD2 read from memory
+# pdd2_mem_read mode address length
+pdd2_mem_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local x
 
 	# 4-byte request data
-	# 00         area  0=data 1=meta
-	# 0000-04C0  offset
-	# 00-FC      length
+	# 00      mode  0=sector_cache 1=cpu_memory
+	# 00-04   address MSB (sector_cache 0000-04C0, cpu_mem 0000-FFFF)
+	# 00-FF   address LSB
+	# 00-FC   length
 	printf -v x '%02X %02X %02X %02X' $1 $((($2>>8)&0xFF)) $(($2&0xFF)) $3
-	ocmd_send_req ${opr_fmt[req_cache_read]} $x || return $?
+	ocmd_send_req ${opr_fmt[req_pdd2_mem_read]} $x || return $?
 	ocmd_read_ret || return $?
-	#ocmd_check_err || return $? # needs to be taught about ret_cache_std
+	#ocmd_check_err || return $? # needs to be taught about ret_pdd2_std2
 
 	# returned data:
-	# [0]     area
-	# [1]     offset MSB
-	# [2]     offset LSB
+	# [0]     mode
+	# [1]     address MSB
+	# [2]     address LSB
 	# [3]+    data
 	((${#ret_dat[*]}==3+$3)) || { err_msg+=("$z: expected $((3+$3)) bytes, got ${#ret_dat[*]}") ;return 1 ; }
 	$quiet || printf 'M:%u O:%05u %s\n' "0x${ret_dat[0]}" "0x${ret_dat[1]}${ret_dat[2]}" "${ret_dat[*]:3}"
 }
 
-# TPDD2 write to cache
-# pdd2_cache_write area offset data...
-pdd2_cache_write () {
+# TPDD2 write to memory
+# pdd2_mem_write mode address data...
+# mode: 0=sector_cache 1=cpu_memory
+# address: mode0 0-1280, mode1 0-65535
+pdd2_mem_write () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	printf -v x '%02X %02X %02X' $1 $((($2>>8)&0xFF)) $(($2&0xFF)) ;shift 2
-	ocmd_send_req ${opr_fmt[req_cache_write]} $x $* || return $?
+	ocmd_send_req ${opr_fmt[req_pdd2_mem_write]} $x $* || return $?
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
-pdd2_flush_cache () {
-	# mystery metadata writes - no idea what these do, copied from backup log
-	pdd2_cache_write 1 $PDD2_MYSTERY_ADDR1 || return $?  # 01 00 83 00
-	pdd2_cache_write 1 $PDD2_MYSTERY_ADDR2 || return $?  # 01 00 96 00
-	# flush the cache to disk
-	pdd2_cache_load $1 $2 2 || return $?
+pdd2_commit_cache () {
+	# Reset Drive Status
+	pdd2_mem_write $MEM_CPU $PDD2_MYSTERY_ADDR1 || return $?  # 01 00 83 00
+	pdd2_mem_write $MEM_CPU $PDD2_MYSTERY_ADDR2 || return $?  # 01 00 96 00
+
+	# write the cache to disk
+	pdd2_cache $1 $2 $CACHE_COMMIT_VERIFY || return $?
 }
 
 # Similar to TPDD1 fcmd_read_id, but just 4 bytes and we don't know the meaning.
@@ -1710,8 +1759,8 @@ pdd2_read_meta () {
 	local a ;local -i t s
 	for a in $* ;do
 		[[ $a =~ , ]] && t=${a%%,*} s=${a##*,} || t=$((a/2)) s=$((a-(a/2)*2))
-		pdd2_cache_load $t $s 0 || return $?
-		quiet=true pdd2_cache_read 1 $PDD2_META_ADDR $PDD2_META_LEN || return $?
+		pdd2_cache $t $s $CACHE_LOAD || return $?
+		quiet=true pdd2_mem_read $MEM_CPU $PDD2_META_ADDR $PDD2_META_LEN || return $?
 		$quiet || printf 'T:%02u S:%u : %s\n' $t $s "${ret_dat[*]:3}"
 	done
 }
@@ -1723,10 +1772,10 @@ pdd2_read_meta () {
 pdd2_read_sector () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	local -i i t=$1 s=$2 c ;local h=()
-	pdd2_cache_load $t $s 0 || return $?
+	pdd2_cache $t $s $CACHE_LOAD || return $?
 	$quiet || echo "Track $t, Sector $s"
 	for ((c=0;c<PDD2_CHUNKS_R;c++)) {
-		quiet=true pdd2_cache_read 0 $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
+		quiet=true pdd2_mem_read $MEM_CACHE $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
 		$quiet || printf '%05u : %s\n' "0x${ret_dat[1]}${ret_dat[2]}" "${ret_dat[*]:3}"
 		h+=( ${ret_dat[*]:3} )
 	}
@@ -1751,16 +1800,16 @@ pdd2_dump_disk () {
 			((${#f})) && pbar $((i++)) $PDD2_SECTORS_D "T:$t S:$s C:-"
 
 			# load sector from media to cache
-			pdd2_cache_load $t $s 0 || return $?
+			pdd2_cache $t $s $CACHE_LOAD || return $?
 
 			# metadata
-			pdd2_cache_read 1 $PDD2_META_ADDR $PDD2_META_LEN || return $?
+			pdd2_mem_read $MEM_CPU $PDD2_META_ADDR $PDD2_META_LEN || return $?
 			((${#f})) && x+=" ${ret_dat[*]:3}"
 
 			# main data
 			for ((c=0;c<PDD2_CHUNKS_R;c++)) { # chunks
 				((${#f})) && pbar $i $PDD2_SECTORS_D "T:$t S:$s C:$c"
-				pdd2_cache_read 0 $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
+				pdd2_mem_read $MEM_CACHE $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
 				((${#f})) && x+=" ${ret_dat[*]:3}"
 			}
 		}
@@ -1801,21 +1850,20 @@ pdd2_restore_disk () {
 			}
 
 			# write metadata to cache
-			pdd2_cache_write 1 $PDD2_META_ADDR ${fhex[*]:p:PDD2_META_LEN} || return $?
+			pdd2_mem_write $MEM_CPU $PDD2_META_ADDR ${fhex[*]:p:PDD2_META_LEN} || return $?
 			((p+=PDD2_META_LEN))
 
 			# write main data to cache
 			for ((c=0;c<PDD2_CHUNKS_W;c++)) { # chunks
 				pbar $i $PDD2_SECTORS_D "T:$t S:$s C:$c"
-				pdd2_cache_write 0 $((c*PDD2_CHUNK_LEN_W)) ${fhex[*]:p:PDD2_CHUNK_LEN_W} || return $?
+				pdd2_mem_write $MEM_CACHE $((c*PDD2_CHUNK_LEN_W)) ${fhex[*]:p:PDD2_CHUNK_LEN_W} || return $?
 				((p+=PDD2_CHUNK_LEN_W))
 			}
 
 			# write cache to media
-			# flush_cache() writes the cache to disk but does not clear the cache.
-			# Every byte of cache must be explicitly over-written before here
-			# to displace the previous data, not just the non-zero bytes.
-			pdd2_flush_cache $t $s || return $?
+			# commit_cache() writes the cache to disk but does not clear the cache.
+			# Every byte of cache must be explicitly over-written before here.
+			pdd2_commit_cache $t $s || return $?
 		}
 	}
 	pbar $i $PDD2_SECTORS_D
@@ -1887,8 +1935,8 @@ read_smt () {
 	# read the 21 bytes
 	((operation_mode==2)) && {
 		echo "____________________________Space Management Table_____________________________"
-		pdd2_cache_load 0 $bank 0 || return $?
-		pdd2_cache_read 0 $SMT_OFFSET $SMT_LEN >/dev/null || return $?
+		pdd2_cache 0 $bank $CACHE_LOAD || return $?
+		pdd2_mem_read $MEM_CACHE $SMT_OFFSET $SMT_LEN >/dev/null || return $?
 		x=(${ret_dat[*]:3})
 	} || {
 		echo "__________________Space Management Table___________________"
@@ -1968,21 +2016,34 @@ set_pdd2 () {
 	operation_mode=2 bd="[$bank]" PDD_MAX_FLEN=$PDD2_MAX_FLEN
 }
 
-# fonzie_smack
+# fonzie_smack()
 # send M1\r
 #
-# If drive was in FDC-mode, this is a valid command to switch to OPR-mode
-# Drive should now be in OPR-mode because we just switched to it.
+# Take a drive in an unknown state (because we just started up and have no way
+# to know what state the drive was already in before we started running), and
+# have the drive be in a known state at the end, without locking up the drive
+# along the way by sending data it wasn't expecting. IE bump it to make it work
 #
-# If drive was in OPR-mode or is PDD2, drive should be scanning for "ZZ", and
-# consuming but ignoring anything that isn't "Z", and none of these are "Z".
-# Drive should now be in OPR-mode because it already was.
+# The only assumption we make, because we have to, is that the drive is not
+# already in the middle of some operation, but is waiting to process either
+# FDC or OPR commands. If the drive were in the middle of some long-running
+# operation like format-disk, or multi-stage operation like read_file,
+# there is no safe way to detect that and avoid locking up the drive firmware.
+#
+# If: Drive was in FDC-mode.
+# Then: "M1<CR>" is a valid FDC-mode command to switch from FDC to OPR-mode.
+# End: Drive should now be in OPR-mode, because we just switched to it.
+#
+# If: Drive was in OPR-mode (including PDD2).
+# Then: Drive should be reading and consuming but otherwise ignoring
+#       anything that isn't 0x5A, and none of these bytes are 0x5A.
+# End: Drive should now be in OPR-mode, because it already was.
 #
 fonzie_smack () {
 	vecho 2 "${FUNCNAME[0]}($@)"
 	tpdd_drain
 	tpdd_write 4D 31 0D
-	_sleep 0.003
+	_sleep 0.003  # cribbed from TS-DOS
 	tpdd_drain
 }
 
@@ -2390,6 +2451,13 @@ pdd1_boot () {
 }
 
 # Emulate a client performing the TPDD2 boot sequence
+# The real TPDD2 bootstrap doesn't merely read a file from the disk,
+# it loads BASIC code to the client which detects the client model
+# and then uses mem_write() to load machine code into the drives memory,
+# and then exec() to execute that machine code on the drive, and that
+# machine code is what finally sends back the actual FLOPPY.CO
+# We will not be able to really emulate that.
+
 # pdd2_boot [100|200]
 pdd2_boot () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
@@ -2475,7 +2543,7 @@ pdd2_boot () {
 
 do_cmd () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i _i _e _det=256 ;local _a=$@ _c x ifs=$IFS
+	local -i _i _e _det=256 _v ;local _a=$@ _c x ifs=$IFS
 	local IFS=';' ;_a=(${_a}) ;IFS=$ifs quiet=false
 	for ((_i=0;_i<${#_a[@]};_i++)) {
 		eval set ${_a[_i]}
@@ -2608,6 +2676,7 @@ do_cmd () {
 			#h Set WITH_VERIFY, display current setting.
 			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID
 			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
+			# TODO update all uses of pdd2_cache() commit
 
 			com_test) lcmd_com_test ;_e=$? ;;
 			#h Check if the serial port is open
@@ -2667,9 +2736,13 @@ do_cmd () {
 			sleep) _sleep $* ;_e=$? ;; # n
 			#h Sleep for n seconds. n may have up to 3 decimals, so 0.001 is the smallest value.
 
-			detect_model) pdd2_unk23 ;_e=$? ;;
+			version|detect_model) ((v)) && _v=$v || _v=1 ;v=$_v pdd2_version ;_e=$? ;;
 			#h Detect whether the connected drive is a TPDD1 or TPDD2
-			#h by sending the TPDD2-only 0x23 command, aka the "TS-DOS mystery command"
+			#h by sending the TPDD2-only get_version command
+
+			sysinfo) ((v)) && _v=$v || _v=1 ;v=$_v pdd2_sysinfo ;_e=$? ;;
+			#h Detect whether the connected drive is a TPDD1 or TPDD2
+			#h by sending the TPDD2-only get_sysinfo command
 
 			#c 0
 
@@ -2762,7 +2835,7 @@ do_cmd () {
 			#h Switch drive from FDC-mode to ___-mode
 			#h operation_mode: 0=FDC (no-op)  1=OPR (switch to OPR mode)
 
-			cnd|condition) get_condition ;_e=$? ;;
+			cond|condition) get_condition ;_e=$? ;;
 			#h Get drive readiness condition flags
 			#h Slightly more info than the "ready" command
 
@@ -2834,22 +2907,22 @@ do_cmd () {
 
 	# TPDD2 sector access
 
-			cache_load) pdd2_cache_load $* ;_e=$? ;; # track sector action
+			cache) pdd2_cache $* ;_e=$? ;; # track sector action
 			#h Load cache from media or Commit cache to media.
 			#h track: 0-79
 			#h sector: 0-1
-			#h action: 0=load (disk to cache) 2=commit (cache to disk)
+			#h action: 0=load (disk to cache) 1=commit (cache to disk) 2=commit+verify
 
-			cache_read) pdd2_cache_read $* ;_e=$? ;; # area offset length
-			#h Read from drive cache.
-			#h area: 0=data 1=meta
-			#h offset: 0-1279
+			mem_read) pdd2_mem_read $* ;_e=$? ;; # mode address length
+			#h Read from drive memory.
+			#h mode: 0=sector_cache 1=cpu_memory
+			#h address: mode 0: 0-1279, mode 1: 0-65534
 			#h length: 0-252
 
-			cache_write) pdd2_cache_write $* ;_e=$? ;; # area offset data
-			#h Write to drive cache.
-			#h area: 0=data 1=meta
-			#h offset: 0-1279
+			mem_write) pdd2_mem_write $* ;_e=$? ;; # mode address data
+			#h Write to drive memory.
+			#h mode: 0=sector_cache 1=cpu_memory
+			#h address: mode 0: 0-1279, mode 1: 0-65534
 			#h data: 0-127 space-seperated hex pairs
 
 	# TPDD1 & TPDD2 local/client sector access
