@@ -123,7 +123,7 @@ This pile of commands is not well organized. Sorry.
 | ?&#160;\|&#160;h&#160;\|&#160;help | \[command\] | show help |
 | pdd1 | | Select TPDD1 mode |
 | pdd2 | | Select TPDD2 mode |
-| version|detect_model | | TPDD2 "Get System Version" command.<br>Also used internaly to detect whether TPDD1 vs TPDD2 is connected.<br>TS-DOS also uses this to detect TPDD2. |
+| version\|detect_model | | TPDD2 "Get System Version" command.<br>Also used internaly to detect whether TPDD1 vs TPDD2 is connected.<br>TS-DOS also uses this to detect TPDD2. |
 | sysinfo | | TPDD2 "Get System Information" command. |
 | opr&#160;\|&#160;fdc | | Switch to Operation or FDC mode (TPDD1 only) |
 | compat | \[floppy\|wp2\|raw\] | Select the compatibility mode for on-disk filenames format and attribute byte. With no args presents a menu.<br><br>**floppy** : space-padded 6.2 filenames with attr 'F'<br>(default) For working with TRS-80 Model 100, NEC PC-8201a, Olivetti M10, or Kyotronic KC-85.<br>(The dos that came with the TPDD1 was called "Floppy", and all other dos's that came later on that platform had to be compatible with that.)<br><br>**wp2** : space-padded 8.2 filenames with attr 'F'<br>For working with a TANDY WP-2.<br><br>**raw** : 24 byte filenames with attr ' ' (space/0x20)<br>For working with anything else, such as CP/M or Cambridge Z88 or Atari Portfolio (MS-DOS), etc. |
