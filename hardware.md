@@ -4,7 +4,7 @@ You will need:
 * A working [TPDD drive](http://tandy.wiki/TPDD)  
 If your drive doesn't work, see the section about the belt.
 
-* The [special cable](http://tandy.wiki/TPDD#Cable) that came with it, or you can [build one](https://github.com/bkw777/TPDD_Cable), or you may possibly be able to buy one from [arcadeshopper](https://arcadeshopper.ecwid.com/#!/Special-serial-cable-for-Tandy-Portable-Disk-Drive-and-Tandy-Portable-Disk-Drive-2/p/144969001/category=28313042)
+* The [special cable](http://tandy.wiki/TPDD#Cable) that came with it, or you can [build one](https://github.com/bkw777/TPDD_Cable), or you may possibly be able to buy one from [arcadeshopper](https://arcadeshopper.ecwid.com/#!/Special-serial-cable-for-Tandy-Portable-Disk-Drive-and-Tandy-Portable-Disk-Drive-2/p/144969001/category=28313042) or [soigeneris](https://www.soigeneris.com/copy-of-tandy-tpdd-2-backpack-drive-plus) <!-- this url is crazy but it's correct at the moment Jan 2023 -->
 
 * Some [720K disks](https://www.ebay.com/sch/i.html?_nkw=720+floppy). Not 1.44M
 
