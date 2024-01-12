@@ -21,14 +21,14 @@ Things this util can do that even the commercial TPDD utils can't do
    - Disk-Power Distribution Disk  
    - Sardine Dictionary Disk
  - Ability to create disks from downloadable disk image files, without special hardware other than the drive itself  
- - Work with disks/files formatted for other platforms than the KC-85 clones
+ - Work with TPDD disks from/for other platforms like WP-2, CP/M, Z88, Atari Portfolio, etc
 
 ## Supported OS's
 Any linux, macos/osx, bsd, any cpu architecture.  
 
 Windows... [possibly with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).  
 Cygwin and MSYS also fail with `stty: /dev/ttyS4: Permission denied`.  
-[dlplus](http://github.com/bkw777/dlplus) does work in both cygwin and msys, so the problem is probably fixable, but I just don't know how yet.
+[dl2](http://github.com/bkw777/dl2) does work in both cygwin and msys, so the problem is probably fixable, but I just don't know how yet.
 
 OSX: Requires a newer bash from macports or brew. Does not work with the stock bash that ships with osx/macos (still as of 2023).
 
@@ -281,7 +281,7 @@ or
 
 Reads the disk in the drive and creates `midisk.pdd1` or `mydisk.pdd2` depending on what kind of drive is connected.
 
-The disk images are the same format as used by [dlplus](github.com/bkw777/dlplus)
+The disk images are the same format as used by [dl2](https://github.com/bkw777/dl2)
 
 ### Restore an entire disk from a disk image file
 `rd mydisk.pdd1`  
@@ -309,7 +309,7 @@ pdd.sh switches the drive to Operation-mode automatically regardless what mode t
 * Run: `$ BAUD=38400 pdd`
 
 Now use the drive as normal.  
-It's not really any faster. The point was just to support all dip switch settings since they exist. And that means getting \_init() working well enough that the app works regardless if the drive is a tpdd1 starting in Operation-mode, a tpdd1 starting in FDC-mode, or a tpdd2. First fonzie_smack() makes sure that we are either a tpdd2, or a tpdd1 in Oeration mode. Then pdd2_unk23() (aka "ts-dos mystery command") detects if the drive is a tpdd1 or tpdd2. At that point we have the drive in a known state and can send commands to it without locking it up.
+It's not really any faster. The point was just to support all dip switch settings since they exist. And that means getting \_init() working well enough that the app works regardless if the drive is a tpdd1 starting in Operation-mode, a tpdd1 starting in FDC-mode, or a tpdd2. First fonzie_smack() makes sure that we are either a tpdd2, or a tpdd1 in Oeration mode. Then pdd2_version() detects if the drive is a tpdd1 or tpdd2. At that point we have the drive in a known state and can send commands to it without locking it up.
 
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
