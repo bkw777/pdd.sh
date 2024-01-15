@@ -353,16 +353,6 @@ typeset -ra model_codes=(
 ###############################################################################
 # general constants
 
-# Data returned by req_pdd2_version and req_pdd2_sysinfo
-# Just the payload data field without format, length, or checksum bytes.
-# This is "canned" static data that all TPDD2 drives return the same.
-# The TPDD2 service manual does document the data and it could theoretically
-# change if any drives with other firmware versions were ever sold, but
-# it seems none ever were, and so "all" drives return this exact data.
-#typeset -ra \
-#	PDD2_VERSION_DAT=(41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00) \
-#	PDD2_SYSINFO_DAT=(80 13 05 00 10 E1)
-
 # PDD2_CHUNK_LEN_R
 # pdd2_mem_read() can read any arbitrary length from 0 to 252 bytes,
 # at any arbitrary offset within the 1280-byte sector_cache.
@@ -423,7 +413,7 @@ typeset -rA compat=(	# fname(dec.dec) fattr(hex)
 	[floppy]='6,2,46'	# 6.2  F
 	[wp2]='8,2,46'		# 8.2  F
 #	[z88]='24,,00'		# 24   null     # not sure what z88 wants yet
-#	[cpm]='24,,00'		# 24   null     # not sure what cpm wants yet
+#	[cpm]='24,,00'		# 24   null     # not sure what cp/m wants yet
 	[raw]='24,,20'		# 24   space
 )
 
@@ -1021,7 +1011,9 @@ ocmd_dirent () {
 ocmd_ready () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1 || return 1
-	ocmd_send_req ${opr_fmt[req_status]} || return $?
+	local r=${opr_fmt[req_status]}
+	(($1)) && printf -v r '%02X' $((0x$r+0x40))
+	ocmd_send_req $r || return $?
 	ocmd_read_ret || return $?
 	ocmd_check_err || return $?
 }
@@ -1496,43 +1488,60 @@ pdd1_restore_disk () {
 	lc=0x${fhex[0]} # logical size code from the 1st record
 	ll=${lsl[lc]} # length in bytes for that size code
 
-	# Sanity check for a disk image that can't be re-created in a drive.
-	# We can only create disks with one of two possible forms:
-	# 1 - All physicals sectors have the same LSC as each other.
+	# Sanity check the logical size codes in the disk image.
+	#
+	# A real drive can't create a disk with mixed LSCs (different LSCs
+	# on different sectors) except for one specific form.
+	#
+	# Scan the LSC of every sector and only proceed if one of the following:
+	#
+	# * Raw data disk: All sectors have the same LSC.
 	# or
-	# 2 - Physical sector 0 has LSC 0
-	#     AND other physical sectors have LSC 0 or 1
-	#     AND any physical sector with LSC 1 has all 0x00 ID and DATA
+	# * Filesystem disk: All sectors have either LSC 0 or 1,
+	#   but any sector with data has LSC 0.
 	#
-	# The 2nd case is the OPR-format (a normal filesystem disk), and in
-	# that case it's ok to format the disk with all LSC 0.
+	# Anything else is something we have no way to reproduce
+	# and is probably just a corrupt / invalid image.
 	#
-	# OPR-format creates a new blank disk where sector 0 has LSC 0, and all
-	# other sectors have LSC 1. Then, as sectors get used by files, any time
-	# a sector is touched, it is changed to LSC 0, and never changed back
-	# even after deleting files. All sectors with data will be LSC 0 on the
-	# original disk and so be compatible with the new disk, and the drive
-	# doesn't care if a sector is already LSC 0 before it touches it.
+	# We can't(*) even truely reproduce the latter, but we can produce
+	# something functionally identical if not literally identical.
+	#
+	# OPR-format (aka filesystem) writes LSC 1 to all untouched sectors.
+	# Then later any time a sector is touched by a file it is changed to LSC 0,
+	# and never changed back even when deleting the file. Sector 0 of an
+	# OPR-format disk always has data, including a fresh format, because the
+	# SMT gets a byte of data in sector 0, so sector 0 just always has LSC 0.
+	#
+	# All sectors with any data always have LSC 0, and so a new duplicate
+	# disk formatted with all LSC 0 is functionally the same.
+	#
+	# (*) We *could*, just the long way, by doing OPR-format, then save &
+	# delete files to touch the sectors that need to get changed from 1 to 0.
+	#
 	${PDD1_RD_CHECK_MIXED_LSC} && for ((s=0;s<PDD1_SECTORS;s++)) {
 		((p=rl*s))
 
-		# size codes all match
+		# This matches both the raw data disk case where LSC might be any 0-6,
+		# as long as all sectors match each other,
+		# and and also matches the LSC 0 sectors on a filesystem disk,
+		# because sector 0 of a filesystem disk always has LSC 0.
 		((${fhex[p]}==lc)) && continue
 
-		# sector 0 has LSC 0
-		# AND current sector has LSC 1
-		# AND current sector has all 0x00 ID & DATA
+		# This matches the rest of the filesystem disk case,
+		#   If current sector has LSC 0, then it was already OK'd above.
+		#   If current sector has LSC 1, and no data in ID or DATA,
+		#   and sector 0 has LSC 0, then that's OK too.
 		((lc==0)) && ((0x${fhex[p]}==1)) && {
 			x=${fhex[*]:p+1:rl-1} ;x=${x//[ 0]/}
 			((${#x})) || continue
 		}
 
-		# anything else is a problem
+		# Anything else is a problem.
 		err_msg+=('Mixed Logical Sector Sizes')
 		return 1
 	}
 
-	# FDC-format the disk with logical size code from file sector 0
+	# FDC-format the disk with logical size code from sector 0
 	fcmd_format $lc || return $?
 
 	# Write the sectors
@@ -1541,7 +1550,7 @@ pdd1_restore_disk () {
 	echo "Writing Disk"
 	for ((s=0;s<PDD1_SECTORS;s++)) {
 
-		# LSC
+		# LSC (advance one byte to skip over it)
 		((p++))
 
 		# ID
@@ -2824,7 +2833,7 @@ do_cmd () {
 			format|mkfs) ocmd_format ;_e=$? ;;
 			#h Format disk with filesystem
 
-			ready|status) ocmd_ready ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;;
+			ready|status) ocmd_ready $* ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;;
 			#h Report basic drive ready / not ready
 
 			#c 2
@@ -3014,7 +3023,7 @@ parse_compat
 [[ $0 =~ .*pdd2(\.sh)?$ ]] && set_pdd2
 
 # for _sleep()
-readonly sleep_fifo="/tmp/.${0//\//_}.sleep.fifo"
+readonly sleep_fifo="/tmp/.${0//\//_}.${LOGNAME}.sleep.fifo"
 [[ -p $sleep_fifo ]] || mkfifo -m 666 "$sleep_fifo" || abrt "Error creating \"$sleep_fifo\""
 exec 4<>$sleep_fifo
 
