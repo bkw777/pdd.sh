@@ -1351,6 +1351,7 @@ fcmd_read_logical () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
 	local -i ps=$1 ls=${2:-1} || return $? ;local x
+	#local ps=${1:-00} ls=${2:-01} || return $? ;local x  # allow 2 digits to exactly mimick Sardine
 	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
@@ -2775,13 +2776,14 @@ do_cmd () {
 
 	# TPDD1 switch between operation-mode and fdc-mode
 
-			fdc) ocmd_fdc ;_e=$? ;;
+			fdc) ocmd_fdc $* ;_e=$? ;; # [force]
 			#h Switch a TPDD1 drive from OPR-mode to FDC-mode
+			#h force = send command even if we think we're already in fdc mode
 
 			opr) fcmd_mode 1 ;_e=$? ;;
 			#h Switch a TPDD1 drive from FDC-mode to OPR-mode
 
-			pdd1_reset|smack) fonzie_smack ;_e=$? ;;
+			reset|smack) fonzie_smack ;_e=$? ;;
 			#h Send the FDC-mode command to switch a TPDD1 drive to OPR-mode while ignoring any errors or other responses.
 
 	# TPDD1 & TPDD2 file access
@@ -2833,8 +2835,9 @@ do_cmd () {
 			format|mkfs) ocmd_format ;_e=$? ;;
 			#h Format disk with filesystem
 
-			ready|status) ocmd_ready $* ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;;
+			ready|status) ocmd_ready $* ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;; # [1]
 			#h Report basic drive ready / not ready
+			#h 1 = send req code 0x47 instead of 0x07 - undocumented tpdd2-only option that PakDOS uses
 
 			#c 2
 
