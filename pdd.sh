@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+[ -n "${BASH_VERSION}" ] || exec bash $0
+set +o posix
+((${BASH_VERSINFO[0]}<4)) && { echo "Requires bash 4+" ;exit 1 ; }
+
 #h pdd.sh - Tandy Portable Disk Drive client in pure bash
 # Brian K. White - b.kenyon.w@gmail.com
 #h github.com/bkw777/pdd.sh
@@ -19,6 +23,9 @@ case "${VERBOSE:=$DEBUG}" in
 	false|off|n|no|"") VERBOSE=0 ;;
 	true|on|y|yes|:) VERBOSE=1 ;;
 esac
+
+# print millisecond timestamps
+: ${MSLOG:=false} # true|false
 
 # see "help compat"
 : ${COMPAT:=floppy}
@@ -438,6 +445,13 @@ vecho () {
 	shift ;echo "$@" >&2
 }
 
+mslog () {
+	$MSLOG || return
+	local -i nowms=$((${EPOCHREALTIME//./}/1000))
+	echo "ms: $((nowms-lastms))"
+	lastms=$nowms
+}
+
 # help [cmd]
 help () {
 	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} s=0 x ;local -a f=() l=() ;((w--))
@@ -687,9 +701,12 @@ close_com () {
 # write $* hex pairs to com port as binary
 tpdd_write () {
 	vecho 3 "${FUNCNAME[0]}($@)"
+	mslog
 	#test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	local x=" $*"
 	printf '%b' "${x// /\\x}" >&3
+	vecho 3 "SENT: $*"
+	mslog
 }
 
 # read $1 bytes from com port
@@ -726,7 +743,8 @@ tpdd_read () {
 	local -i i l=$1 ;local x ;rhex=() read_err=0
 	((l<1)) && return 1
 	tpdd_wait $2 $3 || return $?
-	vecho 2 -n "$z: l=$l "
+	mslog
+	#vecho 2 -n "$z: l=$l "
 	for ((i=0;i<l;i++)) {
 		((operation_mode==2)) && tpdd_wait
 		x=
@@ -736,7 +754,9 @@ tpdd_read () {
 		printf -v rhex[i] '%02X' "'$x"
 	}
 	((read_err)) && err_msg+=("tty read err:$read_err")
-	vecho 2 "${rhex[*]}"
+	#vecho 2 "${rhex[*]}"
+	vecho 3 "RCVD: ${rhex[*]}"
+	mslog
 	((${#rhex[*]}==l))
 }
 
@@ -794,7 +814,7 @@ tpdd_wait () {
 	${d[b]} 1 1
 	((b==1)) && spin -
 	((b)) && echo
-	vecho 4 "$z: $@:$((i*p))"
+	vecho 4 "$z: waited $((i*p)) of ${t} ms"
 }
 
 # stripped & hardcoded for speed
@@ -1351,7 +1371,6 @@ fcmd_read_logical () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return 1
 	local -i ps=$1 ls=${2:-1} || return $? ;local x
-	#local ps=${1:-00} ls=${2:-01} || return $? ;local x  # allow 2 digits to exactly mimick Sardine
 	str_to_shex "${fdc_cmd[read_sector]}$ps,$ls"
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
@@ -2066,6 +2085,20 @@ set_fcb_filesizes () {
 	echo "Use FCBs for true file sizes: $FCB_FSIZE"
 }
 
+set_mslog () {
+	[[ $EPOCHREALTIME ]] || {
+		$quiet || echo "Millisecond timestamps requires bash 5"
+		return;
+	}
+	case "$1" in
+		false|off|no|0) MSLOG=false ;;
+		true|on|yes|1) MSLOG=true ;;
+		#'') $MSLOG && MSLOG=false || MSLOG=true ;;
+	esac
+	mslog 2>&- >&- # hide the first call shows epoch instead of elapsed
+	$quiet || echo "Print millisecond timestamps: $MSLOG"
+}
+
 set_verify () {
 	case "$1" in
 		false|off|no|0) WITH_VERIFY=false ;;
@@ -2559,7 +2592,6 @@ do_cmd () {
 		eval set ${_a[_i]}
 		_c=$1 ;shift
 		_e=${_det} err_msg=()
-
 		case ${_c} in
 
 	#
@@ -2629,6 +2661,12 @@ do_cmd () {
 			ffs|ffsize|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
 			#h Set FCB_FSIZE mode, display current setting.
 			#h Get true filesizes for "ls" and "load" by reading the FCB table ourselves and ignoring the filesizes from the drives dirent() function.
+
+			ms|mslog) set_mslog $1 ;_e=0 ;; # [true|false]
+			#h Set MSLOG mode, display current setting.
+			#h Print "ms: ########" at various points, showing the number
+			#h of milliseconds elapsed since the previous timestamp.
+			#h Requires bash 5
 
 			bank) bank $1 ;_e=$? ;; # [0|1]
 			#h Switch to bank 0 or 1 on a TPDD2, display current setting.
@@ -3015,9 +3053,10 @@ do_cmd () {
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${VERBOSE:-0} FNL # allow FEL to be unset
+typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${VERBOSE:-0} FNL lastms= # don't init $FEL
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= bd= did_init=false quiet=false g_x= PDD_MAX_FLEN=$PDD1_MAX_FLEN
 readonly LANG=C
+quiet=true set_mslog
 ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
 for x in ${!opr_fmt[*]} ;do [[ $x =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done
 for x in ${!lsl[*]} ;do lsc[${lsl[x]}]=$x ;done ;readonly lsc ;unset x
