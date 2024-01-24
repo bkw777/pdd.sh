@@ -103,9 +103,9 @@ This pile of commands is not well organized. Sorry.
 **TPDD2-only Sector Access**  
 | command | arguments | Description |
 | --- | --- | --- |
-| cache_load | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache (ram) & the disk (media).<br>mode 0 = load from disk to cache<br>mode 2 = commit cache to disk |
-| cache_read | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's sector cache.<br>mode 0 = main data, 1 = metadata |
-| cache_write | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<data&#160;0-127&#160;hex&#160;pairs...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode: 0 = main data, 1 = metadata |
+| cache | \<track#&#160;0-79\>&#160;\<sector#&#160;0-1\>&#160;\<mode&#160;0\|2\> | Copy a sector of data between the drive's sector cache (ram) & the disk (media).<br>mode 0 = load from disk to cache<br>mode 2 = commit cache to disk |
+| mem_read | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<length&#160;0-252\> | Read \<length\> bytes at \<offset\> from the drive's memory.<br>mode 0 = sector cache, 1 = cpu memory |
+| mem_write | \<mode&#160;0-1\>&#160;\<offset&#160;0-1279\>&#160;\<data&#160;0-127&#160;hex&#160;pairs...\> | Write \<data...\> at \<offset\> to the drive's sector cache.<br>mode: 0 = sector cache, 1 = cpu memory |
 
 **TPDD1/TPDD2 Sector Access**  
 | command | arguments | Description |
@@ -150,6 +150,7 @@ This pile of commands is not well organized. Sorry.
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | ll | | List the files in the current local working directory (not on the disk). Like "ls" but doesn't run /bin/ls. |
 | lls | | **ll** with filesizes added. |
+| dump_rom&#160;\|&#160;rom_dump | \[filename\] | Read 4096 bytes starting at address 0xF000 of the drives cpu memory<br>output to filename if given |
 | q&#160;\|&#160;quit&#160;\|&#160;bye&#160;\|&#160;exit | | Order Pizza |
 
 There are even more commands that are mostly low level hacky suff.  
@@ -319,13 +320,17 @@ You can find a collection of TPDD client loaders at https://github.com/bkw777/dl
 
 # References
 http://tandy.wiki/TPDD  
-https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s/ ([Local copy](https://docs.google.com/viewer?url=https://github.com/bkw777/pdd.sh/raw/main/Tandy_Portable_Disk_Drive_Software_Manual_26-3808S.pdf))  
+https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s
 https://archive.org/details/tpdd-2-service-manual  
-https://github.com/bkw777/dlplus/blob/master/ref/search_id_section.txt  
+https://github.com/bkw777/dl2/blob/master/ref/search_id_section.txt  
+<!-- now that we have the actual manuals these are obsolete -->
+<!--
 http://www.bitchin100.com/wiki/index.php?title=Base_Protocol  
 http://www.bitchin100.com/wiki/index.php?title=Desklink/TS-DOS_Directory_Access  
 http://www.bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd2-sector-0.html  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd-sector-access.html  
+-->
 https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt  
-https://github.com/bkw777/dlplus  
+https://github.com/bkw777/dl2  
+[TPDD1 rom dump](https://bitchin100.com/wiki/index.php?title=TPDD_Design_Notes)

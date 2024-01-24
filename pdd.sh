@@ -172,10 +172,10 @@ typeset -rA opr_fmt=(
 	[req_unk0E]='0E'		# ???
 	# these are undocumented, but the drive at least responds sanely,
 	# like with a valid response packet with a parameter out of range error etc
-	[req_unk0F]='0F'		# TPDD2 unk, r: ret_pdd2_std2
-	[req_pdd2_unk10]='10'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_std2: ERR_PARAM)
+	[req_unk0F]='0F'		# TPDD2 unk, r: ret_pdd2_mem_write
+	[req_pdd2_unk10]='10'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_mem_write: ERR_PARAM)
 	[req_pdd2_undoc11]='11'	# TPDD2 undocumented synonym for req_pdd2_sysinfo
-	[req_pdd2_unk12]='12'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_std2: ERR_PARAM)
+	[req_pdd2_unk12]='12'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_mem_write: ERR_PARAM)
 	[req_pdd2_unk13]='13'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
 	[req_pdd2_unk14]='14'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
 	[req_pdd2_unk15]='15'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
@@ -186,12 +186,12 @@ typeset -rA opr_fmt=(
 	[req_pdd2_sysinfo]='33'	# TPDD2 r: 3A 06 80 13 05 00 10 E1 (36)
 	[req_pdd2_exec]='34'	# TPDD2 exec: load cpu registers A & X and jump to address
 
-# 0x47 is undocumented, but PAKDOS uses it.
-# TPDD1 responds the same as 0x07 drive status.
-# TPDD2 ignores it.
-# With every directory listing, PAKDOS tries 0x47 first,
+# 0x47 is undocumented, but PakDOS uses it.
+# TPDD2 responds the same as 0x07 drive status.
+# TPDD1 ignores it.
+# With every directory listing, PakDOS tries 0x47 first,
 # and only if 0x47 is ignored, then does 0x07.
-	[req_undoc47]='47'		# TPDD1: undocumented synonym for drive_status TPDD2: no response
+	[req_undoc47]='47'		# TPDD2: undocumented synonym for drive_status TPDD1: no response
 
 	# returns
 	[ret_read]='10'
@@ -199,8 +199,8 @@ typeset -rA opr_fmt=(
 	[ret_std]='12'	# error open close delete status write pdd2_unk13 pdd2_unk14 pdd2_unk15
 	[ret_pdd2_version]='14'	# TPDD2 pdd2_version
 	[ret_pdd2_condition]='15'	# TPDD2
-	[ret_pdd2_std2]='38'	# TPDD2 cache mem_write unk0F unk10 unk12
-	[ret_pdd2_mem_read]='39'	# TPDD2
+	[ret_pdd2_mem_write]='38'	# TPDD2 cache mem_write mem_read* unk0F unk10 unk12
+	[ret_pdd2_mem_read]='39'	# TPDD2 mem_read* (*)mem_read returns 0x38 in the case of error
 	[ret_pdd2_sysinfo]='3A'	# TPDD2 pdd2_sysinfo
 	[ret_pdd2_exec]='3B'	# TPDD2 pdd2_exec
 )
@@ -367,7 +367,7 @@ typeset -ra model_codes=(
 # So pdd2_read_sector() and pdd2_dump_disk() read in 8 160-byte chunks,
 # but could do 6 mixed-size transactions like 5*252+20 or 5*206+250.
 
-# PDD2_CHUNK_LEN_W
+# PDD2_MEM_WR_LEN
 # pdd2_mem_write() can write any arbitrary length from 0 to 127 bytes,
 # at any arbitrary offset within the 1280-byte cache.
 # The largest possible write that divides 1280 evenly is 80 bytes.
@@ -380,13 +380,11 @@ typeset -ri \
 	PDD1_ID_LEN=12 \
 	PDD2_TRACKS=80 \
 	PDD2_SECTORS=2 \
-	PDD2_CHUNK_LEN_R=160 \
-	PDD2_CHUNK_LEN_W=80 \
-	RW_DATA_MAX=128 \
+	PDD2_MEM_RD_LEN=160 \
+	PDD2_MEM_WR_LEN=80 \
+	FILE_RW_LEN=128 \
 	PDD1_MAX_FLEN=65534 \
 	PDD2_MAX_FLEN=65535 \
-	PDD2_MYSTERY_ADDR1=131 \
-	PDD2_MYSTERY_ADDR2=150 \
 	PDD2_META_ADDR=32772 \
 	PDD2_META_LEN=4 \
 	SMT_LEN=21 \
@@ -401,11 +399,13 @@ typeset -ri \
 	CACHE_COMMIT=1 \
 	CACHE_COMMIT_VERIFY=2 \
 	MEM_CACHE=0 \
-	MEM_CPU=1
+	MEM_CPU=1 \
+	ROM_START=0xF000 \
+	ROM_LEN=0x1000
 
 typeset -ri \
-	PDD2_CHUNKS_R=$((SECTOR_DATA_LEN/PDD2_CHUNK_LEN_R)) \
-	PDD2_CHUNKS_W=$((SECTOR_DATA_LEN/PDD2_CHUNK_LEN_W)) \
+	PDD2_CHUNKS_R=$((SECTOR_DATA_LEN/PDD2_MEM_RD_LEN)) \
+	PDD2_CHUNKS_W=$((SECTOR_DATA_LEN/PDD2_MEM_WR_LEN)) \
 	PDD2_SECTORS_D=$((PDD2_TRACKS*PDD2_SECTORS)) \
 	PDD2_RECORD_LEN=$((PDD2_META_LEN+SECTOR_DATA_LEN)) \
 	SMT_OFFSET=$(((PDD_FNAME_LEN+FCB_FATTR_LEN+FCB_FSIZE_LEN+FCB_FRESV_LEN+FCB_FHEAD_LEN+FCB_FTAIL_LEN)*PDD_FCBS))
@@ -490,11 +490,15 @@ _sleep () {
 	read -t ${1:-1} -u 4 ;:
 }
 
-confirm  () {
+ask () {
 	$YES && return 0
 	local r=
-	read -p "${@}: Are you sure? (y/N) " r
+	read -p"${@}" r
 	[[ ${r,,} == y ]]
+}
+
+confirm () {
+	ask "${@}: Are you sure? (y/N) "
 }
 
 # Milliseconds to seconds
@@ -701,12 +705,14 @@ close_com () {
 # write $* hex pairs to com port as binary
 tpdd_write () {
 	vecho 3 "${FUNCNAME[0]}($@)"
+	local -i e
 	mslog
 	#test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	local x=" $*"
-	printf '%b' "${x// /\\x}" >&3
+	printf '%b' "${x// /\\x}" >&3 ;e=$?
 	vecho 3 "SENT: $*"
 	mslog
+	return $e
 }
 
 # read $1 bytes from com port
@@ -1030,12 +1036,12 @@ ocmd_dirent () {
 # return : 07 01 ?? ##
 ocmd_ready () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	((operation_mode)) || fcmd_mode 1 || return 1
+	((operation_mode)) || fcmd_mode 1 || return $?
 	local r=${opr_fmt[req_status]}
 	(($1)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r || return $?
 	ocmd_read_ret || return $?
-	ocmd_check_err || return $?
+	ocmd_check_err
 }
 
 # Operation-Mode Format Disk / also TPDD2 Format Disk
@@ -1254,7 +1260,7 @@ fcmd_mode () {
 # bit flags for some not-ready conditions
 fcmd_ready () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	((operation_mode==0)) || ocmd_fdc || return 1
+	((operation_mode==0)) || ocmd_fdc || return $?
 	str_to_shex "${fdc_cmd[condition]}"
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret || return $?
@@ -1591,21 +1597,126 @@ pdd1_restore_disk () {
 	echo
 }
 
+lcmd_pdd1_mem_read () {
+	echo "mem_read() Not implimented for TPDD1"
+	return 1
+}
+
+# Send a machine program to the drive
+# which reads the 4k rom from 0xF000 to 0xFFFF
+# and outputs to the serial port in hex dump format.
+# The 6301 machine code here comes from Darren Clark
+# https://bitchin100.com/wiki/index.php?title=TPDD_Design_Notes
+lcmd_pdd1_dump_rom () {
+	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	local -i i n b=${BAUD} c ;local f=$1
+	local -a a=(
+		S10E8515CEF000C608860DBD854F8621
+		S11385200ABD854F3C328100271EBD855A32BD8568
+		S11385305A863ABD854FA600BD855A8620BD854F13
+		S1138540085AC10027D220EE8658BD854F20FE3739
+		S1138550D611C42027FA971333393644444444BD12
+		S1138560856532840F810A2B028B078B30BD854FC2
+		S104857039CD
+		S901FE
+	)
+
+	echo
+	echo "ROM DUMP for TPDD1 / FB-100"
+	echo "https://bitchin100.com/wiki/index.php?title=TPDD_Design_Notes"
+	echo
+	echo "This process requires the drive to be configured to receive S-records."
+	echo "Do the following now before proceeding:"
+	echo
+	echo "1 - Turn the drive power OFF."
+	echo "2 - Set all 4 dip switches to ON."
+	echo "    (or close all 4 solder-jumper pads with solder)"
+	echo "3 - Turn the drive power ON."
+	echo
+	echo "If the dip switches were already set from a previous attempt,"
+	echo "still cycle the power switch once right now."
+	echo
+	ask "Ready to proceed (y/N)? " || return
+
+	[[ $f ]] && {
+		echo
+		echo "Saving to file: $f"
+		[[ -e $f ]] && { confirm 'File Exists' || return $? ; }
+		>$f
+	}
+
+	((b==9600)) || {
+		echo "Switching serial port to 9600 baud."
+		lcmd_com_speed 9600
+		echo
+	}
+
+	# send the S-records without \r or \n
+	echo "Sending S-records to the drive cpu..."
+	echo
+	n=${#a[*]}
+	for ((i=0;i<n;i++)) {
+		echo "${a[i]}"
+		printf '%s' "${a[i]}" >&3
+	}
+
+	# The uploaded program generates an ascii hex dump in this format
+	#   F000:0F 8E 87 FF 86 FC 97 00\r\n
+	#   F008:86 34 97 02 86 FF 97 04\r\n
+	#   ...
+	#   FFF8:F0 00 F0 00 F0 00 F0 00\r\n
+
+	# Read the formatted ascii hex dump from the drive
+	# extract the hex pairs and write the binary to a file
+	tpdd_wait || return $?
+	n=0
+	while read -r -t 1 -u 3 x ;do
+		printf '%s\n' "$x"
+		[[ $f ]] || continue
+		IFS+=$'\r' a=(${x##*:}) IFS=$' \t\n'
+		i=${#a[*]}
+		((i)) || continue
+		x="${a[*]}"
+		printf '%b' "\x${x// /\\x}" >>$f
+		((n+=i))
+	done
+	echo
+
+	((b==9600)) || {
+		echo "Restoring serial port to $b baud."
+		lcmd_com_speed $b
+		echo
+	}
+
+	[[ $f ]] && echo -e "Wrote $n bytes to $f\n"
+
+	echo "Return the drive to normal configuration."
+	echo "1 - Turn the drive power OFF."
+	case $b in
+		9600) echo "2 - Set dip switch 1 to ON, 2,3,4 to OFF." ;;
+		19200) echo "2 - Set all 4 dip switches to OFF." ;;
+		*) echo "2 - Set dip switches to previous setting." ;;
+	esac
+	echo "3 - Turn the drive power ON."
+	echo
+}
+
 ###############################################################################
 # TPDD2
 
-# TPDD2 responds, TPDD1 does not respond.
+# Get system version report from the drive.
 # Some versions of TS-DOS use this to detect TPDD2 vs TPDD1.
 # request: 5A 5A 23 00 DC
 # return : 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 2A
 pdd2_version () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	# This is a TPDD2 command, uses Operation-mode api, but we don't want do the
-	# usual operation_mode/pdd2 sanity checks, because this is itself one of the
-	# ways that we figure out if the drive is tpdd1 or tpdd2 in the first place.
-	# Clear err_msg because read() err is expected for every TPDD1. Set a
-	# deliberately short timeout because TPDD2 responds quickly to this command,
-	# and TPDD1 will never respond (will always hang for the full timeout).
+	# This is a TPDD2-only command, but in this case we do NOT want do the
+	# usual sanity check, because trying this command is itself one of the
+	# ways to figure out if the drive is tpdd1 or tpdd2 in the first place.
+	#
+	# Clear err_msg because read() err is expected for every TPDD1.
+	# Set a deliberately short timeout because TPDD2 responds quickly,
+	# and TPDD1 will never respond and always hang for the full timeout.
 	ret_dat=()
 	ocmd_send_req ${opr_fmt[req_pdd2_version]} && ocmd_read_ret $PDD2_VERSION_WAIT_MS ;err_msg=()
 
@@ -1642,17 +1753,18 @@ pdd2_version () {
 	}
 }
 
-# TPDD2 responds, TPDD1 does not respond.
+# Get system info report from the drive.
 # request: 5A 5A 33 00 ck
 # return: 38 06 80 13 05 00 10 E1 ck
 pdd2_sysinfo () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	# This is a TPDD2 command, uses Operation-mode api, but we don't want do the
-	# usual operation_mode/pdd2 sanity checks, because this is itself one of the
-	# things that we can use figure out if the drive is tpdd1 or tpdd2 in the first place.
-	# Clear err_msg because read() err is expected for every TPDD1. Set a
-	# deliberately short timeout because TPDD2 responds quickly to this command,
-	# and TPDD1 will never respond (will always hang for the full timeout).
+	# This is a TPDD2-only command, but in this case we do NOT want do the
+	# usual sanity check, because trying this command is itself one of the
+	# ways to figure out if the drive is tpdd1 or tpdd2 in the first place.
+	#
+	# Clear err_msg because read() err is expected for every TPDD1.
+	# Set a deliberately short timeout because TPDD2 responds quickly,
+	# and TPDD1 will never respond and always hang for the full timeout.
 	ret_dat=()
 	ocmd_send_req ${opr_fmt[req_pdd2_sysinfo]} && ocmd_read_ret $PDD2_SYSINFO_WAIT_MS ;err_msg=()
 
@@ -1687,13 +1799,12 @@ pdd2_sysinfo () {
 	}
 }
 
-
-
 # TPDD2 Get Drive Status
 # request: 5A 5A 0C 00 ##
 # return : 15 01 ?? ##
 pdd2_ready () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	local -i i b
 	ocmd_send_req ${opr_fmt[req_pdd2_condition]} || return $?
 	ocmd_read_ret || return $?
@@ -1711,6 +1822,7 @@ pdd2_ready () {
 # action: 0=load (cache<disk) 1=commit (cache>disk) 2=commit+verify
 pdd2_cache () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	local x ;local -i t=$1 s=$2 a=$3 e
 
 	# 5-byte request data
@@ -1730,8 +1842,15 @@ pdd2_cache () {
 
 # TPDD2 read from memory
 # pdd2_mem_read mode address length
+#   mode: 0=sector_cache  1=cpu_memory
+#   addr: 0-65535
+#   len:  1-252
+# service manual says len should be 1-125, but can actually go up to 252
+# (255 minus 3 bytes for fmt, len, chk), but large reads occasionally fail
+# reading 252 fails as much as 1/4 times, reading 160 seems to be safe
 pdd2_mem_read () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	local x
 
 	# 4-byte request data
@@ -1742,7 +1861,13 @@ pdd2_mem_read () {
 	printf -v x '%02X %02X %02X %02X' $1 $((($2>>8)&0xFF)) $(($2&0xFF)) $3
 	ocmd_send_req ${opr_fmt[req_pdd2_mem_read]} $x || return $?
 	ocmd_read_ret || return $?
-	#ocmd_check_err || return $? # needs to be taught about ret_pdd2_std2
+
+	# TODO retry failed read once or twice, since a large read
+	# can fail sometimes yet work most times.
+    
+	# TODO mem_write can return either a 0x39 block or a 0x38 block
+	# ocmd_check_err doesn't recognize that yet
+	#ocmd_check_err || return $? # needs to be taught about ret_pdd2_mem_write
 
 	# returned data:
 	# [0]     mode
@@ -1755,20 +1880,43 @@ pdd2_mem_read () {
 
 # TPDD2 write to memory
 # pdd2_mem_write mode address data...
-# mode: 0=sector_cache 1=cpu_memory
-# address: mode0 0-1280, mode1 0-65535
+#   mode: 0=sector_cache 1=cpu_memory
+#   address: mode0 0-1280, mode1 0-65535
+#   data: 1-125 hex pairs
 pdd2_mem_write () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	printf -v x '%02X %02X %02X' $1 $((($2>>8)&0xFF)) $(($2&0xFF)) ;shift 2
 	ocmd_send_req ${opr_fmt[req_pdd2_mem_write]} $x $* || return $?
 	ocmd_read_ret || return $?
 	ocmd_check_err
 }
 
+# Reset Drive Status
+# We don't really know what these do, other than that they write a
+# byte to a few memory addresses. They are copied from an example
+# flowchart near the end of the service manual labelled
+# "reset drive status" without actually explaining it.
+pdd2_reset_drive_status () {
+	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
+	# write 0xFF to cpu memory address 0x0084 - why? doont knoow!
+	pdd2_mem_write $MEM_CPU 0x0084 FF || return $?
+	# write 0x0F to cpu memory address 0x0096 - why? doont knoow!
+	pdd2_mem_write $MEM_CPU 0x0096 0F || return $?
+	# write 0x0F to cpu memory address 0x0094 - why? doont knoow!
+	pdd2_mem_write $MEM_CPU 0x0094 0F || return $?
+}
+
+# write the sector cach to disk
 pdd2_commit_cache () {
-	# Reset Drive Status
-	pdd2_mem_write $MEM_CPU $PDD2_MYSTERY_ADDR1 || return $?  # 01 00 83 00
-	pdd2_mem_write $MEM_CPU $PDD2_MYSTERY_ADDR2 || return $?  # 01 00 96 00
+	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
+	# We don't really know what these do, other than that they write a byte
+	# to a couple of memory addresses. They are copied from the backup util.
+	# They are similar to reset_drive_status but not exactly.
+	pdd2_mem_write $MEM_CPU 0x0083 00 || return $?  # 01 00 83 00
+	pdd2_mem_write $MEM_CPU 0x0096 00 || return $?  # 01 00 96 00
 
 	# write the cache to disk
 	pdd2_cache $1 $2 $CACHE_COMMIT_VERIFY || return $?
@@ -1784,6 +1932,7 @@ pdd2_commit_cache () {
 # no args reads 0,0 , "all" reads all sectors on the disk
 pdd2_read_meta () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	case "$1" in '') set 0,0 ;; all) set {0..79},{0,1} ;; esac
 	local a ;local -i t s
 	for a in $* ;do
@@ -1800,11 +1949,12 @@ pdd2_read_meta () {
 # S = sector 0-1
 pdd2_read_sector () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	local -i i t=$1 s=$2 c ;local h=()
 	pdd2_cache $t $s $CACHE_LOAD || return $?
 	$quiet || echo "Track $t, Sector $s"
 	for ((c=0;c<PDD2_CHUNKS_R;c++)) {
-		quiet=true pdd2_mem_read $MEM_CACHE $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
+		quiet=true pdd2_mem_read $MEM_CACHE $((PDD2_MEM_RD_LEN*c)) $PDD2_MEM_RD_LEN || return $?
 		$quiet || printf '%05u : %s\n' "0x${ret_dat[1]}${ret_dat[2]}" "${ret_dat[*]:3}"
 		h+=( ${ret_dat[*]:3} )
 	}
@@ -1815,6 +1965,7 @@ pdd2_read_sector () {
 # pdd2_dump_disk filename[.pdd2]
 pdd2_dump_disk () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	local f=$1 x ;local -i t s i= c
 
 	((${#f})) && {
@@ -1838,7 +1989,7 @@ pdd2_dump_disk () {
 			# main data
 			for ((c=0;c<PDD2_CHUNKS_R;c++)) { # chunks
 				((${#f})) && pbar $i $PDD2_SECTORS_D "T:$t S:$s C:$c"
-				pdd2_mem_read $MEM_CACHE $((PDD2_CHUNK_LEN_R*c)) $PDD2_CHUNK_LEN_R || return $?
+				pdd2_mem_read $MEM_CACHE $((PDD2_MEM_RD_LEN*c)) $PDD2_MEM_RD_LEN || return $?
 				((${#f})) && x+=" ${ret_dat[*]:3}"
 			}
 		}
@@ -1854,6 +2005,7 @@ pdd2_dump_disk () {
 # Read a .pdd2 disk image file and write the contents back to a real disk.
 pdd2_restore_disk () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
 	local f=$1 x ;local -i t s i= p= c
 	[[ -e $f ]] || [[ ${f##*.} == ${PDD2_IMG_EXT} ]] || f+=".${PDD2_IMG_EXT}"
 	echo "Restoring Disk from File: \"$f\""
@@ -1885,8 +2037,8 @@ pdd2_restore_disk () {
 			# write main data to cache
 			for ((c=0;c<PDD2_CHUNKS_W;c++)) { # chunks
 				pbar $i $PDD2_SECTORS_D "T:$t S:$s C:$c"
-				pdd2_mem_write $MEM_CACHE $((c*PDD2_CHUNK_LEN_W)) ${fhex[*]:p:PDD2_CHUNK_LEN_W} || return $?
-				((p+=PDD2_CHUNK_LEN_W))
+				pdd2_mem_write $MEM_CACHE $((c*PDD2_MEM_WR_LEN)) ${fhex[*]:p:PDD2_MEM_WR_LEN} || return $?
+				((p+=PDD2_MEM_WR_LEN))
 			}
 
 			# write cache to media
@@ -1898,6 +2050,108 @@ pdd2_restore_disk () {
 	pbar $i $PDD2_SECTORS_D
 	echo
 }
+
+# lcmd_pdd2_mem_read mode start len [filename]
+# local command wrapping the drive firmware mem_read command
+# mode: 0=sector_cache 1=cpu_memory
+# memory map:
+# 0x0000 - 0x001F I/O Port
+# 0x0080 - 0x00FF CPU Internal RAM (128 bytes)
+# 0x4000 - 0x4002 Gate Array
+# 0x8000 - 0x87FF RAM (2k bytes)
+# 0xF000 - 0xFFFF CPU Internal ROM (4k bytes)
+#
+# To dump the rom:
+# lcmd_pdd2_mem_read 1 0xF000 0x1000 pdd2_rom.bin
+#
+lcmd_pdd2_mem_read () {
+	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
+	local f=$4 x ;local -i m=$1 s=$2 l=$3 i= j= c=${PDD2_MEM_RD_LEN}
+
+	case $m in
+		$MEM_CPU) x="cpu memory" ;;
+		$MEM_CACHE) x="sector cache" ;;
+		*) echo "invalid mode \"$m\"" ;return 1 ;;
+	esac
+	printf 'Reading %s, addr:0x%04X  length:0x%04X\n' "$x" $s $l
+
+	((${#f})) && {
+		echo "to file: \"$f\""
+		[[ -e $f ]] && { confirm 'File Exists' || return $? ; }
+		quiet=true
+	}
+
+	# Drive firmware mem_read() can only give 1-252 bytes at a time, and is
+	# is actually limited further to PDD2_MEM_RD_LEN bytes for reliability.
+	# Loop however many PDD2_MEM_RD_LEN it takes to get the specified range.
+	x= j=$l
+	((${#f})) && pbar 0 $j bytes
+	while ((l)) ;do
+		((l<c)) && ((c=l))
+		pdd2_mem_read $m $s $c || return $?
+		((${#f})) && x+=" ${ret_dat[*]:3}"
+		((l-=c))
+		((s+=c))
+		((${#f})) && pbar $((i+=c)) $j bytes
+	done
+	echo
+
+	((${#f})) && printf '%b' "${x//\ /\\x}" >$f
+}
+
+# lcmd_pdd2_mem_read mode addr data...
+# local command wrapping the drive firmware mem_write command
+# mode: 0=sector_cache 1=cpu_memory
+# addr: start address
+# data: hex pairs...
+lcmd_pdd2_mem_write () {
+	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
+	local x ;local -i m= s= l= i= j= p= c=${PDD2_MEM_WR_LEN} ;local -a a
+	m=$1 ;shift
+	s=$2 ;shift
+	a=($*)
+	l=${#a[*]}
+	case $m in
+		$MEM_CPU) x="cpu memory" ;;
+		$MEM_CACHE) x="sector cache" ;;
+		*) echo "invalid mode \"$m\"" ;return 1 ;;
+	esac
+
+	printf 'Writing %s, addr:0x%04X  length:0x%04X\n' "$x" $s $l
+
+	x= j=$l p=0
+	((v)) || pbar 0 $j bytes
+	while ((l)) ;do
+		((l<c)) && ((c=l))
+		pdd2_mem_write $m $s ${a[*]:p:c} || return $?
+		((p+=c))
+		((s+=c))
+		((l-=c))
+		((v)) || pbar $p $j bytes
+	done
+	((v)) || pbar $p $j bytes
+	echo
+
+	((${#f})) && printf '%b' "${x//\ /\\x}" >$f
+}
+
+# pdd2_dump_rom filename
+# dump the tpdd2 drive's cpu internal 4k rom to file
+lcmd_pdd2_dump_rom () {
+	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
+	fonzie_smack
+	pdd2_version || return $?
+	#pdd2_sysinfo || return $?
+	#pdd2_ready || return $?
+	((operation_mode==2)) || { perr "Requires TPDD2" ; return 1; }
+	lcmd_pdd2_mem_read $MEM_CPU $ROM_START $ROM_LEN "$1"
+}
+
+#pdd2_exec () {
+#	echo "Not yet implimented."
+#}
 
 # Read the File Control Blocks
 # loads the whole table into arrays for the different parts
@@ -1992,16 +2246,18 @@ read_smt () {
 # Server Functions
 # These functions are for talking to a client not a drive
 
-# write $* to com port with per-character delay
-# followed by the BASIC EOF character
+# write a single byte $1 to the com port
+# followed by $2 ms sleep
 slowbyte () {
 	printf '%b' "\x$1" >&3
-	_sleep $s
+	_sleep $2
 }
 
+# write file $1 to com port with per-character sleep
+# followed by BASIC_EOF character
 srv_send_loader () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i i l ;local s REPLY x="${XONOFF:-false}"
+	local -i i l;local s REPLY x="${XONOFF:-false}"
 	ms_to_s $LOADER_PER_CHAR_MS ;s=${_s}
 	file_to_fhex $1 0
 
@@ -2015,7 +2271,7 @@ srv_send_loader () {
 
 	l=${#fhex[*]}
 	for ((i=0;i<l;i++)) ;do
-		slowbyte ${fhex[i]}
+		slowbyte ${fhex[i]} $s
 		((v)) && {
 			((i && 0x${fhex[i-1]}==0x$BASIC_EOL && 0x${fhex[i]}!=0x0A)) && echo
 			printf '%b' "\x${fhex[i]}"
@@ -2025,8 +2281,8 @@ srv_send_loader () {
 	# Add trailing ^M and/or ^Z if the file didn't already.
 	case ${fhex[i]} in
 		$BASIC_EOF) : ;;
-		$BASIC_EOL) slowbyte $BASIC_EOF ;;
-		*) slowbyte $BASIC_EOL ;slowbyte $BASIC_EOF ;;
+		$BASIC_EOL) slowbyte $BASIC_EOF $s ;;
+		*) slowbyte $BASIC_EOL ;slowbyte $BASIC_EOF $s ;;
 	esac
 
 	XONOFF=$x ;set_stty ;echo
@@ -2074,6 +2330,8 @@ fonzie_smack () {
 	tpdd_write 4D 31 0D
 	_sleep 0.003  # cribbed from TS-DOS
 	tpdd_drain
+	((operation_mode)) || operation_mode=1
+	ocmd_ready || ocmd_ready
 }
 
 set_fcb_filesizes () {
@@ -2207,7 +2465,7 @@ lcmd_ls () {
 	echo '-------------------------------------'
 	((${#err_msg[*]})) && return
 	_sleep 0.01 ;quiet=true get_condition || return $?
-	((operation_mode==2)) || { _sleep 0.01 ; quiet=true fcmd_mode 1 ; }
+	((operation_mode==0)) && { _sleep 0.01 ; quiet=true fcmd_mode 1 ; }
 	printf "%-32.32s %4.4s\n" "$((free_sectors*SECTOR_DATA_LEN)) bytes free" "${err_msg[-1]}" ;unset err_msg[-1]
 }
 
@@ -2296,9 +2554,9 @@ lcmd_save () {
 	ocmd_dirent "$d" "$a" ${dirent_cmd[set_name]} || return $?
 	((${#file_name})) && { confirm 'File Exists' || return $? ; }
 	ocmd_open ${open_mode[write_new]} || return $?
-	for ((p=0;p<l;p+=RW_DATA_MAX)) {
+	for ((p=0;p<l;p+=FILE_RW_LEN)) {
 		pbar $p $l 'bytes'
-		ocmd_write ${fhex[*]:p:RW_DATA_MAX} || return $?
+		ocmd_write ${fhex[*]:p:FILE_RW_LEN} || return $?
 	}
 	pbar $l $l 'bytes'
 	echo
@@ -2792,6 +3050,23 @@ do_cmd () {
 			#h Detect whether the connected drive is a TPDD1 or TPDD2
 			#h by sending the TPDD2-only get_sysinfo command
 
+			# This is above the _init() split because in the case of TPDD1
+			# The drive needs to be put into a special mode with dip switches
+			# and we must avoid sending any of the normal commands to the
+			# drive, including the model/mode detection & reset stuff.
+			#c 2
+			rom_dump|dump_rom) pdd2_version ;((operation_mode==2)) && { lcmd_pdd2_dump_rom "$@" ;_e=$? ; } || { lcmd_pdd1_dump_rom "$@" ;_e=$? ; } ;; # [filename]
+			#h Read 4k bytes at 0xF000
+			#h output to filename if given
+			#h
+			#h On TPDD2 this is just a convenience shortcut for
+			#h "mem_dump 1 0xF000 0x1000 [filename]"
+			#h
+			#h On TPDD1 this requires configuring the drive to a special
+			#h mode using the dip switches on the bottom, and then sending
+			#h S-records of machine code to the drive.
+			#c 1
+
 			#c 0
 
 			'') _e=0 ;;
@@ -2963,19 +3238,27 @@ do_cmd () {
 			#h sector: 0-1
 			#h action: 0=load (disk to cache) 1=commit (cache to disk) 2=commit+verify
 
-			mem_read) pdd2_mem_read $* ;_e=$? ;; # mode address length
-			#h Read from drive memory.
-			#h mode: 0=sector_cache 1=cpu_memory
-			#h address: mode 0: 0-1279, mode 1: 0-65534
-			#h length: 0-252
-
-			mem_write) pdd2_mem_write $* ;_e=$? ;; # mode address data
-			#h Write to drive memory.
-			#h mode: 0=sector_cache 1=cpu_memory
-			#h address: mode 0: 0-1279, mode 1: 0-65534
-			#h data: 0-127 space-seperated hex pairs
-
 	# TPDD1 & TPDD2 local/client sector access
+
+			mem_read) ((operation_mode==2)) && { lcmd_pdd2_mem_read $* ;_e=$? ; } || { lcmd_pdd1_mem_read "$@" ;_e=$? ; } ;; # mode address length [filename]
+			#h Read from drive memory
+			#h mode: 0=sector_cache 1=cpu_memory
+			#h addr: in mode 0: 0-1279  in mode 1: 0-65535
+			#h len: in mode 0: 1-1280  in mode 1: 1-65534
+			#h Output to filename if given.
+			#h
+			#h memory map (same for both TPDD1 and TPDD2):
+			#h 0x0000 - 0x001F CPU I/O Port
+			#h 0x0080 - 0x00FF CPU Internal RAM (128 bytes)
+			#h 0x4000 - 0x4002 Gate Array
+			#h 0x8000 - 0x87FF RAM (2k bytes)
+			#h 0xF000 - 0xFFFF CPU Internal ROM (4k bytes)
+
+			mem_write) ((operation_mode==2)) && { lcmd_pdd2_mem_write $* ;_e=$? ; } || { lcmd_pdd1_mem_write $* ;_e=$? ; } ;; # mode address data...
+			#h Write to drive memory
+			#h mode: 0=sector_cache 1=cpu_memory
+			#h addr: in mode 0: 0-1279  in mode 1: 0-65535
+			#h data: hex pairs...
 
 			rh|read_header) ((operation_mode==2)) && { pdd2_read_meta "$@" ;_e=$? ; } || { fcmd_read_id "$@" ;_e=$? ; } ;; # sector(s)
 			#h Rread & display metadata for one or more sectors.
@@ -2997,6 +3280,11 @@ do_cmd () {
 			smt|read_smt) read_smt ;_e=$? ;;
 			#h Display the contents of the Space Management Table
 
+			pdd2_reset) pdd2_reset_drive_status ;_e=$? ;;
+			#h TPDD2 Reset Drive Status
+			#h The service manual has this, but doesn't explain it.
+			#h Writes 3 bytes to 3 memory addresses.
+
 			#c 1
 
 			dd|dump_disk) ((operation_mode==2)) && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;; # dest_img_filename
@@ -3004,6 +3292,7 @@ do_cmd () {
 
 			rd|restore_disk) ((operation_mode==2)) && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;; # src_img_filename
 			#h Clone a disk image file to a physical disk
+
 
 	# TPDD1 & TPDD2 local/client file access
 	# These are used by the user directly
@@ -3015,10 +3304,10 @@ do_cmd () {
 			#h Delete filename [attr] from disk
 
 			load) (($#<4)) && lcmd_load "$@" ;_e=$? ;; # src_filename [dest_filename] [attr]
-			#h Copy a file from local to disk
+			#h Copy a file from disk to local
 
 			save) lcmd_save "$@" ;_e=$? ;; # src_filename [dest_filename] [attr]
-			#h Copy a file from disk to local
+			#h Copy a file from local to disk
 
 			mv|ren|rename) lcmd_mv "$@" ;_e=$? ;; # src_filename dest_filename [attr]
 			#h Rename a file on-disk
