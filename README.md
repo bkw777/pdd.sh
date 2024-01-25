@@ -324,6 +324,9 @@ http://tandy.wiki/TPDD
 https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s
 https://archive.org/details/tpdd-2-service-manual  
 https://github.com/bkw777/dl2/blob/master/ref/search_id_section.txt  
+https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt  
+https://github.com/bkw777/dl2  
+[TPDD1 rom dumper](https://bitchin100.com/wiki/index.php?title=TPDD_Design_Notes)
 <!-- now that we have the actual manuals these are obsolete -->
 <!--
 http://www.bitchin100.com/wiki/index.php?title=Base_Protocol  
@@ -332,6 +335,3 @@ http://www.bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd2-sector-0.html  
 https://www.ordersomewherechaos.com/rosso/fetish/m102/web100/docs/pdd-sector-access.html  
 -->
-https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt  
-https://github.com/bkw777/dl2  
-[TPDD1 rom dump](https://bitchin100.com/wiki/index.php?title=TPDD_Design_Notes)
