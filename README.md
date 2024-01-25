@@ -22,6 +22,7 @@ Things this util can do that even the commercial TPDD utils can't do
    - Sardine Dictionary Disk
  - Ability to create disks from downloadable disk image files, without special hardware other than the drive itself  
  - Work with TPDD disks from/for other platforms like WP-2, CP/M, Z88, Atari Portfolio, etc
+ - Dump the drive's rom
 
 ## Supported OS's
 Any linux, macos/osx, bsd, any cpu architecture.  
