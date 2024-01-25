@@ -3,8 +3,8 @@
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in pure\* bash.
 
 It's pure bash except for the following:  
-* ```stty``` is needed once at startup to configure the serial port.  
-* ```mkfifo``` is used once at startup for ```_sleep()``` without ```/usr/bin/sleep```.  
+* `stty` is needed once at startup to configure the serial port.  
+* `mkfifo` is used once at startup for `_sleep()` without `/usr/bin/sleep`.  
 
 That's it. There are no other external commands or dependencies, not even any child forks of more bash processes (no backticks, perens, or pipes), and no temp files or here-documents (here-docs create temp files behind the scenes in bash).  
 I think the while-loop in help() may create a child bash.
@@ -316,17 +316,21 @@ It's not really any faster. The point was just to support all dip switch setting
 ## Other Functions
 **Send a BASIC loader program to a "Model T"**  
 This function is not used with a TPDD drive but with a "Model T" computer like a TRS-80 Model 100, usually to install a TPDD client like TS-DOS, TEENY, or DSKMGR.  
-```pdd bootstrap TS-DOS.100```  
+`$ pdd bootstrap TS-DOS.100`  
 You can find a collection of TPDD client loaders at https://github.com/bkw777/dlplus/tree/master/clients
+
+**Dump the 4k ROM built into the HD6301 cpu**  
+`$ pdd dump_rom tpdd.rom`
 
 # References
 http://tandy.wiki/TPDD  
-https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s
-https://archive.org/details/tpdd-2-service-manual  
-https://github.com/bkw777/dl2/blob/master/ref/search_id_section.txt  
-https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt  
-https://github.com/bkw777/dl2  
-[TPDD1 rom dumper](https://bitchin100.com/wiki/index.php?title=TPDD_Design_Notes)
+[TPDD1 Software Manual](https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s)  
+[TPDD2 Service Manual](https://archive.org/details/tpdd-2-service-manual)  
+[TS-DOS Directory Extensions](http://bitchin100.com/wiki/index.php?title=Desklink/TS-DOS_Directory_Access)  
+[TPDD1 Search ID](https://github.com/bkw777/dl2/blob/master/ref/search_id_section.txt) (isn't explained in the manual)  
+[RS-232 tap recording of TPDD2 BACKUP.BA doing a backup](https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt)  
+[TPDD emulator that uses the same disk image files as pdd.sh](https://github.com/bkw777/dl2)  
+[TPDD1 rom dump program](https://bitchin100.com/wiki/index.php?title=TPDD_Design_Notes)  
 <!-- now that we have the actual manuals these are obsolete -->
 <!--
 http://www.bitchin100.com/wiki/index.php?title=Base_Protocol  
