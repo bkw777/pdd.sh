@@ -1635,6 +1635,7 @@ lcmd_pdd1_dump_rom () {
 	echo
 	echo "If the dip switches were already set from a previous attempt,"
 	echo "still cycle the power switch once right now."
+	echo "If the low battery light is flashing, cycle the power."
 	echo
 	ask "Ready to proceed (y/N)? " || return
 
@@ -1659,6 +1660,7 @@ lcmd_pdd1_dump_rom () {
 		echo "${a[i]}"
 		printf '%s' "${a[i]}" >&3
 	}
+	echo
 
 	# The uploaded program generates an ascii hex dump in this format
 	#   F000:0F 8E 87 FF 86 FC 97 00\r\n
@@ -1671,11 +1673,11 @@ lcmd_pdd1_dump_rom () {
 	tpdd_wait || return $?
 	n=0
 	while read -r -t 1 -u 3 x ;do
-		printf '%s\n' "$x"
-		[[ $f ]] || continue
 		IFS+=$'\r' a=(${x##*:}) IFS=$' \t\n'
 		i=${#a[*]}
 		((i)) || continue
+		printf '%s\n' "$x"
+		[[ $f ]] || continue
 		x="${a[*]}"
 		printf '%b' "\x${x// /\\x}" >>$f
 		((n+=i))
