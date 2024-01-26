@@ -8,7 +8,6 @@ set +o posix
 #h github.com/bkw777/pdd.sh
 # https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive
 # https://archive.org/details/tpdd-2-service-manual
-# http://bitchin100.com/wiki/index.php?title=TPDD-2_Sector_Access_Protocol
 # https://trs80stuff.net/tpdd/tpdd2_boot_disk_backup_log_hex.txt
 
 ###############################################################################
@@ -359,20 +358,6 @@ typeset -ra model_codes=(
 
 ###############################################################################
 # general constants
-
-# PDD2_CHUNK_LEN_R
-# pdd2_mem_read() can read any arbitrary length from 0 to 252 bytes,
-# at any arbitrary offset within the 1280-byte sector_cache.
-# The largest possible read that divides 1280 evenly is 160 bytes.
-# So pdd2_read_sector() and pdd2_dump_disk() read in 8 160-byte chunks,
-# but could do 6 mixed-size transactions like 5*252+20 or 5*206+250.
-
-# PDD2_MEM_WR_LEN
-# pdd2_mem_write() can write any arbitrary length from 0 to 127 bytes,
-# at any arbitrary offset within the 1280-byte cache.
-# The largest possible write that divides 1280 evenly is 80 bytes.
-# pdd2_write_sector() and pdd2_restore_disk() write in 16 80-byte chunks,
-# but could do 11 mixed-size transactions like 10*127+10 or 10*116+120.
 
 typeset -ri \
 	SECTOR_DATA_LEN=1280 \
