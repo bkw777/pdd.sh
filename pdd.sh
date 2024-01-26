@@ -140,12 +140,12 @@ LOADER_PER_CHAR_MS=8
 ###############################################################################
 # operating modes
 typeset -ra mode=(
-	[0]=fdc		# operate a TPDD1 drive, in "FDC mode"
-	[1]=opr		# operate a TPDD1 drive, in "Operation mode"
-	[2]=pdd2	# operate a TPDD2 drive
-	[3]=loader	# send an ascii BASIC file and BASIC_EOF out the serial port
-	[4]=server	# vaporware
-	[9]=-		# drive model/mode not determined yet
+	[0]=fdc     # operate a TPDD1 drive, in "FDC mode"
+	[1]=opr     # operate a TPDD1 drive, in "Operation mode"
+	[2]=pdd2    # operate a TPDD2 drive
+	[3]=loader  # send an ascii BASIC file and BASIC_EOF out the serial port
+	[4]=server  # vaporware
+	[9]=-       # drive model/mode not determined yet
 )
 
 ###############################################################################
@@ -163,45 +163,45 @@ typeset -rA opr_fmt=(
 	[req_format]='06'
 	[req_status]='07'
 	[req_fdc]='08'
-	[req_seek]='09'			# NADSBox extension
-	[req_tell]='0A'			# ??? (probably also NADSBox)
-	[req_set_ext]='0B'		# ??? (probably also NADSBox)
-	[req_pdd2_condition]='0C'	# TPDD2
-	[req_pdd2_rename]='0D'	# TPDD2
-	[req_unk0E]='0E'		# ???
+	[req_seek]='09'             # NADSBox extension
+	[req_tell]='0A'             # ??? (probably also NADSBox)
+	[req_set_ext]='0B'          # ??? (probably also NADSBox)
+	[req_pdd2_condition]='0C'   # TPDD2
+	[req_pdd2_rename]='0D'      # TPDD2
+	[req_unk0E]='0E'            # ???
 	# these are undocumented, but the drive at least responds sanely,
 	# like with a valid response packet with a parameter out of range error etc
-	[req_unk0F]='0F'		# TPDD2 unk, r: ret_pdd2_mem_write
-	[req_pdd2_unk10]='10'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_mem_write: ERR_PARAM)
-	[req_pdd2_undoc11]='11'	# TPDD2 undocumented synonym for req_pdd2_sysinfo
-	[req_pdd2_unk12]='12'	# TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_mem_write: ERR_PARAM)
-	[req_pdd2_unk13]='13'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
-	[req_pdd2_unk14]='14'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
-	[req_pdd2_unk15]='15'	# TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
-	[req_pdd2_version]='23'	# TPDD2 r: 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 (2A)
-	[req_pdd2_cache]='30'	# TPDD2
-	[req_pdd2_mem_write]='31'	# TPDD2
-	[req_pdd2_mem_read]='32'	# TPDD2
-	[req_pdd2_sysinfo]='33'	# TPDD2 r: 3A 06 80 13 05 00 10 E1 (36)
-	[req_pdd2_exec]='34'	# TPDD2 exec: load cpu registers A & X and jump to address
+	[req_unk0F]='0F'            # TPDD2 unk, r: ret_pdd2_mem_write
+	[req_pdd2_unk10]='10'       # TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_mem_write: ERR_PARAM)
+	[req_pdd2_undoc11]='11'     # TPDD2 undocumented synonym for req_pdd2_sysinfo
+	[req_pdd2_unk12]='12'       # TPDD2 unk, r: 38 01 36 (90)  (ret_pdd2_mem_write: ERR_PARAM)
+	[req_pdd2_unk13]='13'       # TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
+	[req_pdd2_unk14]='14'       # TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
+	[req_pdd2_unk15]='15'       # TPDD2 unk, r: 12 01 36 B6    (ret_std: ERR_PARAM)
+	[req_pdd2_version]='23'     # TPDD2 r: 14 0F 41 10 01 00 50 05 00 02 00 28 00 E1 00 00 00 (2A)
+	[req_pdd2_cache]='30'       # TPDD2
+	[req_pdd2_mem_write]='31'   # TPDD2
+	[req_pdd2_mem_read]='32'    # TPDD2
+	[req_pdd2_sysinfo]='33'     # TPDD2 r: 3A 06 80 13 05 00 10 E1 (36)
+	[req_pdd2_exec]='34'        # TPDD2 exec: load cpu registers A & X and jump to address
 
 # 0x47 is undocumented, but PakDOS uses it.
 # TPDD2 responds the same as 0x07 drive status.
 # TPDD1 ignores it.
 # With every directory listing, PakDOS tries 0x47 first,
 # and only if 0x47 is ignored, then does 0x07.
-	[req_undoc47]='47'		# TPDD2: undocumented synonym for drive_status TPDD1: no response
+	[req_undoc47]='47'          # TPDD2: undocumented synonym for drive_status TPDD1: no response
 
 	# returns
 	[ret_read]='10'
 	[ret_dirent]='11'
-	[ret_std]='12'	# error open close delete status write pdd2_unk13 pdd2_unk14 pdd2_unk15
-	[ret_pdd2_version]='14'	# TPDD2 pdd2_version
-	[ret_pdd2_condition]='15'	# TPDD2
-	[ret_pdd2_mem_write]='38'	# TPDD2 cache mem_write mem_read* unk0F unk10 unk12
-	[ret_pdd2_mem_read]='39'	# TPDD2 mem_read* (*)mem_read returns 0x38 in the case of error
-	[ret_pdd2_sysinfo]='3A'	# TPDD2 pdd2_sysinfo
-	[ret_pdd2_exec]='3B'	# TPDD2 pdd2_exec
+	[ret_std]='12'              # error open close delete status write pdd2_unk13 pdd2_unk14 pdd2_unk15
+	[ret_pdd2_version]='14'     # TPDD2 pdd2_version
+	[ret_pdd2_condition]='15'   # TPDD2
+	[ret_pdd2_mem_write]='38'   # TPDD2 cache mem_write mem_read* unk0F unk10 unk12
+	[ret_pdd2_mem_read]='39'    # TPDD2 mem_read* (*)mem_read returns 0x38 in the case of error
+	[ret_pdd2_sysinfo]='3A'     # TPDD2 pdd2_sysinfo
+	[ret_pdd2_exec]='3B'        # TPDD2 pdd2_exec
 )
 
 # Operation Mode Error Codes
@@ -467,7 +467,7 @@ help () {
 			b=${b:x}
 		done
 	}
-	((v)) || printf '\nSet verbose 1 or greater to see more commands.\n'
+	((v)) || ((${#1})) || printf '\nSet verbose 1 or greater to see more commands.\n'
 	echo
 }
 
@@ -2858,7 +2858,7 @@ do_cmd () {
 			#h If verbose = 0, hides the hacky, low-level, and less-common commands.
 			#h If verbose > 0, shows all commands.
 
-			v|verbose|debug) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # n
+			v|verbose|debug) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # [n]
 			#h Set verbosity level, display current setting.
 
 			y|yes|batch) set_yes $* ;_e=0 ;; # [true|false]
@@ -2883,7 +2883,7 @@ do_cmd () {
 			#h Short for "compat ___"
 			#h ex: "wp2" = "compat wp2"
 
-			baud|speed) lcmd_com_speed $* ;_e=$? ;; # baud
+			baud|speed) lcmd_com_speed $* ;_e=$? ;; # [baud]
 			#h Set the serial port to the specified baud rate, display current setting.
 			#h TPDD1 has dip switches for:
 			#h 150 300 600 1200 2400 4800 9600 19200 38400 76800
@@ -2914,7 +2914,7 @@ do_cmd () {
 			#h Requires bash 5
 
 			bank) bank $1 ;_e=$? ;; # [0|1]
-			#h Switch to bank 0 or 1 on a TPDD2, display current setting.
+			#h (TPDD2) Switch to bank 0 or 1 on a TPDD2, display current setting.
 
 			ll) lcmd_ll $* ;_e=$? ;;
 			#h Local Directory List, no filesizes.
@@ -2969,6 +2969,7 @@ do_cmd () {
 			#h Set WITH_VERIFY, display current setting.
 			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID
 			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
+			#h There are verify/no-verify versions of some TPDD2 commands also, but currently this only affects TPDD1. All TPDD2 commands always use the with-verify version.
 			# TODO update all uses of pdd2_cache() commit
 
 			com_test) lcmd_com_test ;_e=$? ;;
@@ -2992,7 +2993,7 @@ do_cmd () {
 			#h data: space-seperated hex pairs
 
 			read_fdc_ret) fcmd_read_ret $* ;_e=$? ;; # [timeout_ms] [busy_indicator]
-			#h Read an FDC-mode return message (after sending some FDC-mode command)
+			#h (TPDD1) Read an FDC-mode return message (after sending some FDC-mode command)
 			#h timeout_ms: max time in ms to wait for data from the drive
 			#h             default 5000
 			#h busy_indicator:
@@ -3030,29 +3031,12 @@ do_cmd () {
 			#h Sleep for n seconds. n may have up to 3 decimals, so 0.001 is the smallest value.
 
 			version|detect_model) ((v)) && _v=$v || _v=1 ;v=$_v pdd2_version ;_e=$? ;;
-			#h Detect whether the connected drive is a TPDD1 or TPDD2
-			#h by sending the TPDD2-only get_version command
+			#h (TPDD2) Return drive version data
+			#h This is a TPDD2-only command, but is intentionally sent to all drives as a way to automatically detect whether a TPDD1 or TPDD2 is connected.
 
 			sysinfo) ((v)) && _v=$v || _v=1 ;v=$_v pdd2_sysinfo ;_e=$? ;;
-			#h Detect whether the connected drive is a TPDD1 or TPDD2
-			#h by sending the TPDD2-only get_sysinfo command
-
-			# This is above the _init() split because in the case of TPDD1
-			# The drive needs to be put into a special mode with dip switches
-			# and we must avoid sending any of the normal commands to the
-			# drive, including the model/mode detection & reset stuff.
-			#c 2
-			rom_dump|dump_rom) pdd2_version ;((operation_mode==2)) && { lcmd_pdd2_dump_rom "$@" ;_e=$? ; } || { lcmd_pdd1_dump_rom "$@" ;_e=$? ; } ;; # [filename]
-			#h Read 4k bytes at 0xF000
-			#h output to filename if given
-			#h
-			#h On TPDD2 this is just a convenience shortcut for
-			#h "mem_dump 1 0xF000 0x1000 [filename]"
-			#h
-			#h On TPDD1 this requires configuring the drive to a special
-			#h mode using the dip switches on the bottom, and then sending
-			#h S-records of machine code to the drive.
-			#c 1
+			#h (TPDD2) Return drive system info data
+			#h just like version() but different info
 
 			#c 0
 
@@ -3077,14 +3061,15 @@ do_cmd () {
 	# TPDD1 switch between operation-mode and fdc-mode
 
 			fdc) ocmd_fdc $* ;_e=$? ;; # [force]
-			#h Switch a TPDD1 drive from OPR-mode to FDC-mode
+			#h (TPDD1) Switch a TPDD1 drive from OPR-mode to FDC-mode
 			#h force = send command even if we think we're already in fdc mode
 
 			opr) fcmd_mode 1 ;_e=$? ;;
-			#h Switch a TPDD1 drive from FDC-mode to OPR-mode
+			#h (TPDD1) Switch a TPDD1 drive from FDC-mode to OPR-mode
 
-			reset|smack) fonzie_smack ;_e=$? ;;
-			#h Send the FDC-mode command to switch a TPDD1 drive to OPR-mode while ignoring any errors or other responses.
+			smack) fonzie_smack ;_e=$? ;;
+			#h (TPDD1) Blind-send a sequence including the the FDC-mode command to switch a TPDD1 drive to Operation mode, & drain the tty buffer to ignoring any errors or other responses.
+			#h This only has any effect on a TPDD1 drive, but is sent to all drives as part of the initial startup to ensure that the as-yet-unknown drive, if it is a TPDD1, is put into Operation mode.
 
 	# TPDD1 & TPDD2 file access
 	# Most of these are low-level, not used directly by a user.
@@ -3144,15 +3129,15 @@ do_cmd () {
 	# TPDD1 sector access - aka "FDC mode" functions.
 
 			fdc_set_mode) fcmd_mode $* ;_e=$? ;; # operation_mode
-			#h Switch drive from FDC-mode to ___-mode
+			#h (TPDD1) Switch drive from FDC-mode to ___-mode
 			#h operation_mode: 0=FDC (no-op)  1=OPR (switch to OPR mode)
 
 			cond|condition) get_condition ;_e=$? ;;
-			#h Get drive readiness condition flags
+			#h (TPDD1) Get drive readiness condition flags
 			#h Slightly more info than the "ready" command
 
-			ff|fdc_format) fcmd_format $* ;_e=$? ;; # lsc
-			#h Format disk without filesystem
+			ff|fdc_format) fcmd_format $* ;_e=$? ;; # [lsc]
+			#h (TPDD1) Format disk without filesystem
 			#h lsc: logical sector size code 0-6
 			#h
 			#h A TPDD1 disk is organized into 80 physical sectors numbered 0-79.
@@ -3170,11 +3155,11 @@ do_cmd () {
 			#h 5 = 1024      (1, wastes 256 bytes per physical sector)
 			#h 6 = 1280      (1)
 
-			ffnv|fdc_format_nv) WITH_VERIFY=false fcmd_format $* ;_e=$? ;; # lsc
-			#h Same as fdc_format, without verify.
+			ffnv|fdc_format_nv) WITH_VERIFY=false fcmd_format $* ;_e=$? ;; # [lsc]
+			#h (TPDD1) Same as fdc_format, without verify.
 
 			rl|read_logical) fcmd_read_logical $* ;_e=$? ;; # p l
-			#h Read a single logical sector
+			#h (TPDD1) Read a single logical sector
 			#h p: physical sector, 0-79
 			#h l: logical sector, 1-20
 			#h Valid values for l depends on the LSC of the physical sector.
@@ -3182,7 +3167,7 @@ do_cmd () {
 			#h If LSC is 6, the only valid l is 1
 
 			si|search_id) fcmd_search_id $* ;_e=$? ;; # data
-			#h Search for physical sector with ID section that matches.
+			#h (TPDD1) Search for physical sector with ID section that matches.
 			#h data: up to 12 hex pairs
 			#h data is null-padded and/or truncated to exactly 12 bytes
 			#h returns: physical sector number of fist match, if any
@@ -3190,17 +3175,17 @@ do_cmd () {
 			#h The drive always returns the first match, and there is no command or option to set a different starting point etc)
 
 			wi|write_id) fcmd_write_id $* ;_e=$? ;; # p data
-			#h Write ID
+			#h (TPDD1) Write ID
 			#h p: physical sector number, 0-79
 			#h data: up to 12 hex pairs
 			#h Writes data to the ID section of a physical sector
 			#h data is null-padded and/or truncated to exactly 12 bytes
 
 			winv|write_id_nv) WITH_VERIFY=false fcmd_write_id $* ;_e=$? ;; # p data
-			#h Same as write_id, without verify
+			#h (TPDD1) Same as write_id, without verify
 
 			wl|write_logical) fcmd_write_logical $* ;_e=$? ;; # p l data
-			#h Write Sector - Write a single logical sector within a physical sector.
+			#h (TPDD1) Write Sector - Write a single logical sector within a physical sector.
 			#h p: physical sector, 0-79
 			#h l: logical sector, 1-20
 			#h data: 64-1280 space-sepersated hex pairs
@@ -3215,12 +3200,12 @@ do_cmd () {
 			#h then l must be 1, and data must be 1280 hex pairs.
 
 			wlnv|write_logical_nv) WITH_VERIFY=false fcmd_write_logical $* ;_e=$? ;; # p l data
-			#h Same as write_logical, without verify
+			#h (TPDD1) Same as write_logical, without verify
 
 	# TPDD2 sector access
 
 			cache) pdd2_cache $* ;_e=$? ;; # track sector action
-			#h Load cache from media or Commit cache to media.
+			#h (TPDD2) Load cache from media or Commit cache to media.
 			#h track: 0-79
 			#h sector: 0-1
 			#h action: 0=load (disk to cache) 1=commit (cache to disk) 2=commit+verify
@@ -3228,7 +3213,7 @@ do_cmd () {
 	# TPDD1 & TPDD2 local/client sector access
 
 			mem_read) ((operation_mode==2)) && { lcmd_pdd2_mem_read $* ;_e=$? ; } || { lcmd_pdd1_mem_read "$@" ;_e=$? ; } ;; # mode address length [filename]
-			#h Read from drive memory
+			#h (TPDD2) Read from drive memory
 			#h mode: 0=sector_cache 1=cpu_memory
 			#h addr: in mode 0: 0-1279  in mode 1: 0-65535
 			#h len: in mode 0: 1-1280  in mode 1: 1-65534
@@ -3242,7 +3227,7 @@ do_cmd () {
 			#h 0xF000 - 0xFFFF CPU Internal ROM (4k bytes)
 
 			mem_write) ((operation_mode==2)) && { lcmd_pdd2_mem_write $* ;_e=$? ; } || { lcmd_pdd1_mem_write $* ;_e=$? ; } ;; # mode address data...
-			#h Write to drive memory
+			#h (TPDD2) Write to drive memory
 			#h mode: 0=sector_cache 1=cpu_memory
 			#h addr: in mode 0: 0-1279  in mode 1: 0-65535
 			#h data: hex pairs...
@@ -3268,9 +3253,20 @@ do_cmd () {
 			#h Display the contents of the Space Management Table
 
 			pdd2_reset) pdd2_reset_drive_status ;_e=$? ;;
-			#h TPDD2 Reset Drive Status
-			#h The service manual has this, but doesn't explain it.
+			#h (TPDD2) Reset Drive Status
+			#h The TPDD2 service manual page 102 has this, but doesn't explain it.
 			#h Writes 3 bytes to 3 memory addresses.
+
+			rom_dump|dump_rom) pdd2_version ;((operation_mode==2)) && { lcmd_pdd2_dump_rom "$@" ;_e=$? ; } || { lcmd_pdd1_dump_rom "$@" ;_e=$? ; } ;; # [filename]
+			#h Read 4k bytes at 0xF000
+			#h output to filename if given
+			#h
+			#h On TPDD2 this is just a convenience shortcut for
+			#h "mem_dump 1 0xF000 0x1000 [filename]"
+			#h
+			#h On TPDD1 this requires configuring the drive to a special
+			#h mode using the dip switches on the bottom, and then sending
+			#h S-records of machine code to the drive.
 
 			#c 1
 
@@ -3279,7 +3275,6 @@ do_cmd () {
 
 			rd|restore_disk) ((operation_mode==2)) && { pdd2_restore_disk "$@" ;_e=$? ; } || { pdd1_restore_disk "$@" ;_e=$? ; } ;; # src_img_filename
 			#h Clone a disk image file to a physical disk
-
 
 	# TPDD1 & TPDD2 local/client file access
 	# These are used by the user directly
