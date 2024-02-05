@@ -3079,7 +3079,7 @@ do_cmd () {
 			drain) tpdd_drain ;_e=$? ;;
 			#h Read and discard all available bytes from the serial port
 
-			checksum) calc_cksum $* ;_e=$? ;; # data
+			checksum) v=3 calc_cksum $* ;_e=$? ;; # data
 			#h Calculate the checksum for the given data, using the same method that the TPDD uses.
 			#h data: Up to 128 space-seperated hex pairs.
 			#h returns: Bitwise negation of least significant byte of sum of all bytes, returned as a hex pair.
