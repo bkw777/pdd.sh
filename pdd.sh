@@ -194,10 +194,10 @@ typeset -rA opr_fmt=(
 	# returns
 	[ret_read]='10'
 	[ret_dirent]='11'
-	[ret_std]='12'              # error open close delete status write pdd2_unk13 pdd2_unk14 pdd2_unk15
+	[ret_std]='12'              # error open close delete status write
 	[ret_pdd2_version]='14'     # TPDD2 pdd2_version
 	[ret_pdd2_condition]='15'   # TPDD2
-	[ret_pdd2_mem_write]='38'   # TPDD2 cache mem_write mem_read* unk0F unk10 unk12
+	[ret_pdd2_cache]='38'       # TPDD2 cache mem_write mem_read*
 	[ret_pdd2_mem_read]='39'    # TPDD2 mem_read* (*)mem_read returns 0x38 in the case of error
 	[ret_pdd2_sysinfo]='3A'     # TPDD2 pdd2_sysinfo
 	[ret_pdd2_exec]='3B'        # TPDD2 pdd2_exec
@@ -655,7 +655,7 @@ get_tpdd_port () {
 	local x=(/dev/${TPDD_TTY_PREFIX#/dev/}*)
 	[[ ${x[0]} == /dev/${TPDD_TTY_PREFIX}\* ]] && x=(/dev/tty*)
 	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
-	local PS3="Which serial port is the TPDD drive on? "
+	local PS3="Which serial port is the TPDD drive on (1-${#x[*]}) ? "
 	select PORT in ${x[*]} ;do [[ -c $PORT ]] && break ;done
 }
 
@@ -1787,7 +1787,7 @@ pdd2_sysinfo () {
 		printf '\n'
 		printf    'System Information\n'
 		printf -- '---------------------------------------------------\n'
-		printf    'Sector Cache Start:  %u\n' 0x${ret_dat[0]:-00}${ret_dat[1]:-00}
+		printf    'Sector Cache Start:  0x%0X\n' 0x${ret_dat[0]:-00}${ret_dat[1]:-00}
 		printf    'Sector Cache Length: %u\n' 0x${ret_dat[2]:-00}${ret_dat[3]:-00}
 		printf    'CPU:                 %s\n' "$cs"
 		printf    'Model:               %s\n' "$ms"
@@ -1873,7 +1873,7 @@ pdd2_mem_read () {
     
 	# TODO mem_write can return either a 0x39 block or a 0x38 block
 	# ocmd_check_err doesn't recognize that yet
-	#ocmd_check_err || return $? # needs to be taught about ret_pdd2_mem_write
+	#ocmd_check_err || return $? # check_err needs to be taught about ret_pdd2_cache
 
 	# returned data:
 	# [0]     mode
