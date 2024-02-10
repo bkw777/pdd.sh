@@ -3023,15 +3023,16 @@ do_cmd () {
 			pdd2) set_pdd2 ;_e=$? ;;
 			#h Assume the attached drive is a TPDD2
 
-			rtscts|hardware_flow) RTSCTS=${1:-true} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
+			rtscts|hardware_flow) RTSCTS=${1:-true} ;set_stty ;v=1 lcmd_com_show ;_e=$? ;; # [true|false]
 			#h Enable hardware flow control.
 			#h Display current setting.
 
-			xonoff|xonxoff|software_flow) XONOFF=${1:-false} ;set_stty ;lcmd_com_show ;_e=$? ;; # [true|false]
+			xonoff|xonxoff|software_flow) XONOFF=${1:-false} ;set_stty ;v=1 lcmd_com_show ;_e=$? ;; # [true|false]
 			#h Enable software flow control.
 			#h Display current setting.
 			#h This is only potentially useful for send_loader().
-			#h The TPDD protocol is full of binary data that is not encoded in any way.
+			#h The TPDD protocol is full of raw binary data
+			#h and so can not use xon/xof flow control.
 
 			verify|with_verify) set_verify $* ;_e=0 ;; # [true|false]
 			#h Set WITH_VERIFY, display current setting.
