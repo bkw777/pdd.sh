@@ -405,9 +405,9 @@ typeset -r \
 typeset -rA compat=(	# fname(dec.dec) fattr(hex)
 	[floppy]='6,2,46'	# 6.2  F
 	[wp2]='8,2,46'		# 8.2  F
-#	[z88]='24,,00'		# 24   null     # not sure what z88 wants yet
-#	[cpm]='24,,00'		# 24   null     # not sure what cp/m wants yet
-	[raw]='24,,20'		# 24   space
+#	[z88]='24,,00'		# 24.0   null     # not sure what z88 wants yet
+#	[cpm]='24,,00'		# 24.0   null     # not sure what cp/m wants yet
+	[raw]="${PDD_FNAME_LEN},,20"	# 24.0   space
 )
 
 #
@@ -977,7 +977,7 @@ ocmd_dirent () {
 	((m==${dirent_cmd[set_name]})) && {
 		mk_tpdd_file_name "$f"			# pad/truncate filename
 		str_to_shex "$tpdd_file_name"		# filename (shex[0-23])
-		((${#a}<2)) && printf -v a '%02X' "'$a" ;shex[24]=$a	# attribute
+		((${#a}<2)) && printf -v a '%02X' "'$a" ;shex[PDD_FNAME_LEN]=$a	# attribute
 	}
 	printf -v shex[25] '%02X' $m		# action
 
@@ -997,8 +997,8 @@ ocmd_dirent () {
 	((${#ret_dat[*]}==28)) || { err_msg+=("$z: Got ${#ret_dat[*]} bytes, expected 28") ;return 1 ; }
 
 	# parse a dirent return format
-	x="${ret_dat[*]:0:24}" ;printf -v file_name '%-24.24b' "\x${x// /\\x}"
-	printf -v file_attr '%b' "\x${ret_dat[24]}"
+	x="${ret_dat[*]:0:PDD_FNAME_LEN}" ;printf -v file_name '%-*.*b' ${PDD_FNAME_LEN} ${PDD_FNAME_LEN} "\x${x// /\\x}"
+	printf -v file_attr '%b' "\x${ret_dat[PDD_FNAME_LEN]}"
 
 	((file_len=0x${ret_dat[25]}*0xFF+0x${ret_dat[26]})) # file length from dirent()
 	$FCB_FSIZE && { # file length from FCB
@@ -1008,7 +1008,7 @@ ocmd_dirent () {
 	}
 
 	free_sectors=0x${ret_dat[27]}
-	vecho 1 "$z: ret: filename=\"$file_name\" attr=0x${ret_dat[24]} flen=$file_len free_sectors=$free_sectors"
+	vecho 1 "$z: ret: filename=\"$file_name\" attr=0x${ret_dat[PDD_FNAME_LEN]} flen=$file_len free_sectors=$free_sectors"
 
 	# If doing set_name, and we got this far, then return success. Only the
 	# caller knows if they expected file_name & file_attr to be null or not.
@@ -1056,14 +1056,24 @@ ocmd_format () {
 # switch to FDC mode
 ocmd_fdc () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	case $operation_mode in
+	[[ $1 == "force" ]] || case $operation_mode in
+		0) return ;;
 		2) perr "$z requires TPDD1" ;return 1 ;;
-		0) [[ $1 == "force" ]] || return ;;
 	esac
 	ocmd_send_req ${opr_fmt[req_fdc]} || return $?
 	_sleep 0.003
-	tpdd_drain
-	operation_mode=0
+
+	# TPDD1 does not send any response
+	# TPDD2 returns 0x12 packet with 0x36 payload
+	# try a normal ocmd_read_ret
+	tpdd_check && {
+		ocmd_read_ret
+		ocmd_check_err
+		:
+	} || {
+		tpdd_drain
+		operation_mode=0
+	}
 }
 
 # Open File
@@ -2200,7 +2210,7 @@ read_fcb () {
 		fcb_resv[n]="${rhex[*]:i:FCB_FRESV_LEN}" ;((i+=FCB_FRESV_LEN))
 		fcb_head[n]="${rhex[*]:i:FCB_FHEAD_LEN}" ;((i+=FCB_FHEAD_LEN)) ;fcb_head[n]=$((0x${fcb_head[n]}))
 		fcb_tail[n]="${rhex[*]:i:FCB_FTAIL_LEN}" ;((i+=FCB_FTAIL_LEN)) ;fcb_tail[n]=$((0x${fcb_tail[n]}))
-		printf -v d_fname '%-24.24b' "${fcb_fname[n]}"
+		printf -v d_fname '%-*.*b' ${PDD_FNAME_LEN} ${PDD_FNAME_LEN} "${fcb_fname[n]}"
 		printf -v d_attr '%1.1s' "${fcb_attr[n]}"
 		((EXPOSE_BINARY)) && {
 			g_x="$d_fname" ;expose_bytes ;d_fname="$g_x"
@@ -2350,7 +2360,7 @@ fonzie_smack () {
 	tpdd_write 4D 31 0D
 	_sleep 0.003  # cribbed from TS-DOS
 	tpdd_drain
-	#((operation_mode)) || operation_mode=1
+	((operation_mode)) || operation_mode=1
 	#ocmd_ready || ocmd_ready
 }
 
@@ -2477,7 +2487,7 @@ lcmd_ls () {
 
 	while ocmd_dirent '' "$1" $m ;do
 		un_tpdd_file_name "$file_name"
-		printf -v d_fname '%-24.24b' "$file_name"
+		printf -v d_fname '%-*.*b' ${PDD_FNAME_LEN} ${PDD_FNAME_LEN} "$file_name"
 		printf -v d_attr '%1.1s' "$file_attr"
 
 		((EXPOSE_BINARY)) && {
