@@ -51,10 +51,10 @@ esac
 
 # Default rs232 tty device name, with platform differences
 # The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
-			stty_f="-F" TPDD_TTY_PREFIX=ttyUSB	# linux
+				stty_f="-F" TPDD_TTY_PREFIX=ttyUSB			# linux
 case "${OSTYPE,,}" in
-	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;	# *bsd
-	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.  ;;	# osx
+	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;			# *bsd
+	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial ;;	# osx
 esac
 
 # Default serial port settings and tty behavior.
@@ -171,25 +171,12 @@ typeset -rA opr_fmt=(
 	[req_pdd2_rename]='0D'      # TPDD2
 #	[req_nadsbox_get_ext]='0E'
 #	[req_nadsbox_cond_list]='0F'
-#	[req_pdd2_unk10]='10'
-#	[req_pdd2_undoc11]='11'
-#	[req_pdd2_unk12]='12'
-#	[req_pdd2_unk13]='13'
-#	[req_pdd2_unk14]='14'
-#	[req_pdd2_unk15]='15'
 	[req_pdd2_version]='23'     # TPDD2
 	[req_pdd2_cache]='30'       # TPDD2
 	[req_pdd2_mem_write]='31'   # TPDD2
 	[req_pdd2_mem_read]='32'    # TPDD2
 	[req_pdd2_sysinfo]='33'     # TPDD2
 	[req_pdd2_exec]='34'        # TPDD2 exec: load cpu registers A & X and jump to address
-
-# 0x47 is undocumented, but PakDOS uses it.
-# TPDD2 responds the same as 0x07 drive status.
-# TPDD1 ignores it.
-# With every directory listing, PakDOS tries 0x47 first,
-# and only if 0x47 is ignored, then does 0x07.
-	[req_undoc47]='47'          # TPDD2: undocumented synonym for drive_status TPDD1: no response
 
 	# returns
 	[ret_read]='10'
@@ -590,32 +577,15 @@ parse_compat () {
 }
 
 # List the files in the local directory without /bin/ls
-# gross way to get file sizes but ok for tpdd-sized files
-#
-# Based on mapfile(). Fast(ish) but risk of eating all ram.
-# mapfile() reads entire file into ram, then we walk the array
-#lcmd_llm () {
-#	local -i p b e ;local -a a ;local f
-#	echo "__________Local Directory Listing__________"
-#	for f in * ;do
-#		IFS= mapfile -d '' a < "$f"
-#		b=0 ;for ((p=0;p<${#a[*]};p++)) { e=${#a[p]} ;((b+=e+1)) } ;((e)) && ((b--))
-#		[[ -d $f ]] && f+='/'
-#		printf '%-32s %12d\n' "$f" $b
-#	done
-#}
-#
-# Based on read(). Even faster and no risk of eating all ram.
-# read() only reads until the next null into ram at any given time.
-# The reads are slightly slower than mapfile if we read the same 100%,
-# but with reads we can abort mid way and never need to read more than
-# 64k per file, because tpdd can't use them anyway.
 lcmd_lls () {
 	local -i b ;local f x s
 	echo "________Local Directory Listing________"
 	for f in * ;do
 		b=0 x= 
-		[[ -f $f ]] && while IFS= read -d '' -r -s x ;do ((b+=${#x}+1)) ;((b>PDD_MAX_FLEN)) && break ;done <"$f"
+		[[ -f $f ]] && while IFS= read -d '' -r -s x ;do
+			((b+=${#x}+1))
+			((b>PDD_MAX_FLEN)) && break
+		done <"$f"
 		((b+=${#x}))
 		((b>PDD_MAX_FLEN)) && s='>64k' || s=$b
 		[[ -d $f ]] && f+=/ s=
@@ -913,7 +883,7 @@ ocmd_send_req () {
 	calc_cksum $fmt $len $*
 	vecho 2 "$z: fmt=\"$fmt\" len=\"$len\" dat=\"$*\" chk=\"$cksum\""
 	tpdd_write 5A 5A $fmt $len $* $cksum
-	_sleep 0.01
+	#_sleep 0.01
 }
 
 # ocmd_read_ret [timeout_ms [busy_indicator]]
@@ -982,7 +952,7 @@ ocmd_dirent () {
 	printf -v shex[25] '%02X' $m		# action
 
 	# send the request
-	vecho 1 "$z: req: filename=\"$tpdd_file_name\" attr=0x$a action=$m"
+	vecho 2 "$z: req: filename=\"$tpdd_file_name\" attr=0x$a action=$m"
 	ocmd_send_req $r ${shex[*]} || return $?
 
 	# read the response
@@ -1008,7 +978,7 @@ ocmd_dirent () {
 	}
 
 	free_sectors=0x${ret_dat[27]}
-	vecho 1 "$z: ret: filename=\"$file_name\" attr=0x${ret_dat[PDD_FNAME_LEN]} flen=$file_len free_sectors=$free_sectors"
+	vecho 2 "$z: ret: filename=\"$file_name\" attr=0x${ret_dat[PDD_FNAME_LEN]} flen=$file_len free_sectors=$free_sectors"
 
 	# If doing set_name, and we got this far, then return success. Only the
 	# caller knows if they expected file_name & file_attr to be null or not.
@@ -1029,7 +999,7 @@ ocmd_ready () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	((operation_mode)) || fcmd_mode 1 || return $?
 	local r=${opr_fmt[req_status]}
-	(($1)) && printf -v r '%02X' $((0x$r+0x40))
+	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r || return $?
 	ocmd_read_ret || return $?
 	ocmd_check_err
@@ -1145,8 +1115,8 @@ ocmd_read () {
 	local r=${opr_fmt[req_read]}
 	((bank)) && printf -v r '%02X' $((0x$r+0x40))
 	ocmd_send_req $r || return $?
-	tpdd_wait
-	_sleep 0.03
+	tpdd_wait  # CRITICAL!
+	_sleep 0.1 # CRITICAL!
 	ocmd_read_ret || return $?
 	vecho 1 "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 
@@ -2390,7 +2360,7 @@ set_mslog () {
 		true|on|yes|1) MSLOG=true ;;
 		#'') $MSLOG && MSLOG=false || MSLOG=true ;;
 	esac
-	mslog 2>&- >&- # hide the first call shows epoch instead of elapsed
+	mslog 2>&- >&- # hide the first call, shows epoch instead of elapsed
 	$quiet || echo "Print millisecond timestamps: $MSLOG"
 }
 
@@ -2549,14 +2519,7 @@ lcmd_load () {
 			fhex+=(${ret_dat[*]})		# add to fhex[]
 		}
 		((p+=${#ret_dat[*]}))
-
-		# If not using FCB, then the file size reported by from dirent() from
-		# real drives (not emulators) is often smaller than reality.
-		# So if p grows past l, don't exit the loop, just update l so that we
-		# don't end with a final display like "100% (23552/23460 bytes)"
-		# Also simplifies the final sanity check.
-		$FCB_FSIZE || { ((p>l)) && l=$p ; }
-
+		((p>l)) && ((l=p))
 		pbar $p $l 'bytes'
 	done
 
@@ -3186,9 +3149,8 @@ do_cmd () {
 			format|mkfs) ocmd_format ;_e=$? ;;
 			#h Format disk with filesystem
 
-			ready|status) ocmd_ready $* ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;; # [1]
+			ready|status) ocmd_ready ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;; # [1]
 			#h Report basic drive ready / not ready
-			#h 1 = send req code 0x47 instead of 0x07 - undocumented tpdd2-only option that PakDOS uses
 
 			#c 2
 
