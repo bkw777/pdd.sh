@@ -50,11 +50,11 @@ esac
 : ${PDD1_RD_CHECK_MIXED_LSC:=true} # true|false
 
 # Default rs232 tty device name, with platform differences
-# The automatic TPDD port detection will search "/dev/${TPDD_TTY_PREFIX}*"
-				stty_f="-F" TPDD_TTY_PREFIX=ttyUSB			# linux
+stty_f="-f" TPDD_TTY_EXTGLOB='ttyS*'
 case "${OSTYPE,,}" in
-	*bsd*) 		stty_f="-f" TPDD_TTY_PREFIX=ttyU ;;			# *bsd
-	darwin*) 	stty_f="-f" TPDD_TTY_PREFIX=cu.usbserial ;;	# osx
+	linux*)  stty_f="-F" TPDD_TTY_EXTGLOB='ttyUSB*' ;;
+	*bsd*)   TPDD_TTY_EXTGLOB='ttyU!(.init|.lock)' ;;
+	darwin*) TPDD_TTY_EXTGLOB='cu.usbserial*' ;;
 esac
 
 # Default serial port settings and tty behavior.
@@ -427,28 +427,28 @@ mslog () {
 
 # help [cmd]
 help () {
-	local a b ;local -i i c=0 d=$((v+1)) w=${COLUMNS:-80} s=0 x ;local -a f=() l=() ;((w--))
+	local a b ;local -i i t=-1 w=${COLUMNS:-80} s=0 x ;local -a f=() l=() ;((w--))
 	mapfile -t f < $0
 	for ((i=0;i<${#f[*]};i++)) {
 		l=(${f[i]}) ;a=${l[0]}
 		case "${a}" in
 			\#h) a= b=${f[i]} ;b=${b#*#} ;b=${b:2} ;((${#b})) || b=' ' ;;
-			\#c) a= b= c=${l[1]} ;;
+			\#v) a= b= t=${l[1]} ;;
 			\#*) a= b= ;;
-			*\)) ((c)) && ((d>=c || ${#1})) && {
+			*\)) ((t>=0)) && ((v>=t || ${#1})) && {
 					s=0 a=${a%%)*} b=${f[i]} ;a=${a//\\/}
 					((${#1})) && [[ "|$a|" =~ "|$1|" ]] && s=1
 					[[ "$b" =~ '#' ]] && b="${b##*#}" || b=
-					printf -v b '\n %b%s%b %s' "$tstandout" "${a//|/ | }" "$tclear" "${b:1}"
+					printf -v b '\n %b%s%b %s' "${tstandout}" "${a//|/ | }" "${tclear}" "${b:1}"
 				} || a= b=
 				;;
 			*) a= b= ;;
 		esac
 		((${#1})) && ((s==0)) && continue
-		((c)) && ((d<c)) && ((s==0)) && continue
+		((t>=0)) && ((v<t)) && ((s==0)) && continue
 		[[ $b == ' ' ]] && { echo ;continue ; }
 		while ((${#b})) ;do
-			((c)) && ((${#a}==0)) && b="    $b"
+			((t>=0)) && ((${#a}==0)) && b="    $b"
 			x=$w ;until [[ "$IFS" =~ "${b:x:1}" || $x -lt 1 ]] ;do ((x--)) ;done
 			((x<1)) && x=$w
 			printf '%s\n' "${b:0:x}"
@@ -620,13 +620,19 @@ _quit () {
 ###############################################################################
 # serial port operations
 
+pe () {
+	[[ $PORT ]] || { err_msg+=("No serial port.") ;return 1 ; }
+}
+
 get_tpdd_port () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	local x=(/dev/${TPDD_TTY_PREFIX#/dev/}*)
-	[[ ${x[0]} == /dev/${TPDD_TTY_PREFIX}\* ]] && x=(/dev/tty*)
+	unset PORT
+	shopt -s extglob ;local -a x=(/dev/${TPDD_TTY_EXTGLOB}) ;shopt -u extglob
+	[[ "${x[0]}" == "/dev/${TPDD_TTY_EXTGLOB}" ]] && unset x
 	((${#x[*]}==1)) && { PORT=${x[0]} ;return ; }
-	local PS3="Which serial port is the TPDD drive on (1-${#x[*]}) ? "
-	select PORT in ${x[*]} ;do [[ -c $PORT ]] && break ;done
+	local PS3="Which serial port is the TPDD drive on (1-${#x[*]} or q) ? "
+	select PORT in ${x[*]} ;do [[ -c $PORT ]] || unset PORT ;[[ $PORT || ${REPLY,,} == q ]] && break ;done
+	pe
 }
 
 test_com () {
@@ -643,16 +649,18 @@ set_stty () {
 open_com () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	test_com && return
+	[[ $PORT ]] || get_tpdd_port || return 1
 	local -i e=
 	exec 3<>"${PORT}"
 	test_com && set_stty ;e=$?
-	((e)) && err_msg+=("Failed to open serial port \"${PORT}\"")
+	((e)) && { err_msg+=("Failed to open serial port \"${PORT}\"") ;close_com ; }
 	return $e
 }
 
 close_com () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	test_com && exec 3>&-
+	exec 3>&-
+	unset PORT
 }
 
 ###############################################################################
@@ -663,10 +671,9 @@ tpdd_write () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	local -i e
 	mslog
-	#test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	local x=" $*"
-	printf '%b' "${x// /\\x}" >&3 ;e=$?
-	vecho 3 "SENT: $*"
+	printf '%b' "${x// /\\x}" 2>&- >&3 ;e=$?
+	((e)) && { close_com ;pe ; } || vecho 3 "SENT: $*"
 	mslog
 	return $e
 }
@@ -751,6 +758,7 @@ tpdd_read_BASIC () {
 # check if data is available without consuming any
 tpdd_check () {
 	vecho 3 "${FUNCNAME[0]}($@)"
+	test_com || { close_com ;return 1 ; }
 	IFS= read -t 0 -u 3
 }
 
@@ -761,7 +769,6 @@ tpdd_check () {
 # return once the drive starts sending data
 tpdd_wait () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	#test_com || { err_msg+=("$PORT not open") ;return 1 ; }
 	local d=(: spin pbar) s
 	local -i i=-1 n p=${TPDD_WAIT_POLL_INTERVAL_MS} t=${1:-$DEFAULT_TIMEOUT_MS} b=$2
 	ms_to_s $p ;s=$_s
@@ -769,10 +776,12 @@ tpdd_wait () {
 	((b==1)) && spin +
 	until ((++i>n)) ;do
 		tpdd_check && break
+		[[ $PORT ]] || break
 		${d[b]} $i $n
 		_sleep $s
 	done
-	((i>n)) && { err_msg+=("$z: TIMED OUT / no response from drive") ; return 1 ; }
+	pe || return $?
+	((i>n)) && { err_msg+=("$z: TIMED OUT / no response from drive") ;return 1 ; }
 	${d[b]} 1 1
 	((b==1)) && spin -
 	((b)) && echo
@@ -2861,15 +2870,21 @@ do_cmd () {
 		_e=${_det} err_msg=()
 		case ${_c} in
 
-	#
-	# commands that may run before _init()
-	#
+		# help() reads the comments and the case match lines here.
+		# The case match lines are read to get the commands from before the ')'
+		# and the parameters from the comment after the '#' on the same line.
+		# Comments that begin with '#h ' are included in the output.
+		# Lines following '#v N' are hidden if v<N.
+
+		################################################################
+		# commands that don't require com_open() or _init()
+		#
 
 			#h
 			#h COMMAND | SYNONYM(S) PARAMETERS
 			#h     DESCRIPTION
 
-			#c 1 # this comment is used by help()
+			#v 0
 
 			q|quit|exit|bye) exit ;;
 			#h Order Pizza
@@ -2881,11 +2896,25 @@ do_cmd () {
 			#h If verbose > 0, shows all commands.
 
 			v|verbose|debug) ((${#1})) && v=$1 ;echo "Verbose level: $v" ;_e=0 ;; # [n]
-			#h Set verbosity level, display current setting.
+			#h Set verbosity level.
+			#h Display current setting.
 
 			y|yes|batch) set_yes $* ;_e=0 ;; # [true|false]
 			#h Set non-interactive mode, display current setting.
 			#h Assume "y" for all confirmation prompts. Use for scripting.
+
+			bank) bank $1 ;_e=$? ;; # [0|1]
+			#h (TPDD2) Switch to bank 0 or 1 on a TPDD2.
+			#h Display current setting.
+
+			ll) lcmd_ll $* ;_e=$? ;;
+			#h Local Directory List, no filesizes.
+			#h Faster/cheaper than lls.
+
+			lls) lcmd_lls $* ;_e=$? ;;
+			#h Local Directory List, with filesizes.
+
+			#v 1
 
 			compat) ask_compat "$@" ;_e=$? ;; # [floppy|wp2|raw]
 			#h Set filename & attr to match the type of machine you are trading disks with.
@@ -2904,6 +2933,100 @@ do_cmd () {
 			floppy|wp2|raw) ask_compat "${_c}" ;_e=$? ;;
 			#h Short for "compat ___"
 			#h ex: "wp2" = "compat wp2"
+
+			ffs|ffsize|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
+			#h Set FCB_FSIZE mode, display current setting.
+			#h A real TPDD drive's directory listing function returns inaccurate file sizes.
+			#h This setting causes "ls" and "load" to read the FCB table from sector 0 ourselves to get the true file sizes.
+			#h This is an extra step and slows down directory listings, but the displayed file sizes are correct.
+			#h
+			#h *This will not work with TPDD Emulators!*
+			#h This uses FDC mode to read sector 0 as a raw sector, and most emulators only know how to load & save files.
+			#h But emulators also give correct file sizes, so this is not needed with any TPDD emulators anyway.
+
+			ms|mslog) set_mslog $1 ;_e=0 ;; # [true|false]
+			#h Set MSLOG mode, display current setting.
+			#h Print "ms: ########" at various points, showing the number
+			#h of milliseconds elapsed since the previous timestamp.
+			#h Requires bash 5
+
+			eb|expose|expose_binary) set_expose $1 ;_e=0 ;; # [0-2]
+			#h Set EXPOSE_BINARY mode.
+			#h Display current setting.
+			#h Expose non-printable binary bytes in filenames and attr.
+			#h
+			#h 0 = off
+			#h
+			#h 1 = Display 0x00 to 0x1F as inverse-video "@" to "_"
+			#h     display 0x7F to 0xFF as inverse-video "."
+			#h     ex: 0x01 = "^A", displayed as inverse-video "A"
+			#h     This mode makes all bytes visible without altering the display formatting because each byte still only occupies a single character space.
+			#h
+			#h 2 = All non-printing bytes displayed as inverse-video hex pair.
+			#h     ex: 0xB5 displayed as inverse-video "B5"
+			#h     This mode shows the actual value of all bytes, but messes up the display formatting because each non-printing byte requires 2 character spaces.
+			#h
+			#h An example that shows this is the the TPDD2 Util disk, which has an 0x01 byte as the first byte of the first filename, which is normally invisible.
+
+			attr) ask_attr "$@" ;_e=$? ;; # [b|hh]
+			#h Set the default attribute byte.
+			#h b = any single byte  ex: F
+			#h hh = hex pair representing a byte value  ex: 46
+			#h Presents a menu if not given.
+
+			pdd1) set_pdd1 ;_e=$? ;;
+			#h Assume the attached drive is a TPDD1.
+
+			pdd2) set_pdd2 ;_e=$? ;;
+			#h Assume the attached drive is a TPDD2.
+
+			verify|with_verify) set_verify $* ;_e=0 ;; # [true|false]
+			#h Set WITH_VERIFY, display current setting.
+			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID.
+			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
+			#h There are verify/no-verify versions of some TPDD2 commands also, but currently this only affects TPDD1. All TPDD2 commands always use the with-verify version.
+			# TODO update all uses of pdd2_cache() commit
+
+			com_test) lcmd_com_test ;_e=$? ;;
+			#h Check if the serial port is open.
+
+			com_show) lcmd_com_show ;_e=$? ;;
+			#h Display the serial port parameters.
+			#h Higher verbose settings show more info.
+
+			com_open) lcmd_com_open ;_e=$? ;;
+			#h Open the serial port.
+
+			com_close) lcmd_com_close ;_e=$? ;;
+			#h Close the serial port.
+
+			checksum) v=3 calc_cksum $* ;_e=$? ;; # data
+			#h Calculate the checksum for the given data, using the same method that the TPDD uses.
+			#h data: Up to 128 space-seperated hex pairs.
+			#h returns: Bitwise negation of least significant byte of sum of all bytes, returned as a hex pair.
+			#h TPDD checksums include the format, length, and data fields of OPR-mode commands and responses.
+
+			sleep) _sleep $* ;_e=$? ;; # n
+			#h Sleep for n seconds. n may have up to 3 decimals, so 0.001 is the smallest value.
+
+			#v -1
+
+			'') _e=0 ;;
+		esac
+		((_e==_det)) || { # detect if we ran any of the above
+			chk_cmd_err
+			continue
+		}
+
+	####################################################################
+	# commands that require the serial port but don't yet require _init()
+	#
+
+		[[ $PORT ]] || open_com || { printf '%s\n' "${err_msg[*]}" >&2 ;continue ; }
+
+		case ${_c} in
+
+			#v 0
 
 			baud|speed) lcmd_com_speed $* ;_e=$? ;; # [baud]
 			#h Set the serial port to the specified baud rate, display current setting.
@@ -2924,67 +3047,11 @@ do_cmd () {
 			#h Send an ascii BASIC file over the serial port slowly enough for BASIC to read.
 			#h The connected device must be a computer like a Model 100, not a TPDD drive.
 
-			ffs|ffsize|fcb_fsize) set_fcb_filesizes $1 ;_e=0 ;; # [true|false]
-			#h Set FCB_FSIZE mode, display current setting.
-			#h A real TPDD drive's directory listing function returns inaccurate file sizes.
-			#h This setting causes "ls" and "load" to read the FCB table from sector 0 ourselves to get the true file sizes.
-			#h This is an extra step and slows down directory listings, but the displayed file sizes are correct.
-			#h
-			#h *This will not work with TPDD Emulators!*
-			#h This uses FDC mode to read sector 0 as a raw sector, and most emulators only know how to load & save files.
-			#h But emulators also give correct file sizes, so this is not needed with any TPDD emulators anyway.
-
-			ms|mslog) set_mslog $1 ;_e=0 ;; # [true|false]
-			#h Set MSLOG mode, display current setting.
-			#h Print "ms: ########" at various points, showing the number
-			#h of milliseconds elapsed since the previous timestamp.
-			#h Requires bash 5
-
-			bank) bank $1 ;_e=$? ;; # [0|1]
-			#h (TPDD2) Switch to bank 0 or 1 on a TPDD2, display current setting.
-
-			ll) lcmd_ll $* ;_e=$? ;;
-			#h Local Directory List, no filesizes.
-			#h Faster/cheaper than lls.
-
-			#llm) lcmd_llm $* ;_e=$? ;;
-			lls) lcmd_lls $* ;_e=$? ;;
-			#h Local Directory List, with filesizes.
-
-			#c 2
+			#v 1
 
 			smack) fonzie_smack ;_e=$? ;;
 			#h (TPDD1) Blind-send a sequence including the the FDC-mode command to switch a TPDD1 drive to Operation mode, & drain the tty buffer to ignoring any errors or other responses.
 			#h This only has any effect on a TPDD1 drive, but is sent to all drives as part of the initial startup to ensure that the as-yet-unknown drive, if it is a TPDD1, is put into Operation mode.
-
-			eb|expose|expose_binary) set_expose $1 ;_e=0 ;; # [0-2]
-			#h Set EXPOSE_BINARY mode, display current setting.
-			#h Expose non-printable binary bytes in filenames and attr.
-			#h
-			#h 0 = off
-			#h
-			#h 1 = display 0x00 to 0x1F as inverse-video "@" to "_"
-			#h     display 0x7F to 0xFF as inverse-video "."
-			#h     ex: 0x01 = "^A", displayed as inverse-video "A"
-			#h     This mode allows to expose all bytes without altering the display formatting because each byte still only occupies a single character space.
-			#h
-			#h 2 = All non-printing bytes displayed as inverse-video hex pair.
-			#h     ex: 0xB5 displayed as inverse-video "B5"
-			#h     This mode shows the actual value of all bytes, but messes up the display formatting because each non-printing byte requires 2 character spaces.
-			#h
-			#h An example is the the TPDD2 Util disk, which has an 0x01 byte as the first byte of the first filename.
-
-			attr) ask_attr "$@" ;_e=$? ;; # [b|hh]
-			#h Set the default attribute byte.
-			#h b = any single byte  ex: F
-			#h hh = hex pair representing a byte value  ex: 46
-			#h Presents a menu if not given.
-
-			pdd1) fonzie_smack ;set_pdd1 ;_e=$? ;;
-			#h Assume the attached drive is a TPDD1
-
-			pdd2) set_pdd2 ;_e=$? ;;
-			#h Assume the attached drive is a TPDD2
 
 			rtscts|hardware_flow) RTSCTS=${1:-true} ;set_stty ;v=1 lcmd_com_show ;_e=$? ;; # [true|false]
 			#h Enable hardware flow control.
@@ -2996,26 +3063,6 @@ do_cmd () {
 			#h This is only potentially useful for send_loader().
 			#h The TPDD protocol is full of raw binary data
 			#h and so can not use xon/xof flow control.
-
-			verify|with_verify) set_verify $* ;_e=0 ;; # [true|false]
-			#h Set WITH_VERIFY, display current setting.
-			#h Use the "no-verify" versions of FDC-format, Write Sector, and Write ID
-			#h ex: commands like "dump_disk" which uses all of those commands internally, will use the "no-verify" versions for all operations along the way.
-			#h There are verify/no-verify versions of some TPDD2 commands also, but currently this only affects TPDD1. All TPDD2 commands always use the with-verify version.
-			# TODO update all uses of pdd2_cache() commit
-
-			com_test) lcmd_com_test ;_e=$? ;;
-			#h Check if the serial port is open
-
-			com_show) lcmd_com_show ;_e=$? ;;
-			#h Display the serial port parameters
-			#h higher verbose settings show more info
-
-			com_open) lcmd_com_open ;_e=$? ;;
-			#h Open the serial port
-
-			com_close) lcmd_com_close ;_e=$? ;;
-			#h Close the serial port
 
 			com_read) (($#)) && x=tpdd_read || x=tpdd_read_unknown ;$x $* ;_e=$? ;; # [n]
 			#h Read n (or all available) bytes from serial port
@@ -3044,7 +3091,7 @@ do_cmd () {
 			#h Send an OPR-mode command
 			#h fmt: single hex pair for an TPDD1 Operation-mode or TPDD2 "request format"
 			#h data: space-seperated hex pairs for the payload data
-			#h The "ZZ" preamble, length, and checksum bytes are calculated and added automatically
+			#h The "ZZ" preamble, length, and checksum bytes are calculated and added automatically.
 
 			check_opr_err) ocmd_check_err ;_e=$? ;;
 			#h Check ret_dat[] for an OPR-mode error code
@@ -3053,26 +3100,16 @@ do_cmd () {
 			drain) tpdd_drain ;_e=$? ;;
 			#h Read and discard all available bytes from the serial port
 
-			checksum) v=3 calc_cksum $* ;_e=$? ;; # data
-			#h Calculate the checksum for the given data, using the same method that the TPDD uses.
-			#h data: Up to 128 space-seperated hex pairs.
-			#h returns: Bitwise negation of least significant byte of sum of all bytes, returned as a hex pair.
-			#h TPDD checksums include the format, length, and data fields of OPR-mode commands and responses.
-
-			sleep) _sleep $* ;_e=$? ;; # n
-			#h Sleep for n seconds. n may have up to 3 decimals, so 0.001 is the smallest value.
-
 			version|detect_model) ((v)) && _v=$v || _v=1 ;v=$_v pdd2_version ;_e=$? ;;
 			#h (TPDD2) Return drive version data
-			#h This is a TPDD2-only command, but is intentionally sent to all drives as a way to automatically detect whether a TPDD1 or TPDD2 is connected.
+			#h This is a TPDD2-only command, but is intentionally sent to all drives as a way to detect whether the connected device is a FB-100/TPDD1 or TPDD2.
 
 			sysinfo) ((v)) && _v=$v || _v=1 ;v=$_v pdd2_sysinfo ;_e=$? ;;
 			#h (TPDD2) Return drive system info data
-			#h just like version() but different info
+			#h Just like version() but returns other data.
 
-			#c 0
+			#v -1
 
-			'') _e=0 ;;
 		esac
 		((_e!=_det)) && { # detect if we ran any of the above
 			#((${#err_msg[*]})) && printf '\n%s: %s\n' "${_c}" "${err_msg[*]}" >&2
@@ -3080,7 +3117,8 @@ do_cmd () {
 			continue
 		}
 
-	#
+
+	####################################################################
 	# commands that may not run before _init()
 	#
 
@@ -3089,7 +3127,7 @@ do_cmd () {
 
 		case ${_c} in
 
-			#c 2
+			#v 1
 
 	# TPDD1 switch between operation-mode and fdc-mode
 
@@ -3144,7 +3182,7 @@ do_cmd () {
 			#h
 			#h Operates on filename previously set by _dirent(set_name)
 
-			#c 1
+			#v 0
 
 			format|mkfs) ocmd_format ;_e=$? ;;
 			#h Format disk with filesystem
@@ -3152,7 +3190,7 @@ do_cmd () {
 			ready|status) ocmd_ready ;_e=$? ;((_e)) && printf "Not " ;echo "Ready" ;; # [1]
 			#h Report basic drive ready / not ready
 
-			#c 2
+			#v 1
 
 	# TPDD1 sector access - aka "FDC mode" functions.
 
@@ -3285,7 +3323,6 @@ do_cmd () {
 			#h The TPDD2 service manual page 102 has this, but doesn't explain it.
 			#h Writes 3 bytes to 3 memory addresses.
 
-			#rom_dump|dump_rom) pdd2_version ;((operation_mode==2)) && { lcmd_pdd2_dump_rom "$@" ;_e=$? ; } || { lcmd_pdd1_dump_rom "$@" ;_e=$? ; } ;; # [filename]
 			rom_dump|dump_rom) lcmd_pdd2_dump_rom "$@" || lcmd_pdd1_dump_rom "$@" ;_e=$? ;; # [filename]
 			#h Read 4k bytes at 0xF000
 			#h output to filename if given
@@ -3297,7 +3334,7 @@ do_cmd () {
 			#h mode using the dip switches on the bottom, and then sending
 			#h S-records of machine code to the drive.
 
-			#c 1
+			#v 0
 
 			dd|dump_disk) ((operation_mode==2)) && { pdd2_dump_disk "$@" ;_e=$? ; } || { pdd1_dump_disk "$@" ;_e=$? ; } ;; # dest_img_filename
 			#h Clone a physical disk to a disk image file
@@ -3311,7 +3348,7 @@ do_cmd () {
 			ls|dir|list) lcmd_ls "$@" ;_e=$? ;;
 			#h List disk directory
 
-			rm|del|delete) lcmd_rm "$@" ;_e=$? ;; # filename [attr]
+			rm|del|delete|kill) lcmd_rm "$@" ;_e=$? ;; # filename [attr]
 			#h Delete filename [attr] from disk
 
 			load) (($#<4)) && lcmd_load "$@" ;_e=$? ;; # src_filename [dest_filename] [attr]
@@ -3326,7 +3363,7 @@ do_cmd () {
 			cp|copy) lcmd_cp "$@" ;_e=$? ;; # src_filename dest_filename [attr]
 			#h Copy a file from on-disk to on-disk
 
-			#c 2
+			#v 1
 
 	# other
 			pdd1_boot) pdd1_boot "$@" ;_e=$? ;; # [100|200]
@@ -3335,7 +3372,7 @@ do_cmd () {
 			pdd2_boot) pdd2_boot "$@" ;_e=$? ;; # [100|200]
 			#h Mimic a model 100 or 200 bootstrapping from a TPDD2
 
-			#c 0
+			#v -1
 
 			*) err_msg+=("Unrecognized command") ;_e=1 ;;
 
@@ -3369,11 +3406,9 @@ readonly sleep_fifo="/tmp/.${0//\//_}.${LOGNAME}.sleep.fifo"
 [[ -p $sleep_fifo ]] || mkfifo -m 666 "$sleep_fifo" || abrt "Error creating \"$sleep_fifo\""
 exec 4<>$sleep_fifo
 
-# tpdd serial port
-for PORT in $1 /dev/$1 ;do [[ -c $PORT ]] && break || PORT= ;done
-[[ $PORT ]] && shift || get_tpdd_port
-vecho 1 "Using port \"$PORT\""
-open_com || { e=$? ;printf '%s\n' "${err_msg[*]}" >&2 ;exit $e ; }
+# $1 is a chance to specify a tty that might not begin with "/dev/"
+for PORT in $1 /dev/$1 ;do [[ -c $PORT ]] && break || unset PORT ;done
+[[ $PORT ]] && shift
 
 # non-interactive mode
 (($#)) && { do_cmd "$@" ;exit $? ; }
