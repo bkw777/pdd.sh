@@ -69,9 +69,9 @@ PDD2_IMG_EXT=pdd2
 
 # terminal emulation
 typeset -r \
-	tstandout='\e[1m' \
-	tinverse='\e[7m' \
-	tclear='\e[m'
+	bold='\e[1m' \
+	rev='\e[7m' \
+	sgr0='\e[m'
 
 ###############################################################################
 # tunables
@@ -439,7 +439,7 @@ help () {
 					s=0 a=${a%%)*} b=${f[i]} ;a=${a//\\/}
 					((${#1})) && [[ "|$a|" =~ "|$1|" ]] && s=1
 					[[ "$b" =~ '#' ]] && b="${b##*#}" || b=
-					printf -v b '\n %b%s%b %s' "${tstandout}" "${a//|/ | }" "${tclear}" "${b:1}"
+					printf -v b '\n %b%s%b %s' "${bold}" "${a//|/ | }" "${sgr0}" "${b:1}"
 				} || a= b=
 				;;
 			*) a= b= ;;
@@ -555,12 +555,12 @@ expose_bytes () {
 		printf -v n '%u' "'$t"
 		case $EXPOSE_BINARY in
 			2)
-				((n>0&&n<32||n>126)) && printf -v t '%b%02X%b' "$tinverse" $n "$tclear"
+				((n>0&&n<32||n>126)) && printf -v t '%b%02X%b' "${rev}" $n "${sgr0}"
 				((n)) || t=' '
 				;;
 			*)
-				((n<32)) && { printf -v t '%02X' $((n+64)) ;printf -v t '%b%b%b' "$tinverse" "\x$t" "$tclear" ; }
-				((n>126)) && printf -v t '%b.%b' "$tinverse" "$tclear"
+				((n<32)) && { printf -v t '%02X' $((n+64)) ;printf -v t '%b%b%b' "${rev}" "\x$t" "${sgr0}" ; }
+				((n>126)) && printf -v t '%b.%b' "${rev}" "${sgr0}"
 				;;
 		esac
 		x+="$t"
@@ -2242,8 +2242,8 @@ read_smt () {
 	((operation_mode==2)) && f="0x80 0x40 0x20 0x10 0x08 0x04 0x02 0x01" w=3
 	for ((y=0;y<SMT_LEN-1;y++)) {
 		for b in $f ;do
-			ci= co= ;((0x${x[y]}&b)) && ci=$tinverse co=$tclear
-			printf '%b%*.*u%b' "$ci" $w $w $((i++)) "$co"
+			ci= co= ;((0x${x[y]}&b)) && ci=${rev} co=${sgr0}
+			printf '%b%*.*u%b' "${ci}" $w $w $((i++)) "${co}"
 			((++l<20)) && printf ' ' || { printf '\n' ;l=0 ; }
 		done
 	}
