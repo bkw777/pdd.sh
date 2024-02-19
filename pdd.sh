@@ -1310,7 +1310,7 @@ fcmd_search_id () {
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
-	local a=($*) ;while ((${#a[*]}<SECTOR_ID_LEN)) do a+=("00") ;done
+	local a=($*) ;while ((${#a[*]}<SECTOR_ID_LEN)) ;do a+=("00") ;done
 	tpdd_write ${a[*]:0:SECTOR_ID_LEN} || return $?
 	fcmd_read_ret $SEARCHID_WAIT_MS || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	# $fdc_err = success/fail status code
@@ -1406,7 +1406,7 @@ fcmd_write_id () {
 	tpdd_write ${shex[*]} 0D || return $?
 	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
-	local a=($*) ;while ((${#a[*]}<SECTOR_ID_LEN)) do a+=("00") ;done
+	local a=($*) ;while ((${#a[*]}<SECTOR_ID_LEN)) ;do a+=("00") ;done
 	tpdd_write ${a[*]:0:SECTOR_ID_LEN} || return $?
 	fcmd_read_ret || { err_msg+=("err:$? dat:${fdc_dat}") ;return $? ; }
 	((fdc_err)) && { err_msg+=("err:$fdc_err dat:${fdc_dat}") ;return $fdc_err ; }
