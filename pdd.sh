@@ -53,7 +53,7 @@ esac
 stty_f="-f" TPDD_TTY_EXTGLOB='ttyS*'
 case "${OSTYPE,,}" in
 	linux*)  stty_f="-F" TPDD_TTY_EXTGLOB='ttyUSB*' ;;
-	*bsd*)   TPDD_TTY_EXTGLOB='ttyU+([0-9])' ;;
+	*bsd*)   TPDD_TTY_EXTGLOB='cuaU+([0-9])' ;;
 	darwin*) TPDD_TTY_EXTGLOB='cu.usbserial*' ;;
 esac
 
