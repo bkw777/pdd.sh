@@ -427,7 +427,7 @@ mslog () {
 
 # help [cmd]
 help () {
-	local a b ;local -i i t=-1 w=${COLUMNS:-80} s=0 x ;local -a f=() l=() ;((w--))
+	local a b X ;local -i i t=-1 w=${COLUMNS:-80} s=0 x ;local -a f=() l=()
 	mapfile -t f < $0
 	for ((i=0;i<${#f[*]};i++)) {
 		l=(${f[i]}) ;a=${l[0]}
@@ -438,7 +438,7 @@ help () {
 			*\)) ((t>=0)) && ((v>=t || ${#1})) && {
 					s=0 a=${a%%)*} b=${f[i]} ;a=${a//\\/}
 					((${#1})) && [[ "|$a|" =~ "|$1|" ]] && s=1
-					[[ "$b" =~ '#' ]] && b="${b##*#}" || b=
+					[[ $b =~ '#' ]] && b="${b##*#}" || b=
 					printf -v b '\n %b%s%b %s' "${bold}" "${a//|/ | }" "${sgr0}" "${b:1}"
 				} || a= b=
 				;;
@@ -446,13 +446,13 @@ help () {
 		esac
 		((${#1})) && ((s==0)) && continue
 		((t>=0)) && ((v<t)) && ((s==0)) && continue
-		[[ $b == ' ' ]] && { echo ;continue ; }
 		while ((${#b})) ;do
-			((t>=0)) && ((${#a}==0)) && b="    $b"
-			x=$w ;until [[ "$IFS" =~ "${b:x:1}" || $x -lt 1 ]] ;do ((x--)) ;done
-			((x<1)) && x=$w
-			printf '%s\n' "${b:0:x}"
-			b=${b:x}
+			x=$w X=""
+			((t>=0)) && ((${#a}==0)) && { ((x-=4)) ;X="    " ; }
+			until [[ $IFS =~ ${b:x:1} || $x -lt 1 ]] ;do ((x--)) ;done
+			((x<1 || ${#b}<w)) && x=$w
+			printf '%s%s\n' "$X" "${b:0:x+1}"
+			b=${b:x+1}
 		done
 	}
 	((v)) || ((${#1})) || printf '\nSet verbose 1 or greater to see more commands.\n'
