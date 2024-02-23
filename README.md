@@ -25,13 +25,12 @@ Things this util can do that even the commercial TPDD utils can't do
  - Dump the drive's rom
 
 ## Supported OS's
-Any linux, macos/osx, bsd, any cpu architecture.  
-
-Windows... [possibly with effort, but realistically, no](https://github.com/microsoft/WSL/issues/4322).  
-Cygwin and MSYS also fail with `stty: /dev/ttyS4: Permission denied`.  
-[dl2](http://github.com/bkw777/dl2) does work in both cygwin and msys, so the problem is probably fixable, but I just don't know how yet.
-
-OSX: Requires a newer bash from macports or brew. Does not work with the stock bash that ships with osx/macos (still as of 2023).
+In theory it works on any os that can run bash4+ and has an stty command.  
+In reality it only *almost* works on macos and freebsd.  
+Currently it's only working well on Linux.  
+It used to work well on all 3, but there seems to have been a regression. The basic protocol logic hasn't changed but probably various timings have changed, both faster and slower. It's also possible the host OS's have changed the way the serial tty layer behaves in some obscure detail as the os versions have updated.  
+Requires at least bash 4, so on mac this means macports or brew or other.  
+Does not work in either cygwin or WSL.  
 
 ## Installation
 It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions.  
