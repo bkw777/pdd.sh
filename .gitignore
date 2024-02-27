@@ -2,6 +2,7 @@
 .#*
 *.swp
 .*.sw*
+tmp/
 
 pdd
 pdd1

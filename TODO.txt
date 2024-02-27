@@ -11,6 +11,9 @@ lcmd_lls() shows an example using read() to work on only one chunk at a time.
 
 In either case, to reconstruct the file, concat the chunks plus one 0x00 between each.
 
+start of file and end of file will need special handling
+to detect if the first or last byte happened to be a 0x00
+
 ----
 
 Replace TPDD1 "mv" with one that edits the FCB instead of load>rm>save.
@@ -22,10 +25,10 @@ Another point against is it risks all files since you have to overwrite
 the entire FCB table, while deleting and saving a file only risks that file.
 
 But the option should still exist because why not?.
-We have the read_fcb routine now to start from.
+We have the read_fcb() routine now to start from.
 
 It would definitely be significantly faster for large files. Even merely
-deleting a large file without the load or save takes a long time because
+deleting a large file, without the load or save, takes a long time because
 it causes the drive to have to edit a lot of sector IDs and FCBs. Plus
 of course load and save each take a long time for a large file.
 
@@ -41,6 +44,9 @@ tpdd2 disk, X2 from the hex encoding, plus probably at least one more byte
 per array element for a null terminator internal to bash.)
 
 Some routines already do this. lcmd_load() already does this.
+
+Or conversely maybe we need to do everything from ram as much as possible
+for timing reasons on different machines / os's.
 
 ----
 

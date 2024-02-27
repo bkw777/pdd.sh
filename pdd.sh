@@ -23,8 +23,8 @@ case "${VERBOSE:=$DEBUG}" in
 	true|on|y|yes|:) VERBOSE=1 ;;
 esac
 
-# print millisecond timestamps
-: ${MSLOG:=false} # true|false
+# print timestamps
+: ${TIMESTAMPS:=false} # true|false
 
 # see "help compat"
 : ${COMPAT:=floppy}
@@ -49,19 +49,21 @@ esac
 # see pdd1_restore_disk()
 : ${PDD1_RD_CHECK_MIXED_LSC:=true} # true|false
 
-# Default rs232 tty device name, with platform differences
+# Default serial port settings and tty behavior.
+: ${BAUD:=19200}
+: ${RTSCTS:=true}
+: ${XONOFF:=false}
+STTY_FLAGS='raw pass8 clocal cread time 1 min 1'
+
+# Default rs232 tty device name and stty device file flag
 stty_f="-f" TPDD_TTY_EXTGLOB='ttyS*'
+
+# Platform differences
 case "${OSTYPE,,}" in
 	linux*)  stty_f="-F" TPDD_TTY_EXTGLOB='ttyUSB*' ;;
 	*bsd*)   TPDD_TTY_EXTGLOB='cuaU+([0-9])' ;;
 	darwin*) TPDD_TTY_EXTGLOB='cu.usbserial*' ;;
 esac
-
-# Default serial port settings and tty behavior.
-: ${BAUD:=19200}
-: ${RTSCTS:=true}
-: ${XONOFF:=false}
-STTY_FLAGS='raw pass8 clocal cread -echo time 1 min 1'
 
 # filename extensions for disk image files
 PDD1_IMG_EXT=pdd1
@@ -418,13 +420,6 @@ vecho () {
 	shift ;echo "$@" >&2
 }
 
-mslog () {
-	$MSLOG || return
-	local -i nowms=$((${EPOCHREALTIME//./}/1000))
-	echo "ms: $((nowms-lastms))"
-	lastms=$nowms
-}
-
 # help [cmd]
 help () {
 	local a b X ;local -i i t=-1 w=${COLUMNS:-80} s=0 x ;local -a f=() l=()
@@ -573,7 +568,7 @@ parse_compat () {
 	[[ ${compat[$c]} ]] 2>&- >&- || return 1
 	a=(${compat[$c]})
 	FNL="${a[0]}" FEL="${a[1]}" FAH="${a[2]}"
-	printf -v ATTR "%b" "\x$FAH"
+	printf -v ATTR "%b" "\x${FAH}"
 }
 
 # List the files in the local directory without /bin/ls
@@ -646,6 +641,12 @@ set_stty () {
 	((v>1)) && stty ${stty_f} "${PORT}" -a ;:
 }
 
+close_com () {
+	vecho 3 "${FUNCNAME[0]}($@)"
+	exec 3>&-
+	unset PORT
+}
+
 open_com () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	test_com && return
@@ -657,12 +658,6 @@ open_com () {
 	return $e
 }
 
-close_com () {
-	vecho 3 "${FUNCNAME[0]}($@)"
-	exec 3>&-
-	unset PORT
-}
-
 ###############################################################################
 # TPDD communication primitives
 
@@ -670,11 +665,11 @@ close_com () {
 tpdd_write () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	local -i e
-	mslog
+	ts
 	local x=" $*"
 	printf '%b' "${x// /\\x}" 2>&- >&3 ;e=$?
 	((e)) && { close_com ;pe ; } || vecho 3 "SENT: $*"
-	mslog
+	ts
 	return $e
 }
 
@@ -712,7 +707,7 @@ tpdd_read () {
 	local -i i l=$1 ;local x ;rhex=() read_err=0
 	((l<1)) && return 1
 	tpdd_wait $2 $3 || return $?
-	mslog
+	ts
 	#vecho 2 -n "$z: l=$l "
 	for ((i=0;i<l;i++)) {
 		((operation_mode==2)) && tpdd_wait
@@ -725,7 +720,7 @@ tpdd_read () {
 	((read_err)) && err_msg+=("tty read err:$read_err")
 	#vecho 2 "${rhex[*]}"
 	vecho 3 "RCVD: ${rhex[*]}"
-	mslog
+	ts
 	((${#rhex[*]}==l))
 }
 
@@ -2359,22 +2354,20 @@ set_fcb_filesizes () {
 	}
 }
 
-set_mslog () {
-	[[ $EPOCHREALTIME ]] || {
-		$quiet || echo "Millisecond timestamps requires bash 5"
-		return;
-	}
-	case "$1" in
-		false|off|no|0) MSLOG=false ;;
-		true|on|yes|1) MSLOG=true ;;
-		#'') $MSLOG && MSLOG=false || MSLOG=true ;;
+set_ts () {
+	case "${1,,}" in
+		false|off|no|0) ts() { : ; } ;;
+		true|on|yes|1)
+			$quiet || [[ ${EPOCHREALTIME} ]] || echo "Requires bash 5"
+			ts() { echo ts: ${EPOCHREALTIME} ; }
+			;;
+		'') $quiet || ts ;;
+		*) echo "${FUNCNAME[0]}(): unrecognized argument \"$1\""
 	esac
-	mslog 2>&- >&- # hide the first call, shows epoch instead of elapsed
-	$quiet || echo "Print millisecond timestamps: $MSLOG"
 }
 
 set_verify () {
-	case "$1" in
+	case "${1,,}" in
 		false|off|no|0) WITH_VERIFY=false ;;
 		true|on|yes|1) WITH_VERIFY=true ;;
 		#'') $WITH_VERIFY && WITH_VERIFY=false || WITH_VERIFY=true ;;
@@ -2383,7 +2376,7 @@ set_verify () {
 }
 
 set_yes () {
-	case "$1" in
+	case "${1,,}" in
 		false|off|no|0) YES=false ;;
 		true|on|yes|1) YES=true ;;
 		#'') $YES && YES=false || YES=true ;;
@@ -2393,7 +2386,7 @@ set_yes () {
 
 set_expose () {
 	local -i e=$EXPOSE_BINARY
-	case "$1" in
+	case "${1,,}" in
 		false|off|no) e=0 ;;
 		true|on|yes) e=1 ;;
 		0|1|2) e=$1 ;;
@@ -2944,10 +2937,9 @@ do_cmd () {
 			#h This uses FDC mode to read sector 0 as a raw sector, and most emulators only know how to load & save files.
 			#h But emulators also give correct file sizes, so this is not needed with any TPDD emulators anyway.
 
-			ms|mslog) set_mslog $1 ;_e=0 ;; # [true|false]
-			#h Set MSLOG mode, display current setting.
-			#h Print "ms: ########" at various points, showing the number
-			#h of milliseconds elapsed since the previous timestamp.
+			ts|timestamps) set_ts $1 ;_e=0 ;; # [true|false]
+			#h Enable/Disable timestamps
+			#h Print "ts: ##########.######" at various points, showing the number of seconds since the epoch.
 			#h Requires bash 5
 
 			eb|expose|expose_binary) set_expose $1 ;_e=0 ;; # [0-2]
@@ -3390,11 +3382,11 @@ do_cmd () {
 ###############################################################################
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
-typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${VERBOSE:-0} FNL lastms= # don't init $FEL
+typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${VERBOSE:-0} FNL # don't init $FEL
 cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= bd= did_init=false quiet=false g_x= PDD_MAX_FLEN=$PDD1_MAX_FLEN
 readonly LANG=C ifs="$IFS"
-quiet=true set_mslog
-ms_to_s $TTY_READ_TIMEOUT_MS ;read_timeout=${_s}
+quiet=true set_ts ${TIMESTAMPS}
+ms_to_s ${TTY_READ_TIMEOUT_MS} ;read_timeout=${_s}
 for x in ${!opr_fmt[*]} ;do [[ $x =~ ^ret_.* ]] && ret_list+="${opr_fmt[$x]}|" ;done
 for x in ${!lsl[*]} ;do lsc[${lsl[x]}]=$x ;done ;readonly lsc ;unset x
 parse_compat
@@ -3402,9 +3394,9 @@ parse_compat
 [[ $0 =~ .*pdd2(\.sh)?$ ]] && set_pdd2
 
 # for _sleep()
-readonly sleep_fifo="/tmp/.${0//\//_}.${LOGNAME}.sleep.fifo"
-[[ -p $sleep_fifo ]] || mkfifo -m 666 "$sleep_fifo" || abrt "Error creating \"$sleep_fifo\""
-exec 4<>$sleep_fifo
+readonly sleep_fifo="${XDG_RUNTIME_DIR:-/tmp}/.${0//\//_}.${LOGNAME:-$$}.sleep.fifo"
+[[ -p ${sleep_fifo} ]] || mkfifo -m 600 "${sleep_fifo}" || abrt "Error creating \"${sleep_fifo}\""
+exec 4<>${sleep_fifo}
 
 # $1 is a chance to specify a tty that might not begin with "/dev/"
 for PORT in $1 /dev/$1 ;do [[ -c $PORT ]] && break || unset PORT ;done

@@ -25,12 +25,12 @@ Things this util can do that even the commercial TPDD utils can't do
  - Dump the drive's rom
 
 ## Supported OS's
-In theory it works on any os that can run bash4+ and has an stty command.  
-In reality it only *almost* works on macos and freebsd.  
+In theory it works on any os that can run Bash4+ and has an stty command.  
+In reality it only *almost* works on Macos and FreeBSD.  
 Currently it's only working well on Linux.  
 It used to work well on all 3, but there seems to have been a regression. The basic protocol logic hasn't changed but probably various timings have changed, both faster and slower. It's also possible the host OS's have changed the way the serial tty layer behaves in some obscure detail as the os versions have updated.  
-Requires at least bash 4, so on mac this means macports or brew or other.  
-Does not work in either cygwin or WSL.  
+Requires at least bash 4, so on Mac this means Macports or Brew or similar.  
+Does not work in either Cygwin or WSL.  
 
 ## Installation
 It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions.  
@@ -145,6 +145,7 @@ This pile of commands is not well organized. Sorry.
 | drain | | flush the port receive buffer |
 | checksum | \<hex pairs...\> | calculate the checksum for the bytes represented by the given hex pairs |
 | v&#160;\|&#160;verbose&#160;\|&#160;debug | \[#\] | Verbose/Debug level. Default 0. 1 or greater = more verbose.<br>Verbose levels above 0 also exposes more commands in help. |
+| ts&#160;\|&#160;timestamps | \[on\|off\] | Enable/Disable timestamps, seconds since the epoch. Default off. |
 | bootstrap&#160;\|&#160;send_loader | \<filename\> | Send a BASIC program to a "Model T".<br>Usually used to install a [TPDD client](thttps://github.com/bkw777/dlplus/tree/master/clients), but can be used to send any ascii text to the client machine. |
 | pdd1_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD1 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
 | pdd2_boot | \[100\|200\] | Emulate a Model 100 or 200 performing the TPDD2 bootstrap procedure.<br>WIP: the collected BASIC is good, the collected binary is not |
