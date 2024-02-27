@@ -3014,7 +3014,7 @@ do_cmd () {
 	# commands that require the serial port but don't yet require _init()
 	#
 
-		[[ $PORT ]] || open_com || { printf '%s\n' "${err_msg[*]}" >&2 ;continue ; }
+		open_com || { printf '%s\n' "${err_msg[*]}" >&2 ;continue ; }
 
 		case ${_c} in
 
@@ -3399,8 +3399,9 @@ readonly sleep_fifo="${XDG_RUNTIME_DIR:-/tmp}/.${0//\//_}.${LOGNAME:-$$}.sleep.f
 exec 4<>${sleep_fifo}
 
 # $1 is a chance to specify a tty that might not begin with "/dev/"
-for PORT in $1 /dev/$1 ;do [[ -c $PORT ]] && break || unset PORT ;done
-[[ $PORT ]] && shift
+close_com
+for PORT in $1 /dev/$1 ;do [[ -c ${PORT} ]] && break || unset PORT ;done
+[[ ${PORT} ]] && shift || { [[ ${TPDD_PORT} ]] && PORT=${TPDD_PORT} ; }
 
 # non-interactive mode
 (($#)) && { do_cmd "$@" ;exit $? ; }
