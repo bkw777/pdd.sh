@@ -7,7 +7,6 @@ It's pure bash except for the following:
 * `mkfifo` is used once at startup for `_sleep()` without `/usr/bin/sleep`.  
 
 That's it. There are no other external commands or dependencies, not even any child forks of more bash processes (no backticks, perens, or pipes), and no temp files or here-documents (here-docs create temp files behind the scenes in bash).  
-I think the while-loop in help() may create a child bash.
 
 There are a lot of commands and options. This is a swiss army knife for the TPDD.  
 It can be used to inspect, copy, restore, repair, or craft TPDD disks in ways that normal client software like TS-DOS or PDD.EXE doesn't provide or allow.
