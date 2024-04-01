@@ -193,46 +193,46 @@ typeset -rA opr_fmt=(
 )
 
 # Operation Mode Error Codes
-typeset -rA opr_msg=(
-	[00]='Operation Complete'
+typeset -ra opr_msg=(
+	[0x00]='Operation Complete'
 	# File
-	[10]='File Not Found'
-	[11]='File Exists'
+	[0x10]='File Not Found'
+	[0x11]='File Exists'
 	# Sequence
-	[30]='Missing Filename'
-	[31]='Directory Search Error'
-	[35]='Bank Error'
-	[36]='Parameter Error'
-	[37]='Open Format Mismatch'
-	[3F]='End of File'
+	[0x30]='Missing Filename'
+	[0x31]='Directory Search Error'
+	[0x35]='Bank Error'
+	[0x36]='Parameter Error'
+	[0x37]='Open Format Mismatch'
+	[0x3F]='End of File'
 	# Disk I/O
-	[40]='No Start Mark'
-	[41]='ID CRC Error'
-	[42]='Sector Length Error'
-	[44]='Format Verify Error'
-	[45]='Disk Not Formatted'
-	[46]='Format Interruption'
-	[47]='Erase Offset Error'
-	[49]='DATA CRC Error'
-	[4A]='Sector Number Error'
-	[4B]='Read Data Timeout'
-	[4D]='Sector Number Error'
+	[0x40]='No Start Mark'
+	[0x41]='ID CRC Error'
+	[0x42]='Sector Length Error'
+	[0x44]='Format Verify Error'
+	[0x45]='Disk Not Formatted'
+	[0x46]='Format Interruption'
+	[0x47]='Erase Offset Error'
+	[0x49]='DATA CRC Error'
+	[0x4A]='Sector Number Error'
+	[0x4B]='Read Data Timeout'
+	[0x4D]='Sector Number Error'
 	# Protect
-	[50]='Write-Protected Disk'
-	[5E]='Disk Not Formatted' # Really just "No SMT"
-	[5F]='Write-Protected TPDD1 Disk'
+	[0x50]='Write-Protected Disk'
+	[0x5E]='Disk Not Formatted' # Really just "No SMT"
+	[0x5F]='Write-Protected TPDD1 Disk'
 	# File Territory
-	[60]='Directory Full'
-	[61]='Disk Full'
-	[6E]='File Too Long'
+	[0x60]='Directory Full'
+	[0x61]='Disk Full'
+	[0x6E]='File Too Long'
 	# Disk Condition
-	[70]='Disk Not Inserted'
-	[71]='Disk Change Error'
+	[0x70]='Disk Not Inserted'
+	[0x71]='Disk Change Error'
 	# Sensor
-	[80]='No Index Signal'
-	[81]='Abnormal Track 0 Signal'
-	[82]='Abnormal Index Signal'
-	[83]='Defective Disk (power-cycle to clear error)' # not in the manual but you can get the actual error
+	[0x80]='No Index Signal'
+	[0x81]='Abnormal Track 0 Signal'
+	[0x82]='Abnormal Index Signal'
+	[0x83]='Defective Disk (power-cycle to clear error)' # not in the manual but you can get the actual error
 )
 
 # Directory Entry Search Forms
@@ -273,21 +273,22 @@ typeset -rA fdc_cmd=(
 # There is no documentation for the FDC error codes
 # These are guesses from experimenting
 typeset -ra fdc_msg=(
-	[0]='OK'
-	[17]='Logical Sector Number Below Range'
-	[18]='Logical Sector Number Above Range'
-	[19]='Physical Sector Number Above Range'
-	[33]='Parameter Invalid, Wrong Type'
-	[50]='Invalid Logical Sector Size Code'
-	[51]='Logical Sector Size Code Above Range'
-	[60]='ID not found'
-	[61]='Search ID Unexpected Parameter'
-	[160]='Disk Not Formatted'
-	[161]='Read Error'
-	[176]='Write-Protected Disk'
-	[193]='Invalid Command'
-	[209]='Disk Not Inserted'
-	[216]='Operation Interrupted'
+	[0x00]='OK'
+	[0x11]='Logical Sector Number Below Range'
+	[0x12]='Logical Sector Number Above Range'
+	[0x13]='Physical Sector Number Above Range'
+	[0x21]='Parameter Invalid, Wrong Type'
+	[0x32]='Invalid Logical Sector Size Code'
+	[0x33]='Logical Sector Size Code Above Range'
+	[0x3C]='ID not found'
+	[0x3D]='Search ID Unexpected Parameter'
+	[0xA0]='Disk Not Formatted'
+	[0xA1]='Read Error'
+	[0xB0]='Write-Protected Disk'
+	[0xC0]='0xC0 Invalid Command'
+	[0xC1]='0xC1 Invalid Command'
+	[0xD1]='Disk Not Inserted'
+	[0xD8]='Operation Interrupted'
 )
 
 # FDC condition bit flags
@@ -864,12 +865,12 @@ ocmd_check_err () {
 	$quiet && _v=2
 	vecho $_v "$z: ret_fmt=$ret_fmt ret_len=$ret_len ret_dat=(${ret_dat[*]}) read_err=\"$read_err\""
 	((${#ret_dat[*]}==1)) || { err_msg+=('Corrupt Response') ; ret_dat=() ;return 1 ; }
-	vecho $_v -n "$z: ${ret_dat[0]}:"
+	vecho $_v -n "$z: 0x${ret_dat[0]}:"
 	((e=0x${ret_dat[0]}))
 	((e)) && {
+		((ret_err=e))
 		x='UNKNOWN ERROR'
-		((${#opr_msg[${ret_dat[0]}]})) && x="${opr_msg[${ret_dat[0]}]}"
-		ret_err=${ret_dat[0]}
+		((${#opr_msg[e]})) && x="${opr_msg[e]}"
 		$quiet || err_msg+=("$x")
 	}
 	vecho $_v "$x"
@@ -1030,7 +1031,7 @@ ocmd_format () {
 # switch to FDC mode
 ocmd_fdc () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	[[ $1 == "force" ]] || case $operation_mode in
+	[[ $1 == "force" ]] || case ${operation_mode} in
 		0) return ;;
 		2) perr "$z requires TPDD1" ;return 1 ;;
 	esac
@@ -1231,9 +1232,9 @@ fcmd_mode () {
 	tpdd_drain
 }
 
-# Report not-ready conditions
-# bit flags for some not-ready conditions
-fcmd_ready () {
+# TPDD1 report drive/disk condition
+# bit flags retrieved from an FDC-mode command
+fcmd_condition () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
 	((operation_mode==0)) || ocmd_fdc || return $?
 	str_to_shex "${fdc_cmd[condition]}"
@@ -2399,7 +2400,7 @@ set_expose () {
 
 get_condition () {
 	((operation_mode==2)) && { pdd2_condition ;return $? ; }
-	fcmd_ready
+	fcmd_condition
 }
 
 bank () {
@@ -2627,7 +2628,7 @@ lcmd_com_show () {
 lcmd_com_test () {
 	local -i e=
 	test_com ;e=$?
-	((e)) && echo "${PORT} is closed" || echo "${PORT} is open"
+	((e)) && { pe ; : ; } || echo "${PORT} is open"
 	return $e
 }
 
@@ -3383,7 +3384,7 @@ do_cmd () {
 # Main
 typeset -a err_msg=() shex=() fhex=() rhex=() ret_dat=() fcb_fname=() fcb_attr=() fcb_size=() fcb_resv=() fcb_head=() fcb_tail=()
 typeset -i operation_mode=9 _y= bank= read_err= fdc_err= fdc_dat= fdc_len= _om=99 v=${VERBOSE:-0} FNL # don't init $FEL
-cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= bd= did_init=false quiet=false g_x= PDD_MAX_FLEN=$PDD1_MAX_FLEN
+cksum=00 ret_err= ret_fmt= ret_len= ret_sum= tpdd_file_name= file_name= file_attr= d_fname= d_attr= ret_list='|' _s= bd= did_init=false quiet=false g_x= PDD_MAX_FLEN=${PDD1_MAX_FLEN}
 readonly LANG=C ifs="$IFS"
 quiet=true set_ts ${TIMESTAMPS}
 ms_to_s ${TTY_READ_TIMEOUT_MS} ;read_timeout=${_s}
