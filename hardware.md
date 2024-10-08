@@ -10,7 +10,7 @@ If your drive doesn't work, see the section about the belt.
 
 * A serial port. Either an old machine that has a real com port, or a [usb-serial adapter](http://tandy.wiki/Model_T_Serial_Cable#USB-Serial_Adapters), preferrably with FTDI chip, ideally with nuts not screws.
 
-* Serial cable adapter(s) to go from the PC's 9-pin male connector to the tpdd cables's 25-pin male connector.
+* Serial cable adapter(s) to go from the PC's 9-pin male connector to the tpdd cables's 25-pin male connector, straight through, not null-modem.
 
 ## Serial Cable Adapter(s)
 There is more than one way to get there...
