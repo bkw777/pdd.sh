@@ -1,3 +1,8 @@
+# temporary note about restore-disk
+See https://github.com/bkw777/pdd.sh/issues/8#issuecomment-2398216813  
+If you need to use restore-disk, please try this past commit: https://github.com/bkw777/pdd.sh/tree/de92713bf8b643945e431c6f730c8fd570875ff1 (or any older commit)  
+I'm away from home (and thus my TPDD drives) for a couple weeks and can't work on this until I'm back home.
+
 # pdd.sh
 
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in pure\* bash.
