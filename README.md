@@ -327,7 +327,7 @@ You can find a collection of TPDD client loaders at https://github.com/bkw777/dl
 
 # References
 http://tandy.wiki/TPDD  
-[TPDD1 Software Manual](https://archive.org/details/TandyPortableDiskDriveSoftwareManual26-3808s)  
+[TPDD1 Software Manual]([https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive/)  
 [TPDD2 Service Manual](https://archive.org/details/tpdd-2-service-manual)  
 [TS-DOS Directory Extensions](http://bitchin100.com/wiki/index.php?title=Desklink/TS-DOS_Directory_Access)  
 [TPDD1 Search ID](https://github.com/bkw777/dl2/blob/master/ref/search_id_section.txt) (isn't explained in the manual)  
