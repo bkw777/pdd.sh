@@ -298,7 +298,7 @@ The Sardine dictionary disk is also in there.
 
 ### Directory Listings
 
-* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. The `fcb_flens` setting, not enabled by default, makes the "dirent()" function read the FCB to get filesizes. This makes `ls` and `load` take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the `ffs` command. This only works on real drives. This can't be used with TPDD emulators because this requires using sector-access commands to read sector 0 from the disk. Emulators don't have any actual sector 0 and don't support the sector-access commands, but TPDD emulators also don't report the wrong file sizes in their dirent() responses, and so you don't need any better value in that case anyway. (dlplus is a TPDD emulator and does support raw sector access to disk image files, but this doesn't apply to ordinary files shared from a directory)
+* The drive firmwares directory listing function returns file sizes that are often smaller than reality by several bytes. The correct filesizes are available on the disk in the FCB table. The `fcb_fsize` setting, not enabled by default, makes the "dirent()" function read the FCB to get filesizes. This makes `ls` and `load` take an extra second or two to get the FCB data, but displays the correct exact filesizes. This can be turned on/off with the `ffs` command. This only works on real drives. This can't be used with TPDD emulators because this requires using sector-access commands to read sector 0 from the disk. Emulators don't have any actual sector 0 and don't support the sector-access commands, but TPDD emulators also don't report the wrong file sizes in their dirent() responses, and so you don't need any better value in that case anyway. (dl2 is a TPDD emulator and does support raw sector access to disk image files, but this doesn't apply to ordinary files shared from a directory)
 
 * Filenames can have non-printing characters in them. The `expose` option, enabled by default, exposes those bytes in filenames (and in the attr field). When a byte in a filename has an ascii value of 0-32, it's displayed as the assosciated ctrl code, but in inverse video instead of carot notation so that the character only takes up one space. Bytes with ascii values above 126 are all displayed as just inverse ".". ex: null is ^@, and is displayed as inverse video "@". The TPDD2 Utility Disk has a 0x01 byte at the beginning of the `FLOPY2.SYS` filename. Normally that is invisible, (except for the fact that it makes the filename field look one character too short). The `expose` option exposes that hidden byte in the name. This can be toggled with the `expose` command.  
 
@@ -327,7 +327,7 @@ You can find a collection of TPDD client loaders at https://github.com/bkw777/dl
 
 # References
 http://tandy.wiki/TPDD  
-[TPDD1 Software Manual]([https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive/)  
+[TPDD1 Software Manual](https://archive.org/details/tandy-service-manual-26-3808-s-software-manual-for-portable-disk-drive/)  
 [TPDD2 Service Manual](https://archive.org/details/tpdd-2-service-manual)  
 [TS-DOS Directory Extensions](http://bitchin100.com/wiki/index.php?title=Desklink/TS-DOS_Directory_Access)  
 [TPDD1 Search ID](https://github.com/bkw777/dl2/blob/master/ref/search_id_section.txt) (isn't explained in the manual)  
