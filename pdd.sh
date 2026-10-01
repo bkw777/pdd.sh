@@ -53,7 +53,10 @@ esac
 : ${BAUD:=19200}
 : ${RTSCTS:=true}
 : ${XONOFF:=false}
-STTY_FLAGS='raw pass8 clocal cread time 1 min 1'
+LOADER_BAUD=9600
+LOADER_XONOFF=true
+LOADER_PER_CHAR_MS=0  # with xon/xoff working, we no longer need this
+STTY_FLAGS='raw pass8 clocal cread time 0 min 1'
 
 # Default rs232 tty device name and stty device file flag
 stty_f="-f" TPDD_TTY_EXTGLOB='ttyS*'
@@ -128,9 +131,6 @@ SEARCHID_WAIT_MS=25000      # fcmd_search_id
 PDD2_VERSION_WAIT_MS=100    # pdd2_version
 PDD2_SYSINFO_WAIT_MS=100    # pdd2_sysinfo
 PDD2_CACHE_WAIT_MS=20000    # pdd2_cache
-
-# Per-byte delay in send_loader()
-LOADER_PER_CHAR_MS=8
 
 #
 # CONFIG
@@ -2251,27 +2251,45 @@ read_smt () {
 # Server Functions
 # These functions are for talking to a client not a drive
 
+
+# For reference, this works well. No per-byte delay.
+#$ tsend () {
+#	local d=${2:-/dev/ttyUSB0} b=${3:-9600} s=([19200]=9 [9600]=8 [4800]=7 [2400]=6 [1200]=5 [600]=4 [300]=3)
+#	((${#1})) || { echo "${FUNCNAME[0]} FILE.DO [/dev/ttyX] [baud]" ;return ; }
+#	[[ -c $d ]] || { echo /dev/tty* ;return ; }
+#	((${#s[b]})) || { echo ${!s[*]} ;return ; }
+#	echo "100/200/K85/M10: RUN\"COM:${s[b]}8N1ENN"
+#	echo "      8201/8300: RUN\"COM:${s[b]}N81XN"
+#	read -p "Press [Enter] whean ready: " ;echo "Sending..."
+#	stty -F $d $b raw pass8 clocal cread min 1 time 0 -crtscts ixon ixoff flusho -drain
+#	cat $1 >$d
+#	printf '%b' '\x1A' >$d
+#}
+
 # write a single byte $1 to the com port
 # followed by $2 ms sleep
 slowbyte () {
 	printf '%b' "\x$1" >&3
-	_sleep $2
+	(($2)) && _sleep $2
 }
 
 # write file $1 to com port with per-character sleep
 # followed by BASIC_EOF character
 srv_send_loader () {
 	local z=${FUNCNAME[0]} ;vecho 3 "$z($@)"
-	local -i i l;local s REPLY x="${XONOFF:-false}"
-	ms_to_s $LOADER_PER_CHAR_MS ;s=${_s}
+	local -i i l b=BAUD ;local s REPLY x=$XONOFF
+	local c=([19200]=9 [9600]=8 [4800]=7 [2400]=6 [1200]=5 [600]=4 [300]=3)
+	local -i b=BAUD
+	((LOADER_PER_CHAR_MS)) && { ms_to_s $LOADER_PER_CHAR_MS ;s=${_s} ; }
 	file_to_fhex $1 0
 
-	XONOFF=true ;set_stty
+	XONOFF=$LOADER_XONOFF BAUD=$LOADER_BAUD ;set_stty
+	local kx=N nx=N ;$XONOFF && kx=E nx=X
 
 	echo "Installing $1"
 	echo 'Prepare the portable to receive:'
-	echo 'TANDY, Kyotronic, Olivetti:  RUN "COM:98N1ENN"'
-	echo '                       NEC:  RUN "COM:9N81XN"'
+	echo 'TANDY, Kyotronic, Olivetti:  RUN "COM:${s[BAUD]}8N1${kx}NN"'
+	echo '                       NEC:  RUN "COM:${s[BAUD]}N81${nx}N"'
 	read -p 'Press [Enter] when ready...'
 
 	l=${#fhex[*]}
@@ -2287,10 +2305,10 @@ srv_send_loader () {
 	case ${fhex[i]} in
 		$BASIC_EOF) : ;;
 		$BASIC_EOL) slowbyte $BASIC_EOF $s ;;
-		*) slowbyte $BASIC_EOL ;slowbyte $BASIC_EOF $s ;;
+		*) slowbyte $BASIC_EOL $s ;slowbyte $BASIC_EOF $s ;;
 	esac
 
-	XONOFF=$x ;set_stty ;echo
+	XONOFF=$x BAUD=$b ;set_stty ;echo
 }
 
 ###############################################################################
