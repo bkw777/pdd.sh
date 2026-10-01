@@ -56,7 +56,7 @@ esac
 LOADER_BAUD=9600
 LOADER_XONOFF=true
 LOADER_PER_CHAR_MS=0  # with xon/xoff working, we no longer need this
-STTY_FLAGS='raw pass8 clocal cread time 0 min 1'
+STTY_FLAGS='raw pass8 clocal cread time 1 min 1'
 
 # Default rs232 tty device name and stty device file flag
 stty_f="-f" TPDD_TTY_EXTGLOB='ttyS*'
