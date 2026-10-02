@@ -304,6 +304,68 @@ The Sardine dictionary disk is also in there.
 
 * The write-protect status of the disk is indicated in the bottom-right corner of the listing with a `[WP]`if the disk is write-protected.
 
+### Backup All Files On A Disk
+The **load** command doesn't interpret globbing, so you can't load all files by doing `load *`, but here is some quick & dirty bash code to do it.  
+Paste in the 3 shell functions, then run `backup_disk <name_of_disk>`  
+backup_disk() takes a disk name as the only argument and loads all files from the disk into a directory named after the disk.  
+backup_disk() uses load_files(), and load_files() uses list_files().  
+Example, here the disk is named "1-8"  
+```
+$ list_files () { local l= ;pdd ls |while read l ;do [[ "${l:25:1}" == "|" ]] && { set $l ;echo $1 ; } ; done ; }
+$ load_files () { local n= ;for n in `list_files` ;do pdd "load $n" ;done ; }
+$ backup_disk () { local d=$PWD ;mkdir $1 && cd $1 && load_files && cd $d ; }
+$ backup_disk 1-8
+Loading TPDD:ADR3.DO (F) to ADR3.DO
+[########################################] 100% (906/906 bytes)                
+Loading TPDD:ADRS.DO (F) to ADRS.DO
+[########################################] 100% (77/77 bytes)                  
+Loading TPDD:ARTAND.DO (F) to ARTAND.DO
+[########################################] 100% (1151/1151 bytes)              
+Loading TPDD:CHANGE.BA (F) to CHANGE.BA
+[########################################] 100% (4053/4053 bytes)              
+Loading TPDD:CHANGE.DO (F) to CHANGE.DO
+[########################################] 100% (9332/9332 bytes)              
+Loading TPDD:FILMS.DO (F) to FILMS.DO
+[########################################] 100% (1759/1759 bytes)              
+Loading TPDD:IMMIGR.DO (F) to IMMIGR.DO
+[########################################] 100% (2167/2167 bytes)              
+Loading TPDD:MIKE.DO (F) to MIKE.DO
+[########################################] 100% (1607/1607 bytes)              
+Loading TPDD:OLDADR.DO (F) to OLDADR.DO
+[########################################] 100% (363/363 bytes)                
+Loading TPDD:PBUTTR.DO (F) to PBUTTR.DO
+[########################################] 100% (1340/1340 bytes)              
+Loading TPDD:ROMAN.DO (F) to ROMAN.DO
+[########################################] 100% (171/171 bytes)                
+Loading TPDD:SEPT.DO (F) to SEPT.DO
+[########################################] 100% (2096/2096 bytes)              
+Loading TPDD:SETUP.DO (F) to SETUP.DO
+[########################################] 100% (769/769 bytes)                
+Loading TPDD:TELEX.DO (F) to TELEX.DO
+[########################################] 100% (1650/1650 bytes)              
+Loading TPDD:WASHIN.DO (F) to WASHIN.DO
+[########################################] 100% (2165/2165 bytes)              
+$
+$ ls -l 1-8
+total 68
+-rw-rw-r-- 1 bkw bkw  906 Oct  1 19:42 ADR3.DO
+-rw-rw-r-- 1 bkw bkw   77 Oct  1 19:42 ADRS.DO
+-rw-rw-r-- 1 bkw bkw 1151 Oct  1 19:42 ARTAND.DO
+-rw-rw-r-- 1 bkw bkw 4053 Oct  1 19:42 CHANGE.BA
+-rw-rw-r-- 1 bkw bkw 9332 Oct  1 19:42 CHANGE.DO
+-rw-rw-r-- 1 bkw bkw 1759 Oct  1 19:43 FILMS.DO
+-rw-rw-r-- 1 bkw bkw 2167 Oct  1 19:43 IMMIGR.DO
+-rw-rw-r-- 1 bkw bkw 1607 Oct  1 19:43 MIKE.DO
+-rw-rw-r-- 1 bkw bkw  363 Oct  1 19:43 OLDADR.DO
+-rw-rw-r-- 1 bkw bkw 1340 Oct  1 19:43 PBUTTR.DO
+-rw-rw-r-- 1 bkw bkw  171 Oct  1 19:43 ROMAN.DO
+-rw-rw-r-- 1 bkw bkw 2096 Oct  1 19:43 SEPT.DO
+-rw-rw-r-- 1 bkw bkw  769 Oct  1 19:43 SETUP.DO
+-rw-rw-r-- 1 bkw bkw 1650 Oct  1 19:43 TELEX.DO
+-rw-rw-r-- 1 bkw bkw 2165 Oct  1 19:43 WASHIN.DO
+$
+```
+
 ## Non-Standard DIP Switch Settings
 Here is an example to use the FDC-mode 38400 baud DIP switch setting on a TPDD1 or Purple Computing drive.  
 The dip switches not only change the baud rate but also make the drive default to FDC-mode instead of Operation-mode at power-on.  
