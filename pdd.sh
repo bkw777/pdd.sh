@@ -499,7 +499,7 @@ mk_tpdd_file_name () {
 un_tpdd_file_name () {
 	vecho 3 "${FUNCNAME[0]}($@)"
 	file_name="$1"
-	((FNL<PDD_FNAME_LEN)) && file_name=${file_name// /}
+	((FNL<PDD_FNAME_LEN)) && file_name=${file_name%%+( )}
 	:
 }
 
