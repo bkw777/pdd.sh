@@ -2172,9 +2172,9 @@ read_fcb () {
 
 	# legend
 	$quiet || {
-		echo "_________________________FCB table_________________________"
-		echo " # : filename                 | a |  size |       | hd | tl"
-		echo "------------------------------+---+-------+-------+----+---"
+		echo "_________________________FCB table__________________________"
+		echo " # : filename                 | a |  size | resrv | hd | tl "
+		echo "------------------------------+---+-------+-------+----+----"
 	}
 
 	# split out the 40 FCBs
@@ -2219,7 +2219,7 @@ read_fcb () {
 # We could probably just always read the sector 0 copy.
 read_smt () {
 	vecho 3 "${FUNCNAME[0]}($@)"
-	local x=() s=() ci co f ;local -i y i= l= w
+	local x=() s=() ci co f ;local -i b y i= l= w t=$((SMT_LEN-1))
 	# read the 21 bytes
 	((operation_mode==2)) && {
 		echo "____________________________Space Management Table_____________________________"
@@ -2233,18 +2233,18 @@ read_smt () {
 	}
 	vecho 1 "SMT${bd}: ${x[*]}"
 	# decode the bit-flags
-	echo "Bytes 1-20: bit-flags of used sectors:"
+	echo "Bytes 0-$((t-1)): bit-flags of used sectors:"
 	i=0 f="0x80 0x20 0x08 0x02" w=2
 	((operation_mode==2)) && f="0x80 0x40 0x20 0x10 0x08 0x04 0x02 0x01" w=3
-	for ((y=0;y<SMT_LEN-1;y++)) {
+	for ((y=0;y<t;y++)) {
 		for b in $f ;do
 			ci= co= ;((0x${x[y]}&b)) && ci=${rev} co=${sgr0}
 			printf '%b%*.*u%b' "${ci}" $w $w $((i++)) "${co}"
 			((++l<20)) && printf ' ' || { printf '\n' ;l=0 ; }
 		done
 	}
-	# byte 21 is a simple number
-	printf 'Byte 21: sectors used: %d\n' "0x${x[y]}"
+	# byte 20 is a simple number
+	printf 'Byte %d: sectors used: %d\n' "$y" "0x${x[y]}"
 }
 
 ###############################################################################
@@ -3309,16 +3309,16 @@ do_cmd () {
 			#h addr: in mode 0: 0-1279  in mode 1: 0-65535
 			#h data: hex pairs...
 
-			rh|read_header) ((operation_mode==2)) && { pdd2_read_id "$@" ;_e=$? ; } || { fcmd_read_id "$@" ;_e=$? ; } ;; # sector(s)
-			#h Rread & display metadata for one or more sectors.
+			ri|read_id|rh|read_header) ((operation_mode==2)) && { pdd2_read_id "$@" ;_e=$? ; } || { fcmd_read_id "$@" ;_e=$? ; } ;; # sector(s)
+			#h Read & display the "ID" field (metadata header) for one or more sectors.
 			#h sector(s):
-			#h TPDD1: physical_sector (0-79), or space-seperated list, or "all"
+			#h TPDD1: physical sector number (0-79), or space-seperated list, or "all"
 			#h   returns: the LSC and 12-byte ID section for the physical sector
-			#h TPDD2: track,sector (0-79,0-1), or linear_sector (0-159), or list, or "all"
+			#h TPDD2: track,sector (0-79,0-1), or linear sector number (0-159), or list, or "all"
 			#h   returns: the 12-byte ID section for the track,sector
 
 			rs|read_sector) ((operation_mode==2)) && { pdd2_read_sector "$@" ;_e=$? ; } || { pdd1_read_sector "$@" ;_e=$? ; } ;; # TPDD1_physical_sector or TPDD2_track TPDD2_sector
-			#h Read & display sector main data
+			#h Read & display sector data
 			#h TPDD1_physical_sector: 0-79
 			#h TPDD2_track: 0-79
 			#h TPDD2_sector: 0-1
