@@ -1,7 +1,3 @@
-# temporary note about restore-disk
-[restore-disk is currently broken](https://github.com/bkw777/pdd.sh/issues/8#issuecomment-2398216813)  
-If you need restore-disk, please try the [v3 branch](https://github.com/bkw777/pdd.sh/tree/v3)
-
 # pdd.sh
 
 A [TPDD client](http://tandy.wiki/TPDD_client) implemented in pure\* bash.
@@ -17,23 +13,22 @@ It can be used to inspect, copy, restore, repair, or craft TPDD disks in ways th
 
 ## Particularly Unique Features  
 Things this util can do that even the commercial TPDD utils can't do  
- - TPDD2 sector data and sector metadata read & write  
- - Ability to clone "problem" disks, including:  
-   - TPDD1 Utility Disk  
-   - TPDD2 Utility Disk  
-   - Disk-Power Distribution Disk  
-   - Sardine Dictionary Disk
- - Ability to create disks from downloadable disk image files, without special hardware other than the drive itself  
- - Work with TPDD disks from/for other platforms like WP-2, CP/M, Z88, Atari Portfolio, etc
- - Dump the drive's rom
+ - Full raw sector read & write of both data & metadata for both TPDD1 & TPDD2.
+ - Ability to clone abnormal disks, including:  
+   - TPDD1 & TPDD2 Utility Disk  
+   - TS-DOS distribution disk  
+   - Disk-Power distribution disk  
+   - Sardine Dictionary Disk  
+ - Ability to re-create physical disks from downloadable disk image files, with only a serial port and the drive itself  
+ - Work with TPDD disks from other platforms like WP-2, CP/M, Z88, Atari Portfolio, ie not hard coded 6.2 filenames or F attribute  
+ - Dump the drive's rom  
 
 ## Supported OS's
 In theory it works on any os that can run Bash4+ and has an stty command.  
 In reality it only *almost* works on Macos and FreeBSD.  
-Currently it's only working well on Linux.  
-It used to work well on all 3, but there seems to have been a regression. The basic protocol logic hasn't changed but probably various timings have changed, both faster and slower. It's also possible the host OS's have changed the way the serial tty layer behaves in some obscure detail as the os versions have updated.  
-Requires at least bash 4, so on Mac this means Macports or Brew or similar.  
-Does not work in either Cygwin or WSL.  
+It used to work on all 3 but currently it's only working well on Linux.  
+Requires at least bash 4, so on Mac this means installing bash from macports or similar.  
+Does not work in either Cygwin or WSL2 due to the usb/serial hardware access. Should work in WSL1.  
 
 ## Installation
 It's just a bash script with no other dependencies, so installation is nothing more than copying, naming, and setting permissions.  
